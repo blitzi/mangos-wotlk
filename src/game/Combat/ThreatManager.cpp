@@ -315,9 +315,7 @@ void ThreatContainer::update(bool force, bool isPlayer)
             {
                 Unit* left = lhs->getTarget();
                 Unit* right = rhs->getTarget();
-                if (left->IsPlayer() && !right->IsPlayer())
-                    return true;
-                if (owner->CanAttack(left) && !owner->CanAttack(right))
+                if (left->IsPlayer() && owner->CanAttack(left) && !right->IsPlayer())
                     return true;
             }
             if (lhs->GetTauntState() != rhs->GetTauntState())
