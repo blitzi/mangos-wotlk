@@ -865,7 +865,7 @@ bool ChatHandler::HandleModifyFactionCommand(char* args)
     {
         if (chr)
         {
-            uint32 factionid = chr->getFaction();
+            uint32 factionid = chr->GetFaction();
             uint32 flag      = chr->GetUInt32Value(UNIT_FIELD_FLAGS);
             uint32 npcflag   = chr->GetUInt32Value(UNIT_NPC_FLAGS);
             uint32 dyflag    = chr->GetUInt32Value(UNIT_DYNAMIC_FLAGS);
@@ -906,7 +906,7 @@ bool ChatHandler::HandleModifyFactionCommand(char* args)
 
     PSendSysMessage(LANG_YOU_CHANGE_FACTION, chr->GetGUIDLow(), factionid, flag, npcflag, dyflag);
 
-    chr->setFaction(factionid);
+    chr->SetFaction(factionid);
     chr->SetUInt32Value(UNIT_FIELD_FLAGS, flag);
     chr->SetUInt32Value(UNIT_NPC_FLAGS, npcflag);
     chr->SetUInt32Value(UNIT_DYNAMIC_FLAGS, dyflag);
@@ -2069,7 +2069,7 @@ bool ChatHandler::ModifyMountCommandHelper(Player* target, char* args)
         slow = true;
     else
     {
-        const uint32 level = target->getLevel();
+        const uint32 level = target->GetLevel();
         fast = (level >= 60);
         slow = (!fast && level >= 30);
     }

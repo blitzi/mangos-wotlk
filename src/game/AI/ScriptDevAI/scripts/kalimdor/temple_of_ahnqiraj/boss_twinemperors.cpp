@@ -414,7 +414,7 @@ struct MutateBug : public AuraScript
             aura->GetTarget()->AI()->DoCastSpellIfCan(nullptr, SPELL_VIRULENT_POISON, CAST_TRIGGERED | CAST_AURA_NOT_PRESENT);
             if (aura->GetTarget()->IsCreature())
             {
-                aura->GetTarget()->setFaction(FACTION_HOSTILE);
+                aura->GetTarget()->SetFaction(FACTION_HOSTILE);
                 static_cast<Creature*>(aura->GetTarget())->SetInCombatWithZone();
                 aura->GetTarget()->AI()->AttackClosestEnemy();
             }

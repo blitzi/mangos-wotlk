@@ -67,7 +67,7 @@ struct mob_aquementasAI : public ScriptedAI
         m_uiAquaJetTimer        = 5000;
         m_uiFrostShockTimer     = 1000;
 
-        m_creature->setFaction(FACTION_FRIENDLY);           // TODO: Either do this way, or might require a DB change
+        m_creature->SetFaction(FACTION_FRIENDLY);           // TODO: Either do this way, or might require a DB change
     }
 
     void SendItem(Player* pReceiver)
@@ -97,7 +97,7 @@ struct mob_aquementasAI : public ScriptedAI
         {
             if (m_uiSwitchFactionTimer <= uiDiff)
             {
-                m_creature->setFaction(FACTION_ELEMENTAL);
+                m_creature->SetFaction(FACTION_ELEMENTAL);
                 m_uiSwitchFactionTimer = 0;
             }
             else

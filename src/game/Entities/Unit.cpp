@@ -2295,9 +2295,9 @@ float Unit::CalcArmorReducedDamage(Unit* pVictim, const float damage)
     // Apply Player CR_ARMOR_PENETRATION rating and percent talents
     if (GetTypeId() == TYPEID_PLAYER)
     {
-        float maxArmorPen = 400 + 85 * pVictim->getLevel();
-        if (getLevel() > 59)
-            maxArmorPen += 4.5f * 85 * (pVictim->getLevel() - 59);
+        float maxArmorPen = 400 + 85 * pVictim->GetLevel();
+        if (GetLevel() > 59)
+            maxArmorPen += 4.5f * 85 * (pVictim->GetLevel() - 59);
         // Cap ignored armor to this value
         maxArmorPen = std::min(((armor + maxArmorPen) / 3), armor);
         // Also, armor penetration is limited to 100% since 3.1.2, before greater values did
@@ -2309,7 +2309,7 @@ float Unit::CalcArmorReducedDamage(Unit* pVictim, const float damage)
     if (armor < 0.0f)
         armor = 0.0f;
 
-    float levelModifier = (float)getLevel();
+    float levelModifier = (float)GetLevel();
     if (levelModifier > 59)
         levelModifier = levelModifier + (4.5f * (levelModifier - 59));
 
@@ -3126,7 +3126,7 @@ float Unit::CalculateLevelPenalty(SpellEntry const* spellProto) const
 
     if (spellLevel < 20)
         LvlPenalty = (20.0f - spellLevel) * 3.75f;
-    float LvlFactor = (float(spellLevel) + 6.0f) / float(getLevel());
+    float LvlFactor = (float(spellLevel) + 6.0f) / float(GetLevel());
     if (LvlFactor > 1.0f)
         LvlFactor = 1.0f;
 
@@ -6992,7 +6992,7 @@ void Unit::SetPowerType(Powers new_powertype)
 
 FactionTemplateEntry const* Unit::GetFactionTemplateEntry() const
 {
-    FactionTemplateEntry const* entry = sFactionTemplateStore.LookupEntry(getFaction());
+    FactionTemplateEntry const* entry = sFactionTemplateStore.LookupEntry(GetFaction());
     if (!entry)
     {
         static ObjectGuid guid;                             // prevent repeating spam same faction problem
@@ -7003,9 +7003,9 @@ FactionTemplateEntry const* Unit::GetFactionTemplateEntry() const
 
             if (guid.GetHigh() == HIGHGUID_PET)
                 sLog.outError("%s (base creature entry %u) have invalid faction template id %u, owner %s",
-                    GetGuidStr().c_str(), GetEntry(), getFaction(), ((Pet*)this)->GetOwnerGuid().GetString().c_str());
+                    GetGuidStr().c_str(), GetEntry(), GetFaction(), ((Pet*)this)->GetOwnerGuid().GetString().c_str());
             else
-                sLog.outError("%s have invalid faction template id %u", GetGuidStr().c_str(), getFaction());
+                sLog.outError("%s have invalid faction template id %u", GetGuidStr().c_str(), GetFaction());
         }
     }
     return entry;
@@ -8099,7 +8099,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, ui
                     float multiplier = 3.0f;
 
                     // if target have higher level
-                    if (victim->getLevel() > getLevel())
+                    if (victim->GetLevel() > GetLevel())
                         // Glyph of Ice Lance
                         if (Aura* glyph = GetDummyAura(56377))
                             multiplier = glyph->GetModifier()->m_amount;
@@ -12354,10 +12354,10 @@ void Unit::RestoreOriginalFaction()
         if (creature->IsPet() || creature->IsTotem())
         {
             if (Unit* owner = GetOwner())
-                setFaction(owner->getFaction());
+                SetFaction(owner->GetFaction());
         }
         else
-            setFaction(creature->GetCreatureInfo()->Faction);
+            SetFaction(creature->GetCreatureInfo()->Faction);
     }
 }
 
@@ -12890,14 +12890,14 @@ Unit* Unit::TakePossessOf(SpellEntry const* spellEntry, SummonPropertiesEntry co
 
     Player* player = GetTypeId() == TYPEID_PLAYER ? static_cast<Player*>(this) : nullptr;
 
-    possessed->SetFactionTemporary(getFaction(), TEMPFACTION_NONE);     // set same faction than player
+    possessed->SetFactionTemporary(GetFaction(), TEMPFACTION_NONE);     // set same faction than player
     possessed->SetRespawnCoord(pos);                                    // set spawn coord
     possessed->SetCharmerGuid(GetObjectGuid());                         // save guid of the charmer
     possessed->SetCreatorGuid(GetObjectGuid());                         // save guid of the creator
     possessed->SetUInt32Value(UNIT_CREATED_BY_SPELL, spellEntry->Id);   // set the spell id used to create this (may be used for removing corresponding aura
     possessed->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_POSSESSED);          // set flag for client that mean this unit is controlled by a player
     possessed->addUnitState(UNIT_STAT_POSSESSED);                       // also set internal unit state flag
-    possessed->SelectLevel(getLevel());                                 // set level to same level than summoner TODO:: not sure its always the case...
+    possessed->SelectLevel(GetLevel());                                 // set level to same level than summoner TODO:: not sure its always the case...
     possessed->SetLinkedToOwnerAura(TEMPSPAWN_LINKED_AURA_OWNER_CHECK | TEMPSPAWN_LINKED_AURA_REMOVE_OWNER); // set what to do if linked aura is removed or the creature is dead.
 
     // important before adding to the map!
@@ -12994,7 +12994,7 @@ bool Unit::TakePossessOf(Unit* possessed)
     {
         possessedCreature = static_cast<Creature*>(possessed);
         possessedCreature->GetCombatStartPosition(combatStartPosition);
-        possessedCreature->SetFactionTemporary(getFaction(), TEMPFACTION_NONE);
+        possessedCreature->SetFactionTemporary(GetFaction(), TEMPFACTION_NONE);
 
         charmInfo->SetCharmState("PossessedAI");
         possessedCreature->SetWalk(IsWalking(), true);
@@ -13006,7 +13006,7 @@ bool Unit::TakePossessOf(Unit* possessed)
         if (player && player->IsInDuelWith(possessedPlayer))
             possessedPlayer->SetUInt32Value(PLAYER_DUEL_TEAM, player->GetUInt32Value(PLAYER_DUEL_TEAM));
         else
-            possessedPlayer->setFaction(getFaction());
+            possessedPlayer->SetFaction(GetFaction());
 
         charmInfo->SetCharmState("PossessedAI");
     }
@@ -13109,7 +13109,7 @@ bool Unit::TakeCharmOf(Unit* charmed, uint32 spellId, bool advertised /*= true*/
         if (charmerPlayer && charmerPlayer->IsInDuelWith(charmedPlayer))
             charmedPlayer->SetUInt32Value(PLAYER_DUEL_TEAM, charmerPlayer->GetUInt32Value(PLAYER_DUEL_TEAM));
         else
-            charmedPlayer->setFaction(getFaction());
+            charmedPlayer->SetFaction(GetFaction());
 
         charmInfo->SetCharmState("PetAI");
         charmed->SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_AURAS); // important have to be after charminfo initialization
@@ -13143,7 +13143,7 @@ bool Unit::TakeCharmOf(Unit* charmed, uint32 spellId, bool advertised /*= true*/
 
         getHostileRefManager().deleteReference(charmedCreature);
 
-        charmedCreature->SetFactionTemporary(getFaction(), TEMPFACTION_NONE);
+        charmedCreature->SetFactionTemporary(GetFaction(), TEMPFACTION_NONE);
 
         if (isPossessCharm)
             charmInfo->InitPossessCreateSpells();
@@ -13379,7 +13379,7 @@ void Unit::Uncharm(Unit* charmed, uint32 spellId)
         {
             // safeguard against nullptr on totem elemental despawn
             if (Unit* owner = charmedCreature->GetOwner())
-                charmed->setFaction(owner->getFaction());
+                charmed->SetFaction(owner->GetFaction());
 
             charmInfo->ResetCharmState();
 
@@ -13568,7 +13568,7 @@ void Unit::UpdateAllowedPositionZ(float x, float y, float& z, Map* atMap /*=null
 
 uint32 Unit::GetSpellRank(SpellEntry const* spellInfo)
 {
-    uint32 spellRank = getLevel();
+    uint32 spellRank = GetLevel();
     if (spellInfo->maxLevel > 0 && spellRank >= spellInfo->maxLevel * 5)
         spellRank = spellInfo->maxLevel * 5;
     return spellRank;
@@ -13576,7 +13576,7 @@ uint32 Unit::GetSpellRank(SpellEntry const* spellInfo)
 
 float Unit::OCTRegenHPPerSpirit() const
 {
-    uint32 level = getLevel();
+    uint32 level = GetLevel();
     uint32 pclass = getClass();
 
     if (level > GT_MAX_LEVEL) level = GT_MAX_LEVEL;
@@ -13597,7 +13597,7 @@ float Unit::OCTRegenHPPerSpirit() const
 
 float Unit::OCTRegenMPPerSpirit() const
 {
-    uint32 level = getLevel();
+    uint32 level = GetLevel();
     uint32 pclass = getClass();
 
     if (level > GT_MAX_LEVEL) level = GT_MAX_LEVEL;

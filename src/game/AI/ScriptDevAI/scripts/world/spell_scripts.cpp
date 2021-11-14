@@ -708,7 +708,7 @@ bool EffectDummyCreature_spell_dummy_npc(Unit* pCaster, uint32 uiSpellId, SpellE
                     if (urand(0, 1))
                     {
                         DoScriptText(EMOTE_AGGRO, pCreatureTarget);
-                        pCreatureTarget->setFaction(FACTION_HOSTILE);
+                        pCreatureTarget->SetFaction(FACTION_HOSTILE);
                         pCreatureTarget->AI()->AttackStart(pCaster);
                     }
                     else

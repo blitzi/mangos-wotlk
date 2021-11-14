@@ -45,7 +45,7 @@ struct npc_cooshcooshAI : public ScriptedAI
 {
     npc_cooshcooshAI(Creature* pCreature) : ScriptedAI(pCreature)
     {
-        m_uiNormFaction = pCreature->getFaction();
+        m_uiNormFaction = pCreature->GetFaction();
         Reset();
     }
 
@@ -56,8 +56,8 @@ struct npc_cooshcooshAI : public ScriptedAI
     {
         m_uiLightningBolt_Timer = 2000;
 
-        if (m_creature->getFaction() != m_uiNormFaction)
-            m_creature->setFaction(m_uiNormFaction);
+        if (m_creature->GetFaction() != m_uiNormFaction)
+            m_creature->SetFaction(m_uiNormFaction);
     }
 
     void UpdateAI(const uint32 uiDiff) override

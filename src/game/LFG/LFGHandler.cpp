@@ -786,7 +786,7 @@ void WorldSession::SendLfgUpdateList(uint32 dungeonID)
 
             if (flags & LFG_MEMBER_FLAG_CHARINFO)                // charinfo
             {
-                data << uint8(player->getLevel());
+                data << uint8(player->GetLevel());
                 data << uint8(player->getClass());
                 data << uint8(player->getRace());
 
@@ -1205,7 +1205,7 @@ void WorldSession::SendLfgRoleCheckUpdate()
         if (pLeader)
         {
             roles = sLFGMgr.GetLFGPlayerState(pLeader->GetObjectGuid())->GetRoles();
-            leaderLevel = pLeader->getLevel();
+            leaderLevel = pLeader->GetLevel();
         }
         data << leaderguid;                                                  // Guid
         data << uint8(roles != LFG_ROLE_MASK_NONE);                          // Ready
@@ -1225,7 +1225,7 @@ void WorldSession::SendLfgRoleCheckUpdate()
                 data << guid;                                                    // Guid
                 data << uint8(roles != LFG_ROLE_MASK_NONE);                      // Ready
                 data << uint32(roles);                                           // Roles
-                data << uint8(pGroupMember->getLevel());                         // Level
+                data << uint8(pGroupMember->GetLevel());                         // Level
             }
         }
     }

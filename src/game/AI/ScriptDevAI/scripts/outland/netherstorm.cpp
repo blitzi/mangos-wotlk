@@ -3378,7 +3378,7 @@ struct npc_adyen_the_lightwardenAI : public ScriptedAI
 
                 if (Creature* kaylaan = m_creature->GetMap()->GetCreature(m_kaylaanGuid))
                 {
-                    kaylaan->setFaction(FACTION_KAYLAAN_HOSTILE);
+                    kaylaan->SetFaction(FACTION_KAYLAAN_HOSTILE);
                     if (Player* player = GetPlayerTarget())
                         kaylaan->AI()->AttackStart(player);
                     else
@@ -3424,7 +3424,7 @@ struct npc_adyen_the_lightwardenAI : public ScriptedAI
                 {
                     kaylaan->CastSpell(kaylaan, SPELL_CANCEL_POWER_OF_THE_LEGION, TRIGGERED_NONE);
                     DoScriptText(SAY_KAYLAAN_7, kaylaan, kaylaan);
-                    kaylaan->setFaction(FACTION_KAYLAAN_REDEEMED);
+                    kaylaan->SetFaction(FACTION_KAYLAAN_REDEEMED);
                     kaylaan->SetStandState(UNIT_STAND_STATE_STAND);
                     kaylaan->GetMotionMaster()->MovePoint(POINT_KAYLAAN_SAVE_ISHANAH, 4941.518f, 3837.293f, 211.5089f);
                 }
@@ -3497,16 +3497,16 @@ struct npc_adyen_the_lightwardenAI : public ScriptedAI
             return;
 
         m_playerGuid = player->GetObjectGuid();
-        m_creature->setFaction(FACTION_DEATHBLOW_IN_PROGRESS);
+        m_creature->SetFaction(FACTION_DEATHBLOW_IN_PROGRESS);
         // TODO: Formation movement
         if (Creature* orelis = m_creature->GetMap()->GetCreature(m_orelisGuid))
         {
-            orelis->setFaction(FACTION_DEATHBLOW_IN_PROGRESS);
+            orelis->SetFaction(FACTION_DEATHBLOW_IN_PROGRESS);
             orelis->GetMotionMaster()->MoveFollow(m_creature, 1.f, M_PI_F - M_PI_F / 4, true);
         }
         if (Creature* karja = m_creature->GetMap()->GetCreature(m_karjaGuid))
         {
-            karja->setFaction(FACTION_DEATHBLOW_IN_PROGRESS);
+            karja->SetFaction(FACTION_DEATHBLOW_IN_PROGRESS);
             karja->GetMotionMaster()->MoveFollow(m_creature, 1.f, M_PI_F + M_PI_F / 4, true);
         }
         if (Creature* wrathLord = m_creature->GetMap()->GetCreature(ObjectGuid(HIGHGUID_UNIT, uint32(NPC_WRATH_LORD), uint32(DB_GUID_WRATH_LORD_1))))
@@ -3957,7 +3957,7 @@ bool GossipHello_npc_adyen_the_lightwarden(Player* player, Creature* creature)
     uint32 gossipId = GOSSIP_NETHERSTORM;
 
     // custom code required because it utilizes two entries
-    if (creature->getFaction() == FACTION_SHATTRATH)
+    if (creature->GetFaction() == FACTION_SHATTRATH)
         gossipId = GOSSIP_SHATTRATH;
     else
     {

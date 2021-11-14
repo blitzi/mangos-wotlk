@@ -372,7 +372,7 @@ struct npc_inner_demonAI : public ScriptedAI
     {
         Reset();
         m_creature->CastSpell(nullptr, SPELL_DEMON_LINK, TRIGGERED_NONE);
-        m_creature->setFaction(m_creature->GetInstanceData()->GetData(6) + FACTION_DEMON_1);
+        m_creature->SetFaction(m_creature->GetInstanceData()->GetData(6) + FACTION_DEMON_1);
     }
 
     uint32 m_uiShadowBoltTimer;

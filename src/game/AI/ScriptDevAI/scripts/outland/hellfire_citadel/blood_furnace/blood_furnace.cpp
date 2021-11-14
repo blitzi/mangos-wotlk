@@ -243,7 +243,7 @@ void instance_blood_furnace::OnPlayerEnter(Player* /*player*/)
                         if (pOrc->IsWithinDistInMap(pDoor, 15.0f) && pOrc->GetPositionZ() < 15.0f)
                         {
                             pOrc->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE); // ones in cages
-                            pOrc->setFaction(14); // sniffed value
+                            pOrc->SetFaction(14); // sniffed value
                         }
                     }
                 }

@@ -638,7 +638,7 @@ void AreaAura::Update(uint32 diff)
                         for (auto target : nearbyTargets)
                         {
                             // Due to the lack of support for NPC groups or formations, are considered of the same party NPCs with same faction than caster
-                            if (target != owner && target->IsAlive() && target->getFaction() == ((Creature*)owner)->getFaction())
+                            if (target != owner && target->IsAlive() && target->GetFaction() == ((Creature*)owner)->GetFaction())
                                 targets.push_back(target);
                         }
                     }
@@ -719,7 +719,7 @@ void AreaAura::Update(uint32 diff)
                 if (GetCasterGuid() == target->GetObjectGuid()) // if caster is same as target then no need to change rank of the spell
                     actualSpellInfo = GetSpellProto();
                 else
-                    actualSpellInfo = sSpellMgr.SelectAuraRankForLevel(GetSpellProto(), target->getLevel()); // use spell id according level of the target
+                    actualSpellInfo = sSpellMgr.SelectAuraRankForLevel(GetSpellProto(), target->GetLevel()); // use spell id according level of the target
                 if (!actualSpellInfo)
                     continue;
 
@@ -2807,7 +2807,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                             target->CastSpell(target, 25860, TRIGGERED_OLD_TRIGGERED, nullptr, this);
                         return;
                     case 62109:                             // Tails Up: Aura
-                        target->setFaction(1990);           // Ambient (hostile)
+                        target->SetFaction(1990);           // Ambient (hostile)
                         target->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
                         return;
                     case 63122:                             // Clear Insane
@@ -5625,12 +5625,12 @@ void Aura::HandleModThreat(bool apply, bool Real)
     {
         // Arcane Shroud
         case 26400:
-            level_diff = target->getLevel() - 60;
+            level_diff = target->GetLevel() - 60;
             multiplier = 2;
             break;
         // The Eye of Diminution
         case 28862:
-            level_diff = target->getLevel() - 60;
+            level_diff = target->GetLevel() - 60;
             multiplier = 1;
             break;
         // Defiance talents
@@ -6843,8 +6843,8 @@ void Aura::HandleAuraModStat(bool apply, bool /*Real*/)
 
     // Holy Strength amount decrease by 4% each level after 60 From Crusader Enchant
     if (apply && GetId() == 20007)
-        if (GetCaster()->GetTypeId() == TYPEID_PLAYER && GetCaster()->getLevel() > 60)
-            m_modifier.m_amount = int32(m_modifier.m_amount * (1 - (((float(GetCaster()->getLevel()) - 60) * 4) / 100)));
+        if (GetCaster()->GetTypeId() == TYPEID_PLAYER && GetCaster()->GetLevel() > 60)
+            m_modifier.m_amount = int32(m_modifier.m_amount * (1 - (((float(GetCaster()->GetLevel()) - 60) * 4) / 100)));
 
     if (GetSpellProto()->IsFitToFamilyMask(0x0000000000008000)) // improved scorpid sting
     {
@@ -10116,7 +10116,7 @@ void Aura::HandleFactionOverride(bool apply, bool Real)
         return;
 
     if (apply)
-        target->setFaction(GetMiscValue());
+        target->SetFaction(GetMiscValue());
     else
         target->RestoreOriginalFaction();
 }
@@ -10338,7 +10338,7 @@ void SpellAuraHolder::_AddSpellAuraHolder()
     flags |= ((GetCasterGuid() == GetTarget()->GetObjectGuid()) ? AFLAG_NOT_CASTER : AFLAG_NONE) | ((GetSpellMaxDuration(m_spellProto) > 0) ? AFLAG_DURATION : AFLAG_NONE) | (IsPositive() ? AFLAG_POSITIVE : AFLAG_NEGATIVE);
     SetAuraFlags(flags);
 
-    SetAuraLevel(caster ? caster->getLevel() : sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL));
+    SetAuraLevel(caster ? caster->GetLevel() : sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL));
 
     if (IsNeedVisibleSlot(caster))
     {
@@ -11480,7 +11480,7 @@ void SpellAuraHolder::Update(uint32 diff)
                 if (GetSpellProto()->SpellVisual[0] != 163)
                 {
                     Powers powertype = Powers(GetSpellProto()->powerType);
-                    int32 manaPerSecond = GetSpellProto()->manaPerSecond + GetSpellProto()->manaPerSecondPerLevel * caster->getLevel();
+                    int32 manaPerSecond = GetSpellProto()->manaPerSecond + GetSpellProto()->manaPerSecondPerLevel * caster->GetLevel();
                     m_timeCla = 1 * IN_MILLISECONDS;
 
                     if (manaPerSecond)

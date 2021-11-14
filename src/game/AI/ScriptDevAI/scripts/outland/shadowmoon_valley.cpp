@@ -908,7 +908,7 @@ struct mob_torlothAI : public CombatAI
             case 5:
             {
                 SetCombatMovement(true);
-                m_creature->setFaction(FACTION_HOSTILE);
+                m_creature->SetFaction(FACTION_HOSTILE);
                 m_creature->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
                 if (Player* target = m_creature->GetMap()->GetPlayer(m_playerGuid))
                     AttackStart(target);
@@ -2169,17 +2169,17 @@ struct npc_spawned_oronok_tornheartAI : public ScriptedAI, private DialogueHelpe
             if (!pCyrukh->IsAlive())
             {
                 m_creature->GetMotionMaster()->MovePoint(POINT_ID_EPILOGUE, aDamnationLocations[6].m_fX, aDamnationLocations[6].m_fY, aDamnationLocations[6].m_fZ);
-                m_creature->setFaction(FACTION_ORONOK_FRIENDLY);
+                m_creature->SetFaction(FACTION_ORONOK_FRIENDLY);
                 m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
                 if (Creature* borak = GetSpeakerByEntry(NPC_BORAK_SON_OF_ORONOK))
                 {
-                    borak->setFaction(FACTION_ORONOK_FRIENDLY);
+                    borak->SetFaction(FACTION_ORONOK_FRIENDLY);
                     borak->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
                     borak->GetMotionMaster()->MoveFollow(m_creature, 5.0f, -M_PI_F / 2, true);
                 }
                 if (Creature* gromtor = GetSpeakerByEntry(NPC_GROMTOR_SON_OF_ORONOK))
                 {
-                    gromtor->setFaction(FACTION_ORONOK_FRIENDLY);
+                    gromtor->SetFaction(FACTION_ORONOK_FRIENDLY);
                     gromtor->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
                     gromtor->GetMotionMaster()->MoveFollow(m_creature, 5.0f, M_PI_F / 2, true);
                 }
@@ -2268,11 +2268,11 @@ struct npc_spawned_oronok_tornheartAI : public ScriptedAI, private DialogueHelpe
                 break;
             case POINT_ID_ELEMENTS:
                 // Cyrukh starts to attack
-                m_creature->setFaction(FACTION_ORONOK_COMBAT);
+                m_creature->SetFaction(FACTION_ORONOK_COMBAT);
                 if (Creature* borak = GetSpeakerByEntry(NPC_BORAK_SON_OF_ORONOK))
-                    borak->setFaction(FACTION_ORONOK_COMBAT);
+                    borak->SetFaction(FACTION_ORONOK_COMBAT);
                 if (Creature* gromtor = GetSpeakerByEntry(NPC_GROMTOR_SON_OF_ORONOK))
-                    gromtor->setFaction(FACTION_ORONOK_COMBAT);
+                    gromtor->SetFaction(FACTION_ORONOK_COMBAT);
                 if (Creature* pCyrukh = GetSpeakerByEntry(NPC_CYRUKH_THE_FIRELORD))
                 {
                     pCyrukh->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER);
@@ -2660,7 +2660,7 @@ struct npc_disobedient_dragonmaw_peonAI : public ScriptedAI
         m_creature->SetFacingTo(angle);
 
         DoCastSpellIfCan(nullptr, SPELL_PEON_CLEAR_ALL); // clears combat and removes aura
-        m_creature->setFaction(FACTION_WHACKED);
+        m_creature->SetFaction(FACTION_WHACKED);
 
         m_booterangTimer = 3000;
         m_angryTimer = 0;

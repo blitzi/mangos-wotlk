@@ -109,7 +109,7 @@ void instance_black_temple::OnCreatureCreate(Creature* creature)
         case NPC_ASHTONGUE_STALKER:
             m_ashtongue.push_back(creature->GetObjectGuid());
             if (m_auiEncounter[TYPE_SHADE] == DONE)
-                creature->setFaction(FACTION_ASHTONGUE_FRIENDLY);
+                creature->SetFaction(FACTION_ASHTONGUE_FRIENDLY);
             break;
         case NPC_VENGEFUL_SPIRIT:
             if (Creature* teron = GetSingleCreatureFromStorage(NPC_TERON_GOREFIEND))
@@ -178,7 +178,7 @@ void instance_black_temple::OnCreatureRespawn(Creature* creature)
         case NPC_ASHTONGUE_FERAL_SPIRIT:
         case NPC_ASHTONGUE_STALKER:
             if (m_auiEncounter[TYPE_SHADE] == DONE)
-                creature->setFaction(FACTION_ASHTONGUE_FRIENDLY);
+                creature->SetFaction(FACTION_ASHTONGUE_FRIENDLY);
             break;
     }
 }
@@ -296,7 +296,7 @@ void instance_black_temple::SetData(uint32 type, uint32 data)
                 DoOpenPreMotherDoor();
                 for (ObjectGuid guid : m_ashtongue)
                     if (Creature* ashtongue = instance->GetCreature(guid))
-                        ashtongue->setFaction(FACTION_ASHTONGUE_FRIENDLY);
+                        ashtongue->SetFaction(FACTION_ASHTONGUE_FRIENDLY);
             }
             break;
         case TYPE_GOREFIEND:

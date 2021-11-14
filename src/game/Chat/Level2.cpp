@@ -2230,7 +2230,7 @@ bool ChatHandler::HandleNpcFactionIdCommand(char* args)
         return false;
     }
 
-    pCreature->setFaction(factionId);
+    pCreature->SetFaction(factionId);
 
     // faction is set in creature_template - not inside creature
 
@@ -2714,7 +2714,7 @@ bool ChatHandler::HandlePInfoCommand(char* args)
         accId = target->GetSession()->GetAccountId();
         money = target->GetMoney();
         total_player_time = target->GetTotalPlayedTime();
-        level = target->getLevel();
+        level = target->GetLevel();
         latency = target->GetSession()->GetLatency();
     }
     // get additional information from DB

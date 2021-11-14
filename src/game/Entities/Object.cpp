@@ -2048,7 +2048,7 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
     creature->SetActiveObjectState(settings.activeObject);
 
     if (settings.faction)
-        creature->setFaction(settings.faction);
+        creature->SetFaction(settings.faction);
 
     if (settings.modelId)
         creature->SetDisplayId(settings.modelId);
@@ -2914,7 +2914,7 @@ int32 WorldObject::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
 
     if (unitCaster && basePointsPerLevel != 0.0f)
     {
-        int32 level = int32(unitCaster->getLevel());
+        int32 level = int32(unitCaster->GetLevel());
         if (level > int32(spellProto->maxLevel) && spellProto->maxLevel > 0)
             level = int32(spellProto->maxLevel);
         else if (level < int32(spellProto->baseLevel))
@@ -3019,7 +3019,7 @@ int32 WorldObject::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
         if (damage)
         {
             GtNPCManaCostScalerEntry const* spellScaler = sGtNPCManaCostScalerStore.LookupEntry(spellProto->spellLevel - 1);
-            GtNPCManaCostScalerEntry const* casterScaler = sGtNPCManaCostScalerStore.LookupEntry(unitCaster->getLevel() - 1);
+            GtNPCManaCostScalerEntry const* casterScaler = sGtNPCManaCostScalerStore.LookupEntry(unitCaster->GetLevel() - 1);
             if (spellScaler && casterScaler)
                 value *= casterScaler->ratio / spellScaler->ratio;
         }

@@ -85,9 +85,9 @@ void instance_scarlet_monastery::OnObjectCreate(GameObject* pGo)
 void instance_scarlet_monastery::OnCreatureRespawn(Creature* creature)
 {
     if (GetData(TYPE_ASHBRINGER_EVENT) == IN_PROGRESS)
-        if (creature->IsAlive() && !creature->IsInCombat() && creature->getFaction() != 35)
+        if (creature->IsAlive() && !creature->IsInCombat() && creature->GetFaction() != 35)
             if (m_sAshbringerFriendlyGuids.find(creature->GetObjectGuid()) != m_sAshbringerFriendlyGuids.end())
-                creature->setFaction(35);
+                creature->SetFaction(35);
 }
 
 void instance_scarlet_monastery::OnObjectSpawn(GameObject* go)
@@ -152,7 +152,7 @@ void instance_scarlet_monastery::SetData(uint32 uiType, uint32 uiData)
             for (auto scarletCathedralNpcGuid : m_sAshbringerFriendlyGuids)
                 if (Creature* scarletNpc = instance->GetCreature(scarletCathedralNpcGuid))
                     if (scarletNpc->IsAlive() && !scarletNpc->IsInCombat())
-                        scarletNpc->setFaction(35);
+                        scarletNpc->SetFaction(35);
         }
         m_auiEncounter[1] = uiData;
     }

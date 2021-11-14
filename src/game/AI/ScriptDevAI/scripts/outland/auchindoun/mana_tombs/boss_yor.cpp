@@ -68,7 +68,7 @@ struct boss_yorAI : public ScriptedAI, public CombatActions
         {
             m_creature->SetImmuneToNPC(false);
             m_creature->SetImmuneToPlayer(false);
-            m_creature->setFaction(FACTION_HOSTILE);
+            m_creature->SetFaction(FACTION_HOSTILE);
             if (Player* player = m_creature->GetMap()->GetPlayer(m_playerGuid))
                 AttackStart(player);
         });

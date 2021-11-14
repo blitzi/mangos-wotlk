@@ -664,7 +664,7 @@ bool EffectDummyCreature_spell_guard_slip_kik(Unit* pCaster, uint32 uiSpellId, S
         if (pInstance)
         {
             if (Creature* slipkik = pInstance->GetSingleCreatureFromStorage(NPC_GUARD_SLIPKIK))
-                slipkik->setFaction(FACTION_OGRE);
+                slipkik->SetFaction(FACTION_OGRE);
             return true;
         }
     }

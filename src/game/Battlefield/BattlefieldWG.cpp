@@ -292,7 +292,7 @@ void BattlefieldWG::HandleCreatureCreate(Creature* creature)
             if (creature->GetPositionX() < 5000.0f)
             {
                 if (GetAttacker() != TEAM_NONE)
-                    creature->setFaction(wgTeamFactions[GetTeamIndexByTeamId(GetAttacker())]);
+                    creature->SetFaction(wgTeamFactions[GetTeamIndexByTeamId(GetAttacker())]);
 
                 m_attackCannonsGuids.push_back(creature->GetObjectGuid());
             }
@@ -300,7 +300,7 @@ void BattlefieldWG::HandleCreatureCreate(Creature* creature)
             else
             {
                 if (GetDefender() != TEAM_NONE)
-                    creature->setFaction(wgTeamFactions[GetTeamIndexByTeamId(GetDefender())]);
+                    creature->SetFaction(wgTeamFactions[GetTeamIndexByTeamId(GetDefender())]);
 
                 m_defenseCannonsGuids.push_back(creature->GetObjectGuid());
             }
@@ -361,7 +361,7 @@ void BattlefieldWG::HandleCreatureCreate(Creature* creature)
 
                     // apply faction and faction flag
                     creature->CastSpell(creature, creatorTeam == ALLIANCE ? SPELL_ALLIANCE_FLAG : SPELL_HORDE_FLAG, TRIGGERED_OLD_TRIGGERED);
-                    creature->setFaction(wgTeamFactions[GetTeamIndexByTeamId(creatorTeam)]);
+                    creature->SetFaction(wgTeamFactions[GetTeamIndexByTeamId(creatorTeam)]);
                 }
             }
             break;
@@ -953,7 +953,7 @@ void BattlefieldWG::GetBattlefieldReady(const WorldObject* objRef)
     {
         if (Creature* cannon = objRef->GetMap()->GetCreature(guid))
         {
-            cannon->setFaction(wgTeamFactions[GetTeamIndexByTeamId(GetAttacker())]);
+            cannon->SetFaction(wgTeamFactions[GetTeamIndexByTeamId(GetAttacker())]);
             cannon->Respawn();
         }
     }
@@ -961,7 +961,7 @@ void BattlefieldWG::GetBattlefieldReady(const WorldObject* objRef)
     {
         if (Creature* cannon = objRef->GetMap()->GetCreature(guid))
         {
-            cannon->setFaction(wgTeamFactions[GetTeamIndexByTeamId(GetDefender())]);
+            cannon->SetFaction(wgTeamFactions[GetTeamIndexByTeamId(GetDefender())]);
             cannon->Respawn();
         }
     }

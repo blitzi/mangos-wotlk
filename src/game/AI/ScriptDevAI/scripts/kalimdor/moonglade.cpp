@@ -363,7 +363,7 @@ struct npc_keeper_remulosAI : public npc_escortAI, private DialogueHelper
                 break;
             case NPC_NIGHTMARE_PHANTASM:
                 // ToDo: set faction to DB
-                summoned->setFaction(14);
+                summoned->SetFaction(14);
                 summoned->AI()->AttackStart(m_creature);
                 break;
             case NPC_MOONGLADE_WARDEN:

@@ -240,7 +240,7 @@ LFGReward const* LFGMgr::GetRandomDungeonReward(LFGDungeonEntry const* dungeon, 
             // Difficulty check TODO
             rew = &itr->second;
             // ordered properly at loading
-            if (itr->second.maxLevel >= pPlayer->getLevel())
+            if (itr->second.maxLevel >= pPlayer->GetLevel())
                 break;
         }
     }
@@ -707,10 +707,10 @@ LFGLockStatusType LFGMgr::GetPlayerLockStatus(Player* pPlayer, LFGDungeonEntry c
     if (dungeon->difficulty > DUNGEON_DIFFICULTY_NORMAL && isSaved)
         return  LFG_LOCKSTATUS_RAID_LOCKED;
 
-    if (dungeon->minlevel > pPlayer->getLevel())
+    if (dungeon->minlevel > pPlayer->GetLevel())
         return  LFG_LOCKSTATUS_TOO_LOW_LEVEL;
 
-    if (dungeon->maxlevel < pPlayer->getLevel())
+    if (dungeon->maxlevel < pPlayer->GetLevel())
         return LFG_LOCKSTATUS_TOO_HIGH_LEVEL;
 
     uint32 miscRequirement = 0;
@@ -800,10 +800,10 @@ LFGLockStatusType LFGMgr::GetPlayerExpansionLockStatus(Player* pPlayer, LFGDunge
     if (!dungeonExpansion)
         return LFG_LOCKSTATUS_OK;
 
-    if (dungeonExpansion->minlevelHard > pPlayer->getLevel())
+    if (dungeonExpansion->minlevelHard > pPlayer->GetLevel())
         return  LFG_LOCKSTATUS_TOO_LOW_LEVEL;
 
-    if (dungeonExpansion->maxlevelHard < pPlayer->getLevel())
+    if (dungeonExpansion->maxlevelHard < pPlayer->GetLevel())
         return LFG_LOCKSTATUS_TOO_HIGH_LEVEL;
 
     /*

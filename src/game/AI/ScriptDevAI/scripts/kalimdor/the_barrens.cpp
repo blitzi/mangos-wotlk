@@ -372,7 +372,7 @@ struct npc_twiggy_flatheadAI : public ScriptedAI
 
     void SetChallengerReady(Creature* pChallenger)
     {
-        pChallenger->setFaction(FACTION_HOSTILE_CHALLENGER);
+        pChallenger->SetFaction(FACTION_HOSTILE_CHALLENGER);
         pChallenger->HandleEmote(EMOTE_ONESHOT_ROAR);
         ++m_uiChallengerCount;
 
@@ -385,13 +385,13 @@ struct npc_twiggy_flatheadAI : public ScriptedAI
         if (pSummoned->GetEntry() == NPC_BIG_WILL)
         {
             m_bigWillGuid = pSummoned->GetObjectGuid();
-            pSummoned->setFaction(FACTION_FRIENDLY);
+            pSummoned->SetFaction(FACTION_FRIENDLY);
             pSummoned->SetWalk(false);
             pSummoned->GetMotionMaster()->MovePoint(1, aAffrayChallengerLoc[7][0], aAffrayChallengerLoc[7][1], aAffrayChallengerLoc[7][2]);
         }
         else
         {
-            pSummoned->setFaction(FACTION_FRIENDLY);
+            pSummoned->SetFaction(FACTION_FRIENDLY);
             pSummoned->HandleEmote(EMOTE_ONESHOT_ROAR);
             m_vAffrayChallengerGuidsVector.push_back(pSummoned->GetObjectGuid());
         }
@@ -402,7 +402,7 @@ struct npc_twiggy_flatheadAI : public ScriptedAI
         if (uiMoveType != POINT_MOTION_TYPE || !uiPointId || pSummoned->GetEntry() != NPC_BIG_WILL)
             return;
 
-        pSummoned->setFaction(FACTION_HOSTILE_WILL);
+        pSummoned->SetFaction(FACTION_HOSTILE_WILL);
 
         if (Player* pPlayer = m_creature->GetMap()->GetPlayer(m_playerGuid))
         {

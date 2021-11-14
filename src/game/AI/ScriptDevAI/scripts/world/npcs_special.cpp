@@ -275,7 +275,7 @@ struct npc_chicken_cluckAI : public ScriptedAI
     {
         m_uiResetFlagTimer = 20000;
 
-        m_creature->setFaction(FACTION_CHICKEN);
+        m_creature->SetFaction(FACTION_CHICKEN);
         m_creature->RemoveFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
     }
 
@@ -284,13 +284,13 @@ struct npc_chicken_cluckAI : public ScriptedAI
         if (uiEmote == TEXTEMOTE_CHICKEN && !urand(0, 49))
         {
             m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
-            m_creature->setFaction(FACTION_FRIENDLY);
+            m_creature->SetFaction(FACTION_FRIENDLY);
             DoScriptText(EMOTE_CLUCK_TEXT1, m_creature);
         }
         else if (uiEmote == TEXTEMOTE_CHEER && pPlayer->GetQuestStatus(QUEST_CLUCK) == QUEST_STATUS_COMPLETE)
         {
             m_creature->SetFlag(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_QUESTGIVER);
-            m_creature->setFaction(FACTION_FRIENDLY);
+            m_creature->SetFaction(FACTION_FRIENDLY);
             DoScriptText(EMOTE_CLUCK_TEXT2, m_creature);
         }
     }

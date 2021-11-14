@@ -281,7 +281,7 @@ struct boss_algalonAI : public ScriptedAI, private DialogueHelper
                 if (m_pInstance)
                     m_pInstance->SetData(TYPE_ALGALON, DONE);
 
-                m_creature->setFaction(FACTION_ID_FRIENDLY);
+                m_creature->SetFaction(FACTION_ID_FRIENDLY);
                 m_bEventFinished = true;
                 EnterEvadeMode();
             }

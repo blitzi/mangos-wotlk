@@ -122,7 +122,7 @@ struct npc_ethereum_prisonerAI : public ScriptedAI, public CombatActions
         {
             m_creature->SetImmuneToNPC(false);
             m_creature->SetImmuneToPlayer(false);
-            m_creature->setFaction(FACTION_HOSTILE);
+            m_creature->SetFaction(FACTION_HOSTILE);
             Player* player = m_creature->GetMap()->GetPlayer(m_playerGuid);
             switch (m_creature->GetEntry()) // Group mobs have texts, only have text for one atm
             {

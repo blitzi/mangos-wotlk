@@ -214,7 +214,7 @@ struct npc_morokkAI : public npc_escortAI
     void JustRespawned() override
     {
         npc_escortAI::JustRespawned();
-        m_creature->setFaction(FACTION_MOR_SPAWN);
+        m_creature->SetFaction(FACTION_MOR_SPAWN);
     }
 
     void JustReachedHome() override
@@ -253,7 +253,7 @@ struct npc_morokkAI : public npc_escortAI
                         DoScriptText(SAY_MOR_CHALLENGE, m_creature, pPlayer);
                         m_creature->SetImmuneToPlayer(false);
                         SetReactState(REACT_AGGRESSIVE);
-                        m_creature->setFaction(FACTION_MOR_HOSTILE);
+                        m_creature->SetFaction(FACTION_MOR_HOSTILE);
                         AttackStart(pPlayer);
                     }
                     else
@@ -271,7 +271,7 @@ struct npc_morokkAI : public npc_escortAI
                 if (Player* pPlayer = GetPlayerForEscort())
                 {
                     pPlayer->RewardPlayerAndGroupAtEventExplored(QUEST_CHALLENGE_MOROKK, m_creature);
-                    m_creature->setFaction(FACTION_MOR_RUNNING);
+                    m_creature->SetFaction(FACTION_MOR_RUNNING);
                     m_bIsSuccess = true;
                     m_creature->RemoveAllAurasOnEvade();
                     m_creature->CombatStop(true);
@@ -428,7 +428,7 @@ struct npc_ogronAI : public npc_escortAI
     {
         lCreatureList.push_back(pSummoned);
 
-        pSummoned->setFaction(FACTION_GENERIC_FRIENDLY);
+        pSummoned->SetFaction(FACTION_GENERIC_FRIENDLY);
 
         if (pSummoned->GetEntry() == NPC_CALDWELL)
             pSummoned->GetMotionMaster()->MovePoint(0, m_afMoveTo[0], m_afMoveTo[1], m_afMoveTo[2]);
@@ -454,7 +454,7 @@ struct npc_ogronAI : public npc_escortAI
 
                 if (itr->IsAlive())
                 {
-                    itr->setFaction(FACTION_THER_HOSTILE);
+                    itr->SetFaction(FACTION_THER_HOSTILE);
                     itr->AI()->AttackStart(m_creature);
                 }
             }
