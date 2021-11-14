@@ -240,13 +240,18 @@ class CharacterHandler
             session->HandlePlayerLogin((LoginQueryHolder*)holder);
 #ifdef ENABLE_PLAYERBOTS
             Player* player = sObjectMgr.GetPlayer(guid, true);
-            if (player && !player->GetPlayerbotAI())
+
+            if (player)
             {
-                player->SetPlayerbotMgr(new PlayerbotMgr(player));
-                player->GetPlayerbotMgr()->OnPlayerLogin(player);
-                //sRandomPlayerbotMgr.OnPlayerLogin(player);
+                if (!player->GetPlayerbotAI())
+                {
+                    player->SetPlayerbotMgr(new PlayerbotMgr(player));
+                    player->GetPlayerbotMgr()->OnPlayerLogin(player);
+                }
+
+                sRandomPlayerbotMgr.OnPlayerLogin(player);
             }
-            sRandomPlayerbotMgr.OnPlayerLogin(player);
+
 #endif
         }
 #ifdef BUILD_PLAYERBOT
