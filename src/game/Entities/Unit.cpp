@@ -9776,7 +9776,7 @@ bool Unit::IsVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
     // Now check is target visible with LoS
     float x, y, z;
     viewPoint->GetPosition(x, y, z);
-    return IsWithinLOS(x, y, z + viewPoint->GetCollisionHeight());
+    return IsWithinLOS(x, y, z + viewPoint->GetCollisionHeight(), false, true);
 }
 
 void Unit::UpdateVisibilityAndView()

@@ -497,7 +497,7 @@ bool ChaseMovementGenerator::DispatchSplineToPosition(Unit& owner, float x, floa
         this->i_path = new PathFinder(&owner);
 
     bool gen = false;
-    if (owner.IsWithinDist3d(x, y, z, 200.f) && std::abs(owner.GetPositionZ() - z) < 5.f && owner.IsWithinLOS(x, y, z + i_target->GetCollisionHeight()) && !owner.IsInWater() && !i_target->IsInWater())
+    if (owner.IsWithinDist3d(x, y, z, 200.f) && std::abs(owner.GetPositionZ() - z) < 5.f && owner.IsWithinLOS(x, y, z + i_target->GetCollisionHeight(), false, true) && !owner.IsInWater() && !i_target->IsInWater())
     {
         this->i_path->calculate(x, y, z, false, true);
         auto& path = this->i_path->getPath();
@@ -522,7 +522,7 @@ bool ChaseMovementGenerator::DispatchSplineToPosition(Unit& owner, float x, floa
             Position pos = owner.GetPosition();
             std::string message = "Start X: " + std::to_string(pos.x) + " Y: " + std::to_string(pos.y) + " Z: " + std::to_string(pos.z) + "\n";
             message += "End X: " + std::to_string(x) + " Y: " + std::to_string(y) + " Z: " + std::to_string(z) + "\n";
-            message += (owner.IsWithinDist3d(x, y, z, 200.f) ? "Within 200f " : "") + std::string(owner.IsWithinLOS(x, y, z + i_target->GetCollisionHeight()) ? "Within LOS " : "") +
+            message += (owner.IsWithinDist3d(x, y, z, 200.f) ? "Within 200f " : "") + std::string(owner.IsWithinLOS(x, y, z + i_target->GetCollisionHeight(), false, true) ? "Within LOS " : "") +
                 ((this->i_path->getPathType() & PATHFIND_NOPATH) ? " No straight path" : "") + "\n";
             static_cast<Player*>(i_target.getTarget())->SendMessageToPlayer(message);
             std::ostringstream out;
@@ -864,7 +864,7 @@ bool FollowMovementGenerator::Move(Unit& owner, float x, float y, float z)
         // Do a final sanity LoS check when unstucking self to prevent landing on a wrong walkable surface
         // Target needs to be able to see this new location to prevent issues and exploits
         if (i_target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
-            if (!i_target->IsWithinLOS(x, y, (z + owner.GetCollisionHeight()), true))
+            if (!i_target->IsWithinLOS(x, y, (z + owner.GetCollisionHeight()), true, true))
                 i_target->GetPosition(x, y, z);
 
         if (owner.GetTypeId() == TYPEID_PLAYER)

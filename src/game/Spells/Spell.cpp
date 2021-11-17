@@ -2136,7 +2136,7 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, bool targ
 
             z = liqData.level;
             // finally, check LoS
-            if (!m_caster->IsWithinLOS(x, y, z + 1.f))
+            if (!m_caster->IsWithinLOS(x, y, z + 1.f, false, true))
             {
                 SendCastResult(SPELL_FAILED_LINE_OF_SIGHT);
                 finish(false);
@@ -6936,7 +6936,7 @@ SpellCastResult Spell::CheckRange(bool strict)
         if (minRange && dist < minRange * minRange)
             return SPELL_FAILED_TOO_CLOSE;
         if (!IsIgnoreLosSpell(m_spellInfo))
-            if (!m_caster->IsWithinLOS(m_targets.m_destPos.x, m_targets.m_destPos.y, m_targets.m_destPos.z + 1.f))
+            if (!m_caster->IsWithinLOS(m_targets.m_destPos.x, m_targets.m_destPos.y, m_targets.m_destPos.z + 1.f, false, true))
                 return SPELL_FAILED_LINE_OF_SIGHT;
     }
 
@@ -6948,7 +6948,7 @@ SpellCastResult Spell::CheckRange(bool strict)
         if (minRange && dist < minRange * minRange)
             return SPELL_FAILED_TOO_CLOSE;
         if (!IsIgnoreLosSpell(m_spellInfo))
-            if (!m_caster->IsWithinLOS(m_targets.m_srcPos.x, m_targets.m_srcPos.y, m_targets.m_srcPos.z + 1.f))
+            if (!m_caster->IsWithinLOS(m_targets.m_srcPos.x, m_targets.m_srcPos.y, m_targets.m_srcPos.z + 1.f, false, true))
                 return SPELL_FAILED_LINE_OF_SIGHT;
     }
 

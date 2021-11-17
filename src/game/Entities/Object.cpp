@@ -1413,14 +1413,20 @@ bool WorldObject::IsWithinLOSInMap(const WorldObject* obj, bool ignoreM2Model) c
     if (!IsInMap(obj)) return false;
     float x, y, z;
     obj->GetPosition(x, y, z);
-    return IsWithinLOS(x, y, z + obj->GetCollisionHeight(), ignoreM2Model);
+    return IsWithinLOS(x, y, z + obj->GetCollisionHeight(), ignoreM2Model, true);
 }
 
-bool WorldObject::IsWithinLOS(float ox, float oy, float oz, bool ignoreM2Model) const
+bool WorldObject::IsWithinLOS(float ox, float oy, float oz, bool ignoreM2Model, bool ozIncludesCollisionHeight) const
 {
     float x, y, z;
     GetPosition(x, y, z);
-    return GetMap()->IsInLineOfSight(x, y, z + GetCollisionHeight(), ox, oy, oz, GetPhaseMask(), ignoreM2Model);
+
+    float collisionHeight = GetCollisionHeight();
+
+    if (ozIncludesCollisionHeight)
+        return GetMap()->IsInLineOfSight(x, y, z + collisionHeight, ox, oy, oz, GetPhaseMask(), ignoreM2Model);
+    else
+        return GetMap()->IsInLineOfSight(x, y, z + collisionHeight, ox, oy, oz + collisionHeight, GetPhaseMask(), ignoreM2Model);
 }
 
 bool WorldObject::IsWithinLOSForMe(float ox, float oy, float oz, float collisionHeight, bool ignoreM2Model) const
