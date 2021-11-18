@@ -1049,7 +1049,15 @@ void LFGMgr::SendLFGRewards(Group* pGroup)
     GetLFGGroupState(pGroup->GetObjectGuid())->SetState(LFG_STATE_FINISHED_DUNGEON);
     GetLFGGroupState(pGroup->GetObjectGuid())->SetStatus(LFG_STATUS_SAVED);
 
-    LFGDungeonEntry const* dungeon = *GetLFGGroupState(pGroup->GetObjectGuid())->GetDungeons()->begin();
+    LFGDungeonSet const* dungeons = GetLFGGroupState(pGroup->GetObjectGuid())->GetDungeons();
+
+    if(!dungeons)
+    {
+        DEBUG_LOG("LFGMgr::SendLFGReward: group %u - but no dungeons in Set", pGroup->GetObjectGuid().GetCounter());
+        return;
+    }
+
+    LFGDungeonEntry const* dungeon = *dungeons->begin();
     if (!dungeon)
     {
         DEBUG_LOG("LFGMgr::SendLFGReward: group %u - but no realdungeon", pGroup->GetObjectGuid().GetCounter());
