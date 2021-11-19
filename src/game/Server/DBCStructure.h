@@ -22,7 +22,7 @@
 #include "Server/DBCEnums.h"
 #include "MotionGenerators/Path.h"
 #include "Platform/Define.h"
-#include "Globals/SharedDefines.h"
+#include "Spells/SpellDefines.h"
 
 #include <map>
 #include <set>
@@ -1998,6 +1998,17 @@ struct SpellEntry
 
         // custom
         bool HasAttribute(SpellAttributesServerside attribute) const { return (AttributesServerside & attribute) != 0; }
+
+        uint32 GetAllEffectsMechanicMask() const
+        {
+            uint32 mask = 0;
+            if (Mechanic)
+                mask |= 1 << Mechanic;
+            for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                if (Effect[i] && EffectMechanic[i])
+                    mask |= 1 << EffectMechanic[i];
+            return mask;
+        }
 
     private:
         // prevent creating custom entries (copy data from original in fact)

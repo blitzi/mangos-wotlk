@@ -23,6 +23,7 @@
 #include "Entities/Creature.h"
 #include "AI/BaseAI/CreatureAI.h"
 #include "Entities/Unit.h"
+#include "AI/ScriptDevAI/base/TimerAI.h"
 #include <set>
 
 class Player;
@@ -74,6 +75,7 @@ enum EventAI_Type
     EVENT_T_FACING_TARGET           = 33,                   // Position, unused, RepeatMin, RepeatMax
     EVENT_T_SPELLHIT_TARGET         = 34,                   // SpellID, School, RepeatMin, RepeatMax
     EVENT_T_DEATH_PREVENTED         = 35,                   //
+    EVENT_T_TARGET_NOT_REACHABLE    = 36,                   //
 
     EVENT_T_END,
 };
@@ -143,6 +145,7 @@ enum EventAI_ActionType
     ACTION_T_SET_SPELL_SET              = 60,               // SetId
     ACTION_T_SET_IMMOBILIZED_STATE      = 61,               // state (true - rooted), combatonly (true - autoremoved on combat stop)
     ACTION_T_SET_DESPAWN_AGGREGATION    = 62,               // mask, entry, entry2
+    ACTION_T_SET_IMMUNITY_SET           = 63,               // SetId - creature_immunities
 
     ACTION_T_END,
 };
@@ -569,6 +572,11 @@ struct CreatureEventAI_Action
             uint32 entry;
             uint32 entry2;
         } despawnAggregation;
+        // ACTION_T_SET_IMMUNITY_SET
+        struct
+        {
+            uint32 setId;
+        } immunitySet;
         // RAW
         struct
         {
@@ -760,6 +768,11 @@ struct CreatureEventAI_Event
         {
             uint32 unused;
         } deathPrevented;
+        // EVENT_T_TARGET_NOT_REACHABLE                     = 36
+        struct
+        {
+            uint32 unused;
+        } unreachable;
         // RAW
         struct
         {
@@ -831,7 +844,7 @@ class CreatureEventAI : public CreatureAI
         void GetAIInformation(ChatHandler& reader) override;
 
         void JustRespawned() override;
-        void Reset();
+        void Reset() override;
         void JustReachedHome() override;
         void EnterCombat(Unit* enemy) override;
         void EnterEvadeMode() override;
@@ -845,16 +858,16 @@ class CreatureEventAI : public CreatureAI
         void DamageTaken(Unit* dealer, uint32& damage, DamageEffectType damagetype, SpellEntry const* spellInfo) override;
         void JustPreventedDeath(Unit* attacker);
         void HealedBy(Unit* healer, uint32& healedAmount) override;
-        void UpdateAI(const uint32 diff) override;
         void ReceiveEmote(Player* player, uint32 textEmote) override;
         void SummonedCreatureJustDied(Creature* summoned) override;
         void SummonedCreatureDespawn(Creature* summoned) override;
         void ReceiveAIEvent(AIEventType eventType, Unit* sender, Unit* invoker, uint32 miscValue) override;
+        void CorpseRemoved(uint32& respawnDelay) override;
         // bool IsControllable() const override { return true; }
 
         static int Permissible(const Creature* creature);
 
-        void UpdateEventTimers(const uint32 diff);
+        virtual void UpdateEventTimers(const uint32 diff) override;
         void ProcessEvents(Unit* actionInvoker = nullptr, Unit* AIEventSender = nullptr);
         bool CheckEvent(CreatureEventAIHolder& holder, Unit* actionInvoker = nullptr, Unit* AIEventSender = nullptr);
         void ResetEvent(CreatureEventAIHolder& holder);
@@ -870,32 +883,14 @@ class CreatureEventAI : public CreatureAI
         bool SpawnedEventConditionsCheck(CreatureEventAI_Event const& event) const;
 
         void DoFindFriendlyMissingBuff(CreatureList& list, float range, uint32 spellId, bool inCombat) const;
-        void DoFindFriendlyCC(CreatureList& list, float range) const;
-
-        void SetRangedMode(bool state, float distance, RangeModeType type);
-        void SetCurrentRangedMode(bool state);
-
-        void JustStoppedMovementOfTarget(SpellEntry const* spell, Unit* victim) override;
-        void OnSpellInterrupt(SpellEntry const* spellInfo) override;
-        void OnSpellCooldownAdded(SpellEntry const* spellInfo) override;
-
-        void DistancingStarted() override;
-        void DistancingEnded() override;
 
         MovementGeneratorType GetDefaultMovement() { return m_defaultMovement; }
-
-        bool IsRangedUnit() override { return m_currentRangedMode; }
-        SpellSchoolMask GetMainAttackSchoolMask() const override { return m_currentRangedMode ? m_mainAttackMask : CreatureAI::GetMainAttackSchoolMask(); }
-
-        virtual CanCastResult DoCastSpellIfCan(Unit* target, uint32 spellId, uint32 castFlags = 0) override;
     protected:
         std::string GetAIName() override { return "EventAI"; }
         // Event rules specifiers
         bool IsTimerExecutedEvent(EventAI_Type type) const;
         bool IsRepeatableEvent(EventAI_Type type) const;
         bool IsTimerBasedEvent(EventAI_Type type) const;
-        // Event rules specifiers end
-        void DistanceYourself();
 
         uint32 m_EventUpdateTime;                           // Time between event updates
         uint32 m_EventDiff;                                 // Time between the last event call
@@ -919,19 +914,6 @@ class CreatureEventAI : public CreatureAI
         uint32 m_despawnAggregationMask;
         std::set<uint32> m_entriesForDespawn;
         GuidVector m_despawnGuids;
-
-        // Caster ai support
-        bool m_rangedMode;
-        RangeModeType m_rangedModeSetting;
-        float m_chaseDistance;
-        bool m_currentRangedMode;
-        std::unordered_set<uint32> m_mainSpells;
-        std::unordered_set<uint32> m_distanceSpells;
-        uint32 m_mainSpellId;
-        uint32 m_mainSpellCost;
-        SpellEntry const* m_mainSpellInfo;
-        float m_mainSpellMinRange;
-        SpellSchoolMask m_mainAttackMask;
 
         MovementGeneratorType m_defaultMovement; // TODO: Extend to all of AI
 };

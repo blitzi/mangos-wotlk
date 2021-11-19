@@ -34,7 +34,46 @@ struct Regrowth : public AuraScript
     }
 };
 
+struct FormScalingAttackPowerAuras : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        if (data.spellProto->EffectApplyAuraName[data.effIdx] == SPELL_AURA_MOD_ATTACK_POWER)
+        {
+            // Predatory Strikes
+            Aura* predatoryStrikes = nullptr;
+            if (Aura* aura = data.target->GetAura(16975, EFFECT_INDEX_0)) // rank 3
+                predatoryStrikes = aura;
+            else if (Aura* aura = data.target->GetAura(16974, EFFECT_INDEX_0)) // rank 2
+                predatoryStrikes = aura;
+            else if (Aura* aura = data.target->GetAura(16972, EFFECT_INDEX_0)) // rank 1
+                predatoryStrikes = aura;
+            if (predatoryStrikes)
+                value += data.target->GetLevel() * predatoryStrikes->GetAmount() / 100;
+        }
+        return value;
+    }
+};
+
+struct WildGrowth : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        Unit* caster = spell->GetCaster();
+        // stored in dummy effect, affected by mods
+        spell->SetMaxAffectedTargets(spell->CalculateSpellEffectValue(EFFECT_INDEX_2, caster)); 
+        spell->SetFilteringScheme(EFFECT_INDEX_0, true, SCHEME_PRIORITIZE_HEALTH);
+    }
+
+    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
+    {
+        return spell->GetCaster()->IsInGroup(target);
+    }
+};
+
 void LoadDruidScripts()
 {
     RegisterAuraScript<Regrowth>("spell_regrowth");
+    RegisterAuraScript<FormScalingAttackPowerAuras>("spell_druid_form_scaling_ap_auras");
+    RegisterSpellScript<WildGrowth>("spell_wild_growth");
 }

@@ -24,9 +24,12 @@
 #include "Entities/Creature.h"
 #include "Entities/Vehicle.h"
 #include "Server/DBCStores.h"
+#include "MotionGenerators/MovementGenerator.h"
 
-CreatureAI::CreatureAI(Creature* creature) :
-    UnitAI(creature),
+CreatureAI::CreatureAI(Creature* creature) : CreatureAI(creature, 0) { }
+
+CreatureAI::CreatureAI(Creature* creature, uint32 combatActions) :
+    UnitAI(creature, combatActions),
     m_creature(creature),
     m_deathPrevention(false), m_deathPrevented(false)
 {
@@ -39,8 +42,16 @@ CreatureAI::CreatureAI(Creature* creature) :
         m_visibilityDistance = sWorld.getConfig(CONFIG_FLOAT_SIGHT_GUARDER);
 }
 
+void CreatureAI::Reset()
+{
+    ResetAllTimers();
+    m_currentRangedMode = m_rangedMode;
+    m_attackDistance = m_chaseDistance;
+}
+
 void CreatureAI::EnterCombat(Unit* enemy)
 {
+    UnitAI::EnterCombat(enemy);
     if (enemy && (m_creature->IsGuard() || m_creature->IsCivilian()))
     {
         // Send Zone Under Attack message to the LocalDefense and WorldDefense Channels
@@ -107,7 +118,10 @@ void CreatureAI::DamageTaken(Unit* dealer, uint32& damage, DamageEffectType /*da
         {
             damage = m_creature->GetHealth() - 1;
             if (!m_deathPrevented)
+            {
+                m_deathPrevented = true;
                 JustPreventedDeath(dealer);
+            }
         }
     }
 }
@@ -199,4 +213,14 @@ void CreatureAI::HandleAssistanceCall(Unit* sender, Unit* invoker)
         m_creature->SetNoCallAssistance(true);
         AttackStart(invoker);
     }
+}
+
+void CreatureAI::AddUnreachabilityCheck()
+{
+    m_teleportUnreachable = true;
+}
+
+CreatureSpellList const& CreatureAI::GetSpellList() const
+{
+    return m_creature->GetSpellList();
 }

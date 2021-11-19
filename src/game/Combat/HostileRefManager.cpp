@@ -40,7 +40,7 @@ HostileRefManager::~HostileRefManager()
 
 void HostileRefManager::threatAssist(Unit* victim, float threat, SpellEntry const* threatSpell, bool singleTarget, bool ignoreTimer)
 {
-    if (threatSpell->HasAttribute(SPELL_ATTR_EX3_NO_INITIAL_AGGRO) || threatSpell->HasAttribute(SPELL_ATTR_EX_NO_THREAT) || !getOwner()->CanEnterCombat() || !victim->CanEnterCombat())
+    if (threatSpell->HasAttribute(SPELL_ATTR_EX2_NO_INITIAL_THREAT) || threatSpell->HasAttribute(SPELL_ATTR_EX_NO_THREAT) || !getOwner()->CanEnterCombat() || !victim->CanEnterCombat())
         return;
 
     HostileReference* ref = getFirst();
@@ -239,7 +239,7 @@ void HostileRefManager::HandleSuppressed(bool apply, bool immunity)
             HostileReference& ref = static_cast<HostileReference&>(data);
             Unit* source = ref.getSource()->getOwner();
             Unit* target = ref.getTarget();
-            if (!target->IsSuppressedTarget(source))
+            if (!source->IsSuppressedTarget(target))
             {
                 ref.SetSuppressabilityToggle();
                 continue;

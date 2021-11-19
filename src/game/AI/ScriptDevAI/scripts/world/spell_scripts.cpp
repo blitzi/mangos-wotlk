@@ -465,13 +465,13 @@ bool EffectAuraDummy_spell_aura_dummy_npc(const Aura* pAura, bool bApply)
 
             Creature* pTarget = (Creature*)pAura->GetTarget();
 
-            if (Creature* pCreature = GetClosestCreatureWithEntry(pTarget, NPC_DARKSPINE_MYRMIDON, 25.0f))
+            if (Creature* pCreature = GetClosestCreatureWithEntry(pTarget, NPC_DARKSPINE_MYRMIDON, 50.0f))
             {
                 pTarget->AI()->AttackStart(pCreature);
                 return true;
             }
 
-            if (Creature* pCreature = GetClosestCreatureWithEntry(pTarget, NPC_DARKSPINE_SIREN, 25.0f))
+            if (Creature* pCreature = GetClosestCreatureWithEntry(pTarget, NPC_DARKSPINE_SIREN, 50.0f))
             {
                 pTarget->AI()->AttackStart(pCreature);
                 return true;
@@ -970,7 +970,7 @@ struct GreaterInvisibilityMob : public AuraScript
         Cell::VisitWorldObjects(invisible, searcher, invisible->GetDetectionRange());
         for (Unit* nearby : nearbyTargets)
         {
-            if (invisible->CanAttackOnSight(nearby))
+            if (invisible->CanAttackOnSight(nearby) && invisible->IsWithinLOSInMap(nearby, true))
             {
                 invisible->AI()->AttackStart(nearby);
                 return;
@@ -1144,6 +1144,92 @@ struct TKDive : public SpellScript
     }
 };
 
+struct CurseOfPain : public AuraScript
+{
+    void OnPeriodicTickEnd(Aura* aura) const override
+    {
+        if (aura->GetTarget()->GetHealthPercent() < 50.f)
+            aura->GetTarget()->RemoveAurasDueToSpell(aura->GetId());
+    }
+};
+
+enum SeedOfCorruptionNpc
+{
+    SPELL_SEED_OF_CORRUPTION_PROC_DEFAULT   = 32865,
+    SPELL_SEED_OF_CORRUPTION_NPC_24558      = 44141,
+    SPELL_SEED_OF_CORRUPTION_PROC_NPC_24558 = 43991,
+};
+
+struct spell_seed_of_corruption_npc : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        if (aura->GetEffIndex() != EFFECT_INDEX_1)
+            return SPELL_AURA_PROC_OK;
+        Modifier* mod = procData.triggeredByAura->GetModifier();
+        // if damage is more than need deal finish spell
+        if (mod->m_amount <= (int32)procData.damage)
+        {
+            // remember guid before aura delete
+            ObjectGuid casterGuid = procData.triggeredByAura->GetCasterGuid();
+
+            int32 basePoints = 2000; // guesswork, need to fill for all spells that use this because its not in spell data
+
+            // Remove aura (before cast for prevent infinite loop handlers)
+            procData.victim->RemoveAurasByCasterSpell(procData.triggeredByAura->GetId(), procData.triggeredByAura->GetCasterGuid());
+
+            // Cast finish spell (triggeredByAura already not exist!)
+            uint32 triggered_spell_id = 0;
+            switch (aura->GetSpellProto()->Id)
+            {
+                case SPELL_SEED_OF_CORRUPTION_NPC_24558: triggered_spell_id = SPELL_SEED_OF_CORRUPTION_PROC_NPC_24558; break;
+                default: triggered_spell_id = SPELL_SEED_OF_CORRUPTION_PROC_DEFAULT; break;
+            }
+            if (Unit* caster = procData.triggeredByAura->GetCaster())
+                caster->CastCustomSpell(procData.victim, triggered_spell_id, &basePoints, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
+
+            return SPELL_AURA_PROC_OK;              // no hidden cooldown
+        }
+
+        // Damage counting
+        mod->m_amount -= procData.damage;
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+// PX-238 Winter Wondervolt TRAP
+struct WondervoltTrap : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx == EFFECT_INDEX_0)
+        {
+            if (Unit* target = spell->GetUnitTarget())
+            {
+                if (WorldObject* source = spell->GetCastingObject())
+                    if (!source->IsWithinDist(target, 1.0f))
+                        return;
+
+                if (spell->GetUnitTarget()->getGender() == GENDER_MALE)
+                {
+                    target->RemoveAurasDueToSpell(26157);
+                    target->RemoveAurasDueToSpell(26273);
+                    target->CastSpell(target, urand(0, 1) ? 26157 : 26273, TRIGGERED_OLD_TRIGGERED);
+                }
+                else
+                {
+                    target->RemoveAurasDueToSpell(26272);
+                    target->RemoveAurasDueToSpell(26274);
+                    target->CastSpell(target, urand(0, 1) ? 26272 : 26274, TRIGGERED_OLD_TRIGGERED);
+                }
+            }
+            return;
+        }
+    }
+};
+
+// wotlk section
+
 struct deflection : public SpellScript
 {
     SpellCastResult OnCheckCast(Spell* spell, bool/* strict*/) const override
@@ -1173,17 +1259,105 @@ struct spell_eject_all_passengers : public SpellScript
     }
 };
 
-// PX-238 Winter Wondervolt TRAP
-struct WondervoltTrap : public SpellScript
+struct Replenishment : public SpellScript
 {
-    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    void OnInit(Spell* spell) const override
     {
-        if (effIdx == EFFECT_INDEX_0)
+        spell->SetMaxAffectedTargets(10);
+        spell->SetFilteringScheme(EFFECT_INDEX_0, false, SCHEME_PRIORITIZE_MANA);
+    }
+
+    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
+    {
+        Unit* caster = spell->GetCaster();
+        if (caster->GetMap()->IsBattleArena()) // in arenas only hits caster
+            if (target != caster)
+                return false;
+
+        return true;
+    }
+};
+
+enum SpellVisualKitFoodOrDrink
+{
+    SPELL_VISUAL_KIT_FOOD = 406,
+    SPELL_VISUAL_KIT_DRINK = 438
+};
+
+struct FoodAnimation : public AuraScript
+{
+    void OnHeartbeat(Aura* aura) const override
+    {
+        aura->GetTarget()->PlaySpellVisual(SPELL_VISUAL_KIT_FOOD);
+    }
+};
+
+struct DrinkAnimation : public AuraScript
+{
+    void OnHeartbeat(Aura* aura) const override
+    {
+        aura->GetTarget()->PlaySpellVisual(SPELL_VISUAL_KIT_DRINK);
+    }
+};
+
+struct Drink : public DrinkAnimation
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply || aura->GetEffIndex() != EFFECT_INDEX_0)
+            return;
+
+        if (!aura->GetTarget()->IsPlayer())
+            return;
+
+        if (aura->GetTarget()->GetMap()->IsBattleArena())
+            return;
+
+        if (Aura* periodicAura = aura->GetHolder()->GetAuraByEffectIndex((SpellEffectIndex)(aura->GetEffIndex() + 1)))
+            aura->GetModifier()->m_amount = periodicAura->GetModifier()->m_amount;
+    }
+
+    void OnPeriodicDummy(Aura* aura) const override
+    {
+        if (aura->GetEffIndex() != EFFECT_INDEX_1)
+            return;
+
+        if (!aura->GetTarget()->IsPlayer())
+            return;
+
+        if (!aura->GetTarget()->GetMap()->IsBattleArena())
+            return;
+
+        //if (aura->GetAuraTicks() != 2) // todo: wait for 2nd tick to update regen in Arena only? (needs confirmation)
+        //    return;
+
+        aura->ForcePeriodicity(0);
+
+        if (Aura* regenAura = aura->GetHolder()->GetAuraByEffectIndex((SpellEffectIndex)(aura->GetEffIndex() - 1)))
         {
-            uint32 spells[4] = {26272, 26157, 26273, 26274};    // Four possible transform spells
-            if (spell->GetUnitTarget())
-                spell->GetUnitTarget()->CastSpell(spell->GetUnitTarget(), spells[urand(0, 3)], TRIGGERED_OLD_TRIGGERED);
+            regenAura->GetModifier()->m_amount = aura->GetModifier()->m_amount;
+            ((Player*)aura->GetTarget())->UpdateManaRegen();
         }
+    }
+};
+
+struct spell_effect_summon_no_follow_movement : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        summon->AI()->SetFollowMovement(false);
+    }
+};
+
+struct SpellHasteHealerTrinket : public AuraScript
+{
+    bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
+    {
+        // should only proc off of direct heals or HoT applications
+        if (data.spell && (data.isHeal || IsSpellHaveAura(data.spellInfo, SPELL_AURA_PERIODIC_HEAL)))
+            return true;
+
+        return false;
     }
 };
 
@@ -1211,7 +1385,17 @@ void AddSC_spell_scripts()
     RegisterSpellScript<RaiseDead>("spell_raise_dead");
     RegisterSpellScript<SplitDamage>("spell_split_damage");
     RegisterSpellScript<TKDive>("spell_tk_dive");
+    RegisterAuraScript<CurseOfPain>("spell_curse_of_pain");
+    RegisterAuraScript<spell_seed_of_corruption_npc>("spell_seed_of_corruption_npc");
     RegisterSpellScript<deflection>("spell_deflection");
     RegisterSpellScript<spell_eject_all_passengers>("spell_eject_all_passengers");
     RegisterSpellScript<WondervoltTrap>("spell_wondervolt_trap");
+    RegisterAuraScript<FoodAnimation>("spell_food_animation");
+    RegisterAuraScript<DrinkAnimation>("spell_drink_animation");
+    RegisterAuraScript<Drink>("spell_drink");
+    RegisterSpellScript<spell_effect_summon_no_follow_movement>("spell_effect_summon_no_follow_movement");
+    RegisterAuraScript<SpellHasteHealerTrinket>("spell_spell_haste_healer_trinket");
+
+    // wotlk section
+    RegisterSpellScript<Replenishment>("spell_replenishment");
 }

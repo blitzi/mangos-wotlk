@@ -69,7 +69,7 @@ class PathFinder
 public:
     PathFinder();
     PathFinder(uint32 mapId, uint32 instanceId = 0);
-    PathFinder(Unit const* owner);
+    PathFinder(Unit const* owner, bool ignoreNormalization = false);
     ~PathFinder();
 
     // Calculate the path from owner to given destination
@@ -119,6 +119,9 @@ private:
     const dtNavMesh* m_navMesh;          // the nav mesh
     const dtNavMeshQuery* m_navMeshQuery;     // the nav mesh query used to find the path
 
+        bool                    m_ignoreNormalization;
+
+        dtQueryFilter m_filter;                     // use single filter for all movements, update it when needed
     const dtNavMeshQuery* m_defaultNavMeshQuery;     // the nav mesh query used to find the path
     uint32                  m_defaultMapId;
 

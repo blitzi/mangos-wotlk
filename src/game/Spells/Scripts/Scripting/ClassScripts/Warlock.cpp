@@ -18,6 +18,7 @@
  
 #include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellAuras.h"
+#include "Spells/SpellMgr.h"
 
 enum
 {
@@ -121,18 +122,147 @@ struct LifeTap : public SpellScript
 
 struct DemonicKnowledge : public AuraScript
 {
-    int32 OnAuraValueCalculate(Aura* aura, Unit* caster, int32 value) const override
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
     {
-        if (!caster)
-            caster = aura->GetCaster();
-        if (caster)
+        if (!data.aura)
+            return value;
+        if (Unit* caster = data.caster)
         {
-            Unit* target = aura->GetTarget();
-            if (!aura->GetScriptValue())
-                aura->SetScriptValue((target->HasAura(35693) ? 12 : target->HasAura(35692) ? 8 : target->HasAura(35691) ? 4 : 0));
-            value = aura->GetScriptValue() * (caster->GetStat(STAT_STAMINA) + caster->GetStat(STAT_INTELLECT)) / 100;
+            Unit* target = data.target;
+            if (!data.aura->GetScriptValue())
+                data.aura->SetScriptValue((target->HasAura(35693) ? 12 : target->HasAura(35692) ? 8 : target->HasAura(35691) ? 4 : 0));
+            value = data.aura->GetScriptValue() * (caster->GetStat(STAT_STAMINA) + caster->GetStat(STAT_INTELLECT)) / 100;
         }
         return value;
+    }
+};
+
+struct EyeOfKilrogg : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        summon->CastSpell(nullptr, 2585, TRIGGERED_OLD_TRIGGERED);
+        summon->DisableThreatPropagationToOwner();
+        if (spell->GetCaster()->GetMapId() == 571) // Northrend - Flight
+            summon->CastSpell(nullptr, 58083, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct CurseOfDoom : public SpellScript, public AuraScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool /*strict*/) const override
+    {
+        // not allow cast at player
+        Unit* target = spell->m_targets.getUnitTarget();
+        if (!target || target->GetTypeId() == TYPEID_PLAYER)
+            return SPELL_FAILED_BAD_TARGETS;
+        return SPELL_CAST_OK;
+    }
+
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply && aura->GetRemoveMode() == AURA_REMOVE_BY_DEATH && urand(0, 100) > 95)
+            if (Unit* caster = aura->GetCaster())
+                caster->CastSpell(nullptr, 18662, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct CurseOfDoomEffect : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        summon->CastSpell(nullptr, 42010, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct DevourMagic : public SpellScript
+{
+    SpellCastResult OnCheckCast(Spell* spell, bool strict) const override
+    {
+        Unit* target = spell->m_targets.getUnitTarget();
+        Unit* caster = spell->GetCaster();
+        if (target && caster)
+        {
+            auto auras = target->GetSpellAuraHolderMap();
+            for (auto itr : auras)
+            {
+                SpellEntry const* spell = itr.second->GetSpellProto();
+                if (itr.second->GetTarget()->GetObjectGuid() != caster->GetObjectGuid() && spell->Dispel == DISPEL_MAGIC && IsPositiveSpell(spell) && !IsPassiveSpell(spell))
+                    return SPELL_CAST_OK;
+            }
+        }
+        return SPELL_FAILED_NOTHING_TO_DISPEL;
+    }
+};
+
+enum
+{
+    SPELL_SEED = 27243,
+    SPELL_SEED_2 = 47835,
+    SPELL_SEED_3 = 47836,
+
+    SPELL_SEED_DAMAGE = 27285,
+    SPELL_SEED_DAMAGE_2 = 47833,
+    SPELL_SEED_DAMAGE_3 = 47834,
+};
+
+struct SeedOfCorruption : public AuraScript
+{
+    uint32 GetSeedDamageSpell(uint32 id) const
+    {
+        switch (id)
+        {
+            default:
+            case SPELL_SEED: return SPELL_SEED_DAMAGE;
+            case SPELL_SEED_2: return SPELL_SEED_DAMAGE_2;
+            case SPELL_SEED_3: return SPELL_SEED_DAMAGE_3;
+        }
+    }
+
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (apply)
+            return;
+        if (aura->GetEffIndex() != EFFECT_INDEX_1)
+            return;
+        if (aura->GetRemoveMode() == AURA_REMOVE_BY_DEATH)
+            if (Unit* caster = aura->GetCaster())
+                caster->CastSpell(aura->GetTarget(), GetSeedDamageSpell(aura->GetId()), TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        if (aura->GetEffIndex() != EFFECT_INDEX_1)
+            return SPELL_AURA_PROC_OK;
+        Modifier* mod = procData.triggeredByAura->GetModifier();
+        // if damage is more than need
+        if (mod->m_amount <= (int32)procData.damage)
+        {
+            // remember guid before aura delete
+            ObjectGuid casterGuid = procData.triggeredByAura->GetCasterGuid();
+
+            // Remove aura (before cast for prevent infinite loop handlers)
+            procData.victim->RemoveAurasByCasterSpell(procData.triggeredByAura->GetId(), procData.triggeredByAura->GetCasterGuid());
+
+            // Cast finish spell (triggeredByAura already not exist!)
+            if (Unit* caster = procData.triggeredByAura->GetCaster())
+                caster->CastSpell(procData.victim, GetSeedDamageSpell(aura->GetId()), TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
+            return SPELL_AURA_PROC_OK;              // no hidden cooldown
+        }
+
+        // Damage counting
+        mod->m_amount -= procData.damage;
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct SeedOfCorruptionDamage : public SpellScript
+{
+    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
+    {
+        if (target->GetObjectGuid() == spell->m_targets.getUnitTargetGuid()) // in TBC skip target of initial aura
+            return false;
+        return true;
     }
 };
 
@@ -142,4 +272,10 @@ void LoadWarlockScripts()
     RegisterAuraScript<CurseOfAgony>("spell_curse_of_agony");
     RegisterSpellScript<LifeTap>("spell_life_tap");
     RegisterAuraScript<DemonicKnowledge>("spell_demonic_knowledge");
+    RegisterAuraScript<SeedOfCorruption>("spell_seed_of_corruption");
+    RegisterSpellScript<EyeOfKilrogg>("spell_eye_of_kilrogg");
+    RegisterSpellScript<DevourMagic>("spell_devour_magic");
+    RegisterSpellScript<SeedOfCorruptionDamage>("spell_seed_of_corruption_damage");
+    RegisterScript<CurseOfDoom>("spell_curse_of_doom");
+    RegisterSpellScript<CurseOfDoomEffect>("spell_curse_of_doom_effect");
 }

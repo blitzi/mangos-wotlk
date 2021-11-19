@@ -80,7 +80,7 @@ int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster)
 {
     int32 duration = GetSpellDuration(spellInfo);
 
-    if (duration != -1 && caster && !spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_DONE_BONUS))
+    if (duration != -1 && caster && !spellInfo->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS))
     {
         int32 maxduration = GetSpellMaxDuration(spellInfo);
 
@@ -91,7 +91,7 @@ int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster)
         {
             modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_DURATION, duration);
 
-            if (spellInfo->HasAttribute(SPELL_ATTR_EX5_HASTE_AFFECT_DURATION))
+            if (spellInfo->HasAttribute(SPELL_ATTR_EX5_HASTE_AFFECT_DURATION) || caster->HasAffectedAura(SPELL_AURA_PERIODIC_HASTE, spellInfo))
                 duration = int32(duration * caster->GetFloatValue(UNIT_MOD_CAST_SPEED));
 
             if (duration < 0)
@@ -102,17 +102,17 @@ int32 CalculateSpellDuration(SpellEntry const* spellInfo, Unit const* caster)
     return duration;
 }
 
-uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell* spell)
+uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell* spell, bool consume)
 {
     if (spell)
     {
         // Workaround for custom cast time
         switch (spellInfo->Id)
         {
-            case 3366: // Opening - seems to have a settable timer per usage
-                if (spell->m_CastItem)
+            case 3366:  // Opening - seems to have a settable timer per usage
+                if (Item* item = spell->GetCastItem())
                 {
-                    switch (spell->m_CastItem->GetEntry())
+                    switch (item->GetEntry())
                     {
                         case 31088: // Tainted Core - instant opening
                             return 0;
@@ -132,8 +132,8 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell*
             return 0;
 
         // spell targeted to non-trading trade slot item instant at trade success apply
-        if (spell->GetCaster()->GetTypeId() == TYPEID_PLAYER)
-            if (TradeData* my_trade = ((Player*)(spell->GetCaster()))->GetTradeData())
+        if (caster->IsPlayer())
+            if (TradeData* my_trade = static_cast<Player*>(caster)->GetTradeData())
                 if (Item* nonTrade = my_trade->GetTraderData()->GetItem(TRADE_SLOT_NONTRADED))
                     if (nonTrade == spell->m_targets.getItemTarget())
                         return 0;
@@ -155,13 +155,17 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell*
 
     if (spell)
     {
-        if (Player* modOwner = spell->GetCaster()->GetSpellModOwner())
-            modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_CASTING_TIME, castTime);
+        if (Player* modOwner = caster->GetSpellModOwner())
+            modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_CASTING_TIME, castTime, consume);
 
-        if (!spellInfo->HasAttribute(SPELL_ATTR_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL) && !spellInfo->HasAttribute(SPELL_ATTR_EX3_NO_DONE_BONUS))
-            castTime = int32(castTime * spell->GetCaster()->GetFloatValue(UNIT_MOD_CAST_SPEED));
-        else if (spell->IsRangedSpell() && !spell->IsAutoRepeat())
-            castTime = int32(castTime * spell->GetCaster()->m_modAttackSpeedPct[RANGED_ATTACK]);
+        if (caster->IsUnit())
+        {
+            Unit* unitCaster = static_cast<Unit*>(caster);
+            if (!spellInfo->HasAttribute(SPELL_ATTR_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL) && !spellInfo->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS))
+                castTime = int32(castTime * unitCaster->GetFloatValue(UNIT_MOD_CAST_SPEED));
+            else if (spell->IsRangedSpell() && !spell->IsAutoRepeat())
+                castTime = int32(castTime * unitCaster->m_modAttackSpeedPct[RANGED_ATTACK]);
+        }
     }
 
     return (castTime > 0) ? uint32(castTime) : 0;
@@ -169,7 +173,7 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell*
 
 uint32 GetSpellCastTimeForBonus(SpellEntry const* spellProto, DamageEffectType damagetype)
 {
-    uint32 CastingTime = (!IsChanneledSpell(spellProto)) || spellProto->HasAttribute(SPELL_ATTR_EX5_HASTE_AFFECT_DURATION) ? GetSpellCastTime(spellProto, nullptr) : GetSpellDuration(spellProto);
+    uint32 CastingTime = (!IsChanneledSpell(spellProto)) ? GetSpellCastTime(spellProto, nullptr) : GetSpellDuration(spellProto);
 
     if (CastingTime > 7000) CastingTime = 7000;
     if (CastingTime < 1500) CastingTime = 1500;
@@ -513,141 +517,6 @@ bool IsExplicitNegativeTarget(uint32 targetA)
             break;
     }
     return false;
-}
-
-uint32 GetAffectedTargets(SpellEntry const* spellInfo, Unit* caster)
-{
-    // custom target amount cases
-    switch (spellInfo->SpellFamilyName)
-    {
-        case SPELLFAMILY_GENERIC:
-        {
-            switch (spellInfo->Id)
-            {
-                case 802:                                   // Mutate Bug (AQ40, Emperor Vek'nilash)
-                case 804:                                   // Explode Bug (AQ40, Emperor Vek'lor)
-                case 23138:                                 // Gate of Shazzrah (MC, Shazzrah)
-                case 23173:                                 // Brood Affliction (BWL, Chromaggus) - TODO: Remove along with rework
-                case 24019:                                 // Axe Flurry (ZG - Gurubashi Axe Thrower)
-                case 24150:                                 // Stinger Charge Primer (AQ20, Hive'Zara Stinger)
-                case 24781:                                 // Dream Fog (Emerald Dragons)
-                case 26080:                                 // Stinger Charge Primer (AQ40, Vekniss Stinger)
-                case 26524:                                 // Sand Trap (AQ20 - Kurinnaxx)
-                case 28560:                                 // Summon Blizzard (Naxx, Sapphiron)
-                case 30541:                                 // Blaze (Magtheridon)
-                case 30769:                                 // Pick Red Riding Hood (Karazhan, Big Bad Wolf)
-                case 30835:                                 // Infernal Relay (Karazhan, Prince Malchezaar)
-                case 32312:                                 // Move 1 (Karazhan, Chess Event)
-                case 33711:                                 // Murmur's Touch (Shadow Labyrinth, Murmur)
-                case 37388:                                 // Move 2 (Karazhan, Chess Event)
-                case 38794:                                 // Murmur's Touch (h) (Shadow Labyrinth, Murmur)
-                case 39338:                                 // Karazhan - Chess, Medivh CHEAT: Hand of Medivh, Target Horde
-                case 39342:                                 // Karazhan - Chess, Medivh CHEAT: Hand of Medivh, Target Alliance
-                case 40834:                                 // Agonizing Flames (BT, Illidan Stormrage)
-                case 41537:                                 // Summon Enslaved Soul (BT, Reliquary of Souls)
-                case 44869:                                 // Spectral Blast (SWP, Kalecgos)
-                case 45391:                                 // Summon Demonic Vapor (SWP, Felmyst)
-                case 45785:                                 // Sinister Reflection Clone (SWP, Kil'jaeden)
-                case 45892:                                 // Sinister Reflection (SWP, Kil'jaeden)
-                case 45976:                                 // Open Portal (SWP, M'uru)
-                case 46372:                                 // Ice Spear Target Picker (Slave Pens, Ahune)
-                    return 1;
-                case 10258:                                 // Awaken Vault Warder (Uldaman)
-                case 28542:                                 // Life Drain (Naxx, Sapphiron)
-                    return 2;
-                case 28796:                                 // Poison Bolt Volley (Naxx, Faerlina)
-                case 29213:                                 // Curse of the Plaguebringer (Naxx, Noth the Plaguebringer)
-                case 30004:                                 // Flame Wreath (Karazhan, Shade of Aran)
-                case 39341:                                 // Karazhan - Chess, Medivh CHEAT: Fury of Medivh, Target Horde
-                case 39344:                                 // Karazhan - Chess, Medivh CHEAT: Fury of Medivh, Target Alliance
-                case 39992:                                 // Needle Spine Targeting (BT, Warlord Najentus)
-                case 40869:                                 // Fatal Attraction (BT, Mother Shahraz)
-                case 41303:                                 // Soul Drain (BT, Reliquary of Souls)
-                case 41376:                                 // Spite (BT, Reliquary of Souls)
-                    return 3;
-                case 46650:                                 // Open Brutallus Back Door (SWP, Felmyst)
-                    return 4;
-                case 40243:                                 // Crushing Shadows (BT, Teron Gorefiend)
-                case 42005:                                 // Bloodboil (BT, Gurtogg Bloodboil)
-                case 45641:                                 // Fire Bloom (SWP, Kil'jaeden)
-                    return 5;
-                case 25676:                                 // Drain Mana (correct number has to be researched)
-                case 25754:
-                    return 6;
-                case 38054:                                 // Random Rocket Missile
-                    return 8;
-                case 26457:                                 // Drain Mana (correct number has to be researched)
-                case 26559:
-                    return 12;
-                case 61916:                                 // Lightning Whirl (Ulduar, Stormcaller Brundir)
-                    return urand(2, 3);
-                case 46771:                                 // Flame Sear (SWP, Grand Warlock Alythess)
-                    return urand(3, 5);
-                case 63482:                                 // Lightning Whirl (h) (Ulduar, Stormcaller Brundir)
-                    return urand(3, 6);
-                case 74452:                                 // Conflagration (Saviana, Ruby Sanctum)
-                {
-                    if (caster)
-                    {
-                        switch (caster->GetMap()->GetDifficulty())
-                        {
-                            case RAID_DIFFICULTY_10MAN_NORMAL:
-                            case RAID_DIFFICULTY_10MAN_HEROIC:
-                                return 2;
-                            case RAID_DIFFICULTY_25MAN_NORMAL:
-                            case RAID_DIFFICULTY_25MAN_HEROIC:
-                                return 5;
-                        }
-                    }
-                    break;
-                }
-                case 42471:                                 // Hatch Eggs
-                    if (UnitAI* ai = static_cast<Unit*>(caster)->AI())
-                        return ai->GetScriptData();
-                    else
-                        return 1; // for testing purposes
-                default: break;
-            }
-            break;
-        }
-        case SPELLFAMILY_MAGE:
-        {
-            switch (spellInfo->Id)
-            {
-                case 23603:                             // Wild Polymorph (BWL, Nefarian)
-                case 38194:                             // Blink
-                    return 1;
-                default:
-                    break;
-            }
-            break;
-        }
-        case SPELLFAMILY_WARRIOR:
-        {
-            // Sunder Armor (main spell)
-            if (spellInfo->IsFitToFamilyMask(uint64(0x0000000000004000), 0x00000000) && spellInfo->SpellVisual[0] == 406)
-                if (caster->HasAura(58387))               // Glyph of Sunder Armor
-                    return 2;
-            break;
-        }
-        case SPELLFAMILY_DRUID:
-        {
-            // Starfall
-            if (spellInfo->IsFitToFamilyMask(uint64(0x0000000000000000), 0x00000100))
-                return 2;
-            break;
-        }
-        case SPELLFAMILY_DEATHKNIGHT:
-        {
-            if (spellInfo->SpellIconID == 1737)           // Corpse Explosion // TODO - spell 50445?
-                return 1;
-            break;
-        }
-        default:
-            break;
-    }
-
-    return spellInfo->MaxAffectedTargets;
 }
 
 SpellCastResult GetErrorAtShapeshiftedCast(SpellEntry const* spellInfo, uint32 form)
@@ -1281,7 +1150,7 @@ void SpellMgr::LoadSpellBonuses()
     sLog.outString();
 }
 
-bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellProcEvent, uint32 EventProcFlag, SpellEntry const* procSpell, uint32 procFlags, uint32 procExtra)
+bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellProcEvent, uint32 EventProcFlag, SpellEntry const* spellInfo, uint32 procFlags, uint32 procExtra)
 {
     // No extra req need
     uint32 procEvent_procEx = PROC_EX_NONE;
@@ -1291,43 +1160,43 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
         return false;
 
     // Always trigger for this
-    if (EventProcFlag & (PROC_FLAG_KILLED | PROC_FLAG_KILL | PROC_FLAG_ON_TRAP_ACTIVATION | PROC_FLAG_DEATH))
+    if (EventProcFlag & (PROC_FLAG_HEARTBEAT | PROC_FLAG_KILL | PROC_FLAG_DEAL_HELPFUL_PERIODIC | PROC_FLAG_DEATH))
         return true;
 
-    if (procFlags & PROC_FLAG_ON_DO_PERIODIC && EventProcFlag & PROC_FLAG_ON_DO_PERIODIC)
+    if (procFlags & PROC_FLAG_DEAL_HARMFUL_PERIODIC && EventProcFlag & PROC_FLAG_DEAL_HARMFUL_PERIODIC)
     {
         if (procExtra & PROC_EX_INTERNAL_HOT)
         {
-            if (EventProcFlag == PROC_FLAG_ON_DO_PERIODIC)
+            if (EventProcFlag == PROC_FLAG_DEAL_HARMFUL_PERIODIC)
             {
-                /// no aura with only PROC_FLAG_DONE_PERIODIC and spellFamilyName == 0 can proc from a HOT.
-                if (!procSpell->SpellFamilyName)
+                // no aura with only PROC_FLAG_DONE_PERIODIC and spellFamilyName == 0 can proc from a HOT.
+                if (!spellInfo->SpellFamilyName)
                     return false;
             }
-            /// Aura must have positive procflags for a HOT to proc
-            else if (!(EventProcFlag & (PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_POS)))
+            // Aura must have positive procflags for a HOT to proc
+            else if (!(EventProcFlag & (PROC_FLAG_DEAL_HELPFUL_SPELL | PROC_FLAG_DEAL_HELPFUL_ABILITY)))
                 return false;
         }
-        /// Aura must have negative or neutral(PROC_FLAG_DONE_PERIODIC only) procflags for a DOT to proc
-        else if (EventProcFlag != PROC_FLAG_ON_DO_PERIODIC)
-            if (!(EventProcFlag & (PROC_FLAG_DONE_SPELL_MAGIC_DMG_CLASS_NEG | PROC_FLAG_DONE_SPELL_NONE_DMG_CLASS_NEG)))
+        // Aura must have negative or neutral(PROC_FLAG_DONE_PERIODIC only) procflags for a DOT to proc
+        else if (EventProcFlag != PROC_FLAG_DEAL_HARMFUL_PERIODIC)
+            if (!(EventProcFlag & (PROC_FLAG_DEAL_HARMFUL_SPELL | PROC_FLAG_DEAL_HARMFUL_ABILITY)))
                 return false;
     }
 
-    if (procFlags & PROC_FLAG_ON_TAKE_PERIODIC && EventProcFlag & PROC_FLAG_ON_TAKE_PERIODIC)
+    if (procFlags & PROC_FLAG_TAKE_HARMFUL_PERIODIC && EventProcFlag & PROC_FLAG_TAKE_HARMFUL_PERIODIC)
     {
         if (procExtra & PROC_EX_INTERNAL_HOT)
         {
-            /// No aura that only has PROC_FLAG_TAKEN_PERIODIC can proc from a HOT.
-            if (EventProcFlag == PROC_FLAG_ON_TAKE_PERIODIC)
+            // No aura that only has PROC_FLAG_TAKEN_PERIODIC can proc from a HOT.
+            if (EventProcFlag == PROC_FLAG_TAKE_HARMFUL_PERIODIC)
                 return false;
-            /// Aura must have positive procflags for a HOT to proc
-            if (!(EventProcFlag & (PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_POS | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_POS)))
+            // Aura must have positive procflags for a HOT to proc
+            if (!(EventProcFlag & (PROC_FLAG_TAKE_HELPFUL_SPELL | PROC_FLAG_TAKE_HELPFUL_ABILITY)))
                 return false;
         }
-        /// Aura must have negative or neutral(PROC_FLAG_TAKEN_PERIODIC only) procflags for a DOT to proc
-        else if (EventProcFlag != PROC_FLAG_ON_TAKE_PERIODIC)
-            if (!(EventProcFlag & (PROC_FLAG_TAKEN_SPELL_MAGIC_DMG_CLASS_NEG | PROC_FLAG_TAKEN_SPELL_NONE_DMG_CLASS_NEG)))
+        // Aura must have negative or neutral(PROC_FLAG_TAKEN_PERIODIC only) procflags for a DOT to proc
+        else if (EventProcFlag != PROC_FLAG_TAKE_HARMFUL_PERIODIC)
+            if (!(EventProcFlag & (PROC_FLAG_TAKE_HARMFUL_SPELL | PROC_FLAG_TAKE_HARMFUL_ABILITY)))
                 return false;
     }
 
@@ -1337,7 +1206,7 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
         procEvent_procEx = spellProcEvent->procEx;
 
         // For melee triggers
-        if (procSpell == nullptr)
+        if (spellInfo == nullptr)
         {
             // Check (if set) for school (melee attack have Normal school)
             if (spellProcEvent->schoolMask && (spellProcEvent->schoolMask & SPELL_SCHOOL_MASK_NORMAL) == 0)
@@ -1346,11 +1215,11 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
         else // For spells need check school/spell family/family mask
         {
             // Check (if set) for school
-            if (spellProcEvent->schoolMask && (spellProcEvent->schoolMask & procSpell->SchoolMask) == 0)
+            if (spellProcEvent->schoolMask && (spellProcEvent->schoolMask & spellInfo->SchoolMask) == 0)
                 return false;
 
             // Check (if set) for spellFamilyName
-            if (spellProcEvent->spellFamilyName && (spellProcEvent->spellFamilyName != procSpell->SpellFamilyName))
+            if (spellProcEvent->spellFamilyName && (spellProcEvent->spellFamilyName != spellInfo->SpellFamilyName))
                 return false;
         }
     }
@@ -1359,7 +1228,7 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
     if (procEvent_procEx == PROC_EX_NONE)
     {
         // Don't allow proc from periodic heal if no extra requirement is defined
-        if (EventProcFlag & (PROC_FLAG_ON_DO_PERIODIC | PROC_FLAG_ON_TAKE_PERIODIC) && (procExtra & PROC_EX_PERIODIC_POSITIVE))
+        if (EventProcFlag & (PROC_FLAG_DEAL_HARMFUL_PERIODIC | PROC_FLAG_TAKE_HARMFUL_PERIODIC) && (procExtra & PROC_EX_PERIODIC_POSITIVE))
             return false;
 
         // No extra req, so can trigger for (damage/healing present) and cast end/hit/crit
@@ -2624,7 +2493,7 @@ void SpellMgr::LoadPetDefaultSpells()
         int32 petSpellsId = -(int32)cInfo->PetSpellDataId;
         PetDefaultSpellsEntry petDefSpells;
         for (int j = 0; j < MAX_CREATURE_SPELL_DATA_SLOT; ++j)
-            petDefSpells.spellid[j] = spellDataEntry->spellId[j];
+            petDefSpells.spellid.push_back(spellDataEntry->spellId[j]);
 
         if (LoadPetDefaultSpells_helper(cInfo, petDefSpells))
         {
@@ -2659,9 +2528,9 @@ void SpellMgr::LoadPetDefaultSpells()
                     continue;
 
                 PetDefaultSpellsEntry petDefSpells;
-                if (CreatureTemplateSpells const* templateSpells = sObjectMgr.GetCreatureTemplateSpellSet(cInfo->Entry, 0))
-                    for (int j = 0; j < MAX_CREATURE_SPELL_DATA_SLOT; ++j)
-                        petDefSpells.spellid[j] = templateSpells->spells[j];
+                if (CreatureSpellList* spellList = sObjectMgr.GetCreatureSpellList(cInfo->SpellList ? cInfo->SpellList : cInfo->Entry * 100))
+                    for (auto& data : spellList->Spells)
+                        petDefSpells.spellid.push_back(data.second.SpellId);
 
                 if (LoadPetDefaultSpells_helper(cInfo, petDefSpells))
                 {
@@ -3495,6 +3364,8 @@ DiminishingGroup GetDiminishingReturnsGroupForSpell(SpellEntry const* spellproto
                 return DIMINISHING_DISORIENT;
             break;
         }
+        case SPELLFAMILY_UNK1:
+            return DIMINISHING_NONE;
         default:
             break;
     }
@@ -3616,6 +3487,13 @@ DiminishingReturnsType GetDiminishingReturnsGroupType(DiminishingGroup group)
     }
 
     return DRTYPE_NONE;
+}
+
+bool IsSubjectToDiminishingLevels(DiminishingGroup group, bool pvp)
+{
+    if ((GetDiminishingReturnsGroupType(group) == DRTYPE_PLAYER && pvp) || GetDiminishingReturnsGroupType(group) == DRTYPE_ALL)
+        return true;
+    return false;
 }
 
 bool IsCreatureDRSpell(SpellEntry const* spellInfo)

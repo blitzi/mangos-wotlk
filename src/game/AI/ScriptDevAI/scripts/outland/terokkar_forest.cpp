@@ -1033,6 +1033,7 @@ struct npc_skyguard_prisonerAI : public npc_escortAI
         }
         DoCastSpellIfCan(m_creature, SPELL_CAGE_SUMMON);
         m_creature->SetActiveObjectState(false);
+        m_creature->SetImmuneToNPC(true); // hack, cage should break los and prevent any interaction with npcs outside the cage befor the escort is started
     }
 
     void ReceiveAIEvent(AIEventType eventType, Unit* /*pSender*/, Unit* pInvoker, uint32 uiMiscValue) override
@@ -1040,17 +1041,18 @@ struct npc_skyguard_prisonerAI : public npc_escortAI
         if (eventType == AI_EVENT_START_ESCORT && pInvoker->GetTypeId() == TYPEID_PLAYER)
         {
             m_creature->SetFactionTemporary(FACTION_ESCORT_N_NEUTRAL_ACTIVE, TEMPFACTION_RESTORE_RESPAWN);
+            m_creature->SetImmuneToNPC(false); // hack, cage should break los and prevent any interaction with npcs outside the cage befor the escort is started
 
             Start(false, (Player*)pInvoker, GetQuestTemplateStore(uiMiscValue));
 
             SetEscortPaused(true);
 
-            if (m_creature->GetPositionZ() < 310.0f)
-                SetCurrentWaypoint(19);
-            else if (m_creature->GetPositionZ() < 330.0f)
-                SetCurrentWaypoint(33);
-            else
-                SetCurrentWaypoint(0);
+            if (m_creature->GetPositionZ() < 310.0f)        // -3720.35, 3789.91, 302.888
+                SetCurrentWaypoint(20);
+            else if (m_creature->GetPositionZ() < 320.0f)   // -3669.57, 3386.74, 312.955
+                SetCurrentWaypoint(34);
+            else if (m_creature->GetPositionZ() < 350.0f)   // -4106.64, 3029.76, 344.877
+                SetCurrentWaypoint(1);
 
             SetEscortPaused(false);
 
@@ -1255,6 +1257,36 @@ UnitAI* GetAI_npc_minion_of_terokk(Creature* pCreature)
     return new npc_minion_of_terokkAI(pCreature);
 }
 
+/*######
+## go_monstrous_kaliri_egg
+######*/
+
+struct go_monstrous_kaliri_egg : public GameObjectAI
+{
+    go_monstrous_kaliri_egg(GameObject* go) : GameObjectAI(go) {}
+
+    void OnLootStateChange() override
+    {
+        if (m_go->GetLootState() == GO_ACTIVATED)
+            m_go->SetForcedDespawn();
+    }
+};
+
+GameObjectAI* GetAI_go_monstrous_kaliri_egg(GameObject* go)
+{
+    return new go_monstrous_kaliri_egg(go);
+}
+
+struct ShadowyDisguise : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        Unit* target = aura->GetTarget();
+        if (!apply)
+            target->RemoveAurasDueToSpell(target->getGender() == GENDER_MALE ? 38080 : 38081);
+    }
+};
+
 void AddSC_terokkar_forest()
 {
     Script* pNewScript = new Script;
@@ -1316,4 +1348,11 @@ void AddSC_terokkar_forest()
     pNewScript->Name = "npc_minion_of_terokk";
     pNewScript->GetAI = &GetAI_npc_minion_of_terokk;
     pNewScript->RegisterSelf();
+
+    pNewScript = new Script;
+    pNewScript->Name = "go_monstrous_kaliri_egg";
+    pNewScript->GetGameObjectAI = &GetAI_go_monstrous_kaliri_egg;
+    pNewScript->RegisterSelf();
+
+    RegisterAuraScript<ShadowyDisguise>("spell_shadowy_disguise");
 }

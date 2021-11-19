@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "Globals/SharedDefines.h"
 #include "MotionGenerators/WaypointManager.h"
+#include "Entities/ObjectGuid.h"
 
 #include <stack>
 #include <vector>
@@ -138,14 +139,15 @@ class MotionMaster : private std::stack<MovementGenerator*>
         void DistanceYourself(float dist);
         void MoveConfused();
         void MoveFleeing(Unit* enemy, uint32 time = 0);
-        void MovePoint(uint32 id, Position const& position, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, float speed = 0.f, bool generatePath = true);
+        void MovePoint(uint32 id, Position const& position, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, float speed = 0.f, bool generatePath = true, ObjectGuid guid = ObjectGuid(), uint32 relayId = 0);
         void MovePoint(uint32 id, float x, float y, float z, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, bool generatePath = true);
         void MovePointTOL(uint32 id, float x, float y, float z, bool takeOff, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE);
         void MovePath(std::vector<G3D::Vector3>& path, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, bool flying = false);
         void MovePath(std::vector<G3D::Vector3>& path, float o, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, bool flying = false);
-        void MovePath(int32 pathId, WaypointPathOrigin wpOrigin = PATH_NO_PATH, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, bool flying = false, float speed = 0.f, bool cyclic = false);
+        // MovePath can not change speed or flying mid path due to how it works - if you wish to do that, split it into two paths
+        void MovePath(int32 pathId = 0, WaypointPathOrigin wpOrigin = PATH_NO_PATH, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, bool flying = false, float speed = 0.f, bool cyclic = false, ObjectGuid guid = ObjectGuid());
         void MoveRetreat(float x, float y, float z, float o, uint32 delay);
-        void MoveWaypoint(uint32 pathId = 0, uint32 source = 0, uint32 initialDelay = 0, uint32 overwriteEntry = 0);
+        void MoveWaypoint(uint32 pathId = 0, uint32 source = 0, uint32 initialDelay = 0, uint32 overwriteEntry = 0, ForcedMovement forcedMovement = FORCED_MOVEMENT_NONE, ObjectGuid guid = ObjectGuid());
         void MoveTaxi();
         void MoveDistract(uint32 timer);
         void MoveCharge(float x, float y, float z, float speed, uint32 id = EVENT_CHARGE);

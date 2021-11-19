@@ -133,6 +133,7 @@ int Master::Run()
     CharacterDatabase.AllowAsyncTransactions();
     WorldDatabase.AllowAsyncTransactions();
     LoginDatabase.AllowAsyncTransactions();
+    LogsDatabase.AllowAsyncTransactions();
     PlayerbotDatabase.AllowAsyncTransactions();
 
     ///- Catch termination signals
@@ -264,6 +265,7 @@ int Master::Run()
     CharacterDatabase.HaltDelayThread();
     WorldDatabase.HaltDelayThread();
     LoginDatabase.HaltDelayThread();
+    LogsDatabase.HaltDelayThread();
 
     sLog.outString("Halting process...");
 
@@ -439,6 +441,42 @@ bool Master::_StartDB()
         WorldDatabase.HaltDelayThread();
         CharacterDatabase.HaltDelayThread();
         PlayerbotDatabase.HaltDelayThread();
+        LoginDatabase.HaltDelayThread();
+        return false;
+    }
+
+    ///- Get logs database info from configuration file
+    dbstring = sConfig.GetStringDefault("LogsDatabaseInfo", "");
+    nConnections = sConfig.GetIntDefault("LogsDatabaseConnections", 1);
+    if (dbstring.empty())
+    {
+        sLog.outError("logs database not specified in configuration file");
+
+        ///- Wait for already started DB delay threads to end
+        WorldDatabase.HaltDelayThread();
+        CharacterDatabase.HaltDelayThread();
+        LoginDatabase.HaltDelayThread();
+        return false;
+    }
+
+    ///- Initialise the logs database
+    sLog.outString("Logs Database total connections: %i", nConnections + 1);
+    if (!LogsDatabase.Initialize(dbstring.c_str(), nConnections))
+    {
+        sLog.outError("Cannot connect to logs database %s", dbstring.c_str());
+
+        ///- Wait for already started DB delay threads to end
+        WorldDatabase.HaltDelayThread();
+        CharacterDatabase.HaltDelayThread();
+        LoginDatabase.HaltDelayThread();
+        return false;
+    }
+
+    if (!LogsDatabase.CheckRequiredField("logs_db_version", REVISION_DB_LOGS))
+    {
+        ///- Wait for already started DB delay threads to end
+        WorldDatabase.HaltDelayThread();
+        CharacterDatabase.HaltDelayThread();
         LoginDatabase.HaltDelayThread();
         return false;
     }

@@ -91,6 +91,7 @@ void MapManager::LoadTransports()
             continue;
 
         transportTemplate->pathTime = period;
+        transportTemplate->keyFrames.back().DepartureTime = period;
 
         m_transportsByMap[pMapInfo->MapID].push_back(transportTemplate);
         m_transportsByEntry[entry].push_back(transportTemplate);
@@ -654,7 +655,6 @@ void ElevatorTransport::Update(const uint32 diff)
 
             GetMap()->GameObjectRelocation(this, currentPos.x, currentPos.y, currentPos.z, GetOrientation());
             // SummonCreature(1, currentPos.x, currentPos.y, currentPos.z, GetOrientation(), TEMPSPAWN_TIMED_DESPAWN, 5000);
-            UpdateModelPosition();
 
             UpdatePassengerPositions(GetPassengers());
 
@@ -815,7 +815,7 @@ void Transport::UpdateForMap(Map const* targetMap, bool newMap)
                 BuildCreateUpdateBlockForPlayer(&updateData, player);
                 WorldPacket packet = updateData.BuildPacket(0); // always only one packet
                 player->SendDirectMessage(packet);
-                player->m_clientGUIDs.insert(this->GetObjectGuid());
+                player->AddAtClient(this);
             }
         }
     }
@@ -830,7 +830,7 @@ void Transport::UpdateForMap(Map const* targetMap, bool newMap)
             if (this != player->GetTransport())
             {
                 player->SendDirectMessage(packet);
-                player->m_clientGUIDs.erase(this->GetObjectGuid());
+                player->RemoveAtClient(this);
             }
         }
     }

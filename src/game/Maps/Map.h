@@ -35,6 +35,9 @@
 #include "Entities/CreatureLinkingMgr.h"
 #include "Vmap/DynamicTree.h"
 #include "Multithreading/Messager.h"
+#include "Globals/GraveyardManager.h"
+#include "Maps/SpawnManager.h"
+#include "Maps/MapDataContainer.h"
 
 #include <bitset>
 #include <functional>
@@ -282,6 +285,14 @@ class Map : public GridRefManager<NGridType>
         Corpse* GetCorpse(ObjectGuid guid) const;                 // !!! find corpse can be not in world
         Unit* GetUnit(ObjectGuid guid);                     // only use if sure that need objects at current map, specially for player case
         WorldObject* GetWorldObject(ObjectGuid guid);       // only use if sure that need objects at current map, specially for player case
+        // dbguid methods
+        Creature* GetCreature(uint32 dbguid);
+        std::vector<Creature*> GetCreatures(uint32 dbguid);
+        GameObject* GetGameObject(uint32 dbguid);
+        std::vector<GameObject*> GetGameObjects(uint32 dbguid);
+
+        void AddDbGuidObject(WorldObject* obj);
+        void RemoveDbGuidObject(WorldObject* obj);
 
         typedef TypeUnorderedMapContainer<AllMapStoredObjectTypes, ObjectGuid> MapStoredObjectTypesContainer;
         MapStoredObjectTypesContainer& GetObjectsStore() { return m_objectsStore; }
@@ -363,12 +374,24 @@ class Map : public GridRefManager<NGridType>
 
         Messager<Map>& GetMessager() { return m_messager; }
 
+        typedef std::set<Transport*> TransportSet;
         GenericTransport* GetTransport(ObjectGuid guid);
+        TransportSet const& GetTransports() { return m_transports; }
+
+        GraveyardManager& GetGraveyardManager() { return m_graveyardManager; }
 
         void AddTransport(Transport* transport);
         void RemoveTransport(Transport* transport);
 
         bool CanSpawn(TypeID typeId, uint32 dbGuid);
+
+        SpawnManager& GetSpawnManager() { return m_spawnManager; }
+
+        MapDataContainer& GetMapDataContainer() { return m_dataContainer; }
+        MapDataContainer const& GetMapDataContainer() const { return m_dataContainer; }
+
+        // debug
+        std::set<ObjectGuid> m_objRemoveList; // this will eventually eat up too much memory - only used for debugging VisibleNotifier::Notify() customlog leak
 
     private:
         void LoadMapAndVMap(int gx, int gy);
@@ -426,11 +449,14 @@ class Map : public GridRefManager<NGridType>
         MapStoredObjectTypesContainer m_objectsStore;
         std::map<uint32, uint32> m_tempCreatures;
         std::map<uint32, uint32> m_tempPets;
+        std::map<std::pair<HighGuid, uint32>, std::vector<WorldObject*>> m_dbGuidObjects;
 
         WorldObjectSet m_onEventNotifiedObjects;
         WorldObjectSet::iterator m_onEventNotifiedIter;
 
         Messager<Map> m_messager;
+
+        GraveyardManager m_graveyardManager;
     private:
         time_t i_gridExpiry;
 
@@ -474,11 +500,16 @@ class Map : public GridRefManager<NGridType>
         WeatherSystem* m_weatherSystem;
 
         // Transports
-        typedef std::set<Transport*> TransportSet;
         TransportSet m_transports;
         TransportSet::iterator m_transportsIterator;
 
         std::unordered_map<uint32, std::set<ObjectGuid>> m_spawnedCount;
+
+        // spawning
+        SpawnManager m_spawnManager;
+
+        MapDataContainer m_dataContainer;
+        std::shared_ptr<CreatureSpellListContainer> m_spellListContainer;
 
         ZoneDynamicInfoMap m_zoneDynamicInfo;
         uint32 i_defaultLight;
@@ -507,7 +538,7 @@ class DungeonMap : public Map
         void Remove(Player*, bool) override;
         void Update(const uint32&) override;
         bool Reset(InstanceResetMethod method);
-        void PermBindAllPlayers(Player* player);
+        void PermBindAllPlayers(Player* player = nullptr);
         void UnloadAll(bool pForce) override;
         void SendResetWarnings(uint32 timeLeft) const;
         void SetResetSchedule(bool on);

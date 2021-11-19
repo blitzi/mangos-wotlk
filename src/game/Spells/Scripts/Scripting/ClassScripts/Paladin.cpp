@@ -18,6 +18,112 @@
 
 #include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellAuras.h"
+#include "Spells/SpellMgr.h"
+
+struct SealOfTheCrusader : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const
+    {
+        if (aura->GetEffIndex() != EFFECT_INDEX_1)
+            return;
+
+        // Seal of the Crusader damage reduction
+        // SotC increases attack speed but reduces damage to maintain the same DPS
+        float reduction = (-100.0f * aura->GetModifier()->m_amount) / (aura->GetModifier()->m_amount + 100.0f);
+        aura->GetTarget()->HandleStatModifier(UNIT_MOD_DAMAGE_MAINHAND, TOTAL_PCT, reduction, apply);
+    }
+};
+
+struct spell_judgement : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        Unit* unitTarget = spell->GetUnitTarget();
+        if (!unitTarget || !unitTarget->IsAlive())
+            return;
+
+        Unit* caster = spell->GetCaster();
+
+        uint32 spellId1;
+        uint32 spellId2 = 0;
+
+        // Judgement self add switch
+        switch (spell->m_spellInfo->Id)
+        {
+            case 53407: spellId1 = 20184; break;    // Judgement of Justice
+            case 20271:                             // Judgement of Light
+            case 57774: spellId1 = 20185; break;    // Judgement of Light
+            case 53408: spellId1 = 20186; break;    // Judgement of Wisdom
+            default:
+                sLog.outError("Unsupported Judgement (seal trigger) spell (Id: %u) in Spell::EffectScriptEffect", spell->m_spellInfo->Id);
+                return;
+        }
+
+        // offensive seals have aura dummy in 2 effect
+        Unit::AuraList const& m_dummyAuras = caster->GetAurasByType(SPELL_AURA_DUMMY);
+        for (auto m_dummyAura : m_dummyAuras)
+        {
+            // search seal (offensive seals have judgement's aura dummy spell id in 2 effect
+            if (m_dummyAura->GetEffIndex() != EFFECT_INDEX_2 || !IsSealSpell(m_dummyAura->GetSpellProto()))
+                continue;
+            spellId2 = m_dummyAura->GetModifier()->m_amount;
+            SpellEntry const* judge = sSpellTemplate.LookupEntry<SpellEntry>(spellId2);
+            if (!judge)
+                continue;
+            break;
+        }
+
+        // if there were no offensive seals than there is seal with proc trigger aura
+        if (!spellId2)
+        {
+            Unit::AuraList const& procTriggerAuras = caster->GetAurasByType(SPELL_AURA_PROC_TRIGGER_SPELL);
+            for (auto procTriggerAura : procTriggerAuras)
+            {
+                if (procTriggerAura->GetEffIndex() != EFFECT_INDEX_0 || !IsSealSpell(procTriggerAura->GetSpellProto()))
+                    continue;
+                spellId2 = 54158;
+                break;
+            }
+        }
+
+        if (spellId1)
+            caster->CastSpell(unitTarget, spellId1, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL);
+
+        if (spellId2)
+            caster->CastSpell(unitTarget, spellId2, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL);
+
+        if (caster->HasAura(37188)) // improved judgement
+            caster->CastSpell(nullptr, 43838, TRIGGERED_OLD_TRIGGERED);
+
+        if (caster->HasAura(40470)) // spell_paladin_tier_6_trinket
+            if (roll_chance_f(50.f))
+                caster->CastSpell(unitTarget, 40472, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct spell_paladin_tier_6_trinket : public AuraScript
+{
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        if (!procData.spellInfo)
+            return SPELL_AURA_PROC_FAILED;
+
+        float chance = 0.f;
+
+        // Flash of light/Holy light
+        if (procData.spellInfo->SpellFamilyFlags & uint64(0x00000000C0000000))
+        {
+            procData.triggeredSpellId = 40471;
+            chance = 15.0f;
+            procData.triggerTarget = procData.victim;
+        }
+
+        if (!roll_chance_f(chance))
+            return SPELL_AURA_PROC_FAILED;
+
+        return SPELL_AURA_PROC_OK;
+    }
+};
 
 struct IncreasedHolyLightHealing : public AuraScript
 {
@@ -78,5 +184,8 @@ struct RighteousDefense : public SpellScript
 void LoadPaladinScripts()
 {
     RegisterAuraScript<IncreasedHolyLightHealing>("spell_increased_holy_light_healing");
+    RegisterSpellScript<spell_judgement>("spell_judgement");
     RegisterSpellScript<RighteousDefense>("spell_righteous_defense");
+    RegisterAuraScript<SealOfTheCrusader>("spell_seal_of_the_crusader");
+    RegisterAuraScript<spell_paladin_tier_6_trinket>("spell_paladin_tier_6_trinket");
 }

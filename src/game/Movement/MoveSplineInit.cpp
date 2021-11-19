@@ -20,6 +20,7 @@
 #include "MoveSpline.h"
 #include "packet_builder.h"
 #include "Entities/Unit.h"
+#include "Log.h"
 #include "Maps/TransportSystem.h"
 #include "Entities/Transports.h"
 
@@ -42,15 +43,17 @@ namespace Movement
         if (transport)
             transport->CalculatePassengerOffset(real_position.x, real_position.y, real_position.z, &real_position.orientation);
 
-        // there is a big chane that current position is unknown if current state is not finalized, need compute it
+        // there is a big chance that current position is unknown if current state is not finalized, need compute it
         // this also allows calculate spline position and update map position in much greater intervals
         if (!move_spline.Finalized() && !transportInfo)
             real_position = move_spline.ComputePosition();
 
+        bool pathEmpty = false;
         if (args.path.empty())
         {
             // should i do the things that user should do?
             MoveTo(real_position);
+            pathEmpty = true;
         }
 
         // corrent first vertex
@@ -72,9 +75,9 @@ namespace Movement
         if (!args.Validate(&unit))
             return 0;
 
-        if (moveFlags & MOVEFLAG_ROOT && !args.path.empty())
+        if (moveFlags & MOVEFLAG_ROOT && !pathEmpty)
         {
-            sLog.outCustomLog("Invalid movement during root.");
+            sLog.outCustomLog("Invalid movement during root. Entry: %u IsImmobilized %s, moveflags %u", unit.GetEntry(), unit.IsImmobilizedState() ? "true" : "false", moveFlags);
             sLog.traceLog();
             return 0;
         }
@@ -130,7 +133,7 @@ namespace Movement
 
         // there is a big chane that current position is unknown if current state is not finalized, need compute it
         // this also allows calculate spline position and update map position in much greater intervals
-        if (!move_spline.Finalized() && !transportInfo)
+        if (!move_spline.Finalized())
             real_position = move_spline.ComputePosition();
 
         if (args.path.empty())
@@ -141,6 +144,8 @@ namespace Movement
 
         // corrent first vertex
         args.path[0] = real_position;
+
+        args.splineId = splineCounter++;
 
         args.flags = MoveSplineFlag::Done;
         unit.m_movementInfo.RemoveMovementFlag(MovementFlags(MOVEFLAG_FORWARD | MOVEFLAG_SPLINE_ENABLED));

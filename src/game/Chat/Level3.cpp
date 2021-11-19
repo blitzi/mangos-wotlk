@@ -57,6 +57,10 @@
 #include "Loot/LootMgr.h"
 #include "World/WorldState.h"
 #include "Arena/ArenaTeam.h"
+#ifdef BUILD_METRICS
+#include "Metric/Metric.h"
+#endif
+#include "Server/PacketLog.h"
 
 #ifdef BUILD_AHBOT
 #include "AuctionHouseBot/AuctionHouseBot.h"
@@ -332,6 +336,10 @@ bool ChatHandler::HandleReloadConfigCommand(char* /*args*/)
     sLog.outString("Re-Loading config settings...");
     sWorld.LoadConfigSettings(true);
     sMapMgr.InitializeVisibilityDistanceInfo();
+#ifdef BUILD_METRICS
+    metric::metric::instance().reload_config();
+#endif
+    PacketLog::instance()->Reinitialize();
     SendGlobalSysMessage("World config settings reloaded.");
     return true;
 }
@@ -1034,7 +1042,7 @@ bool ChatHandler::HandleReloadGameGraveyardZoneCommand(char* /*args*/)
 {
     sLog.outString("Re-Loading Graveyard-zone links...");
 
-    sObjectMgr.LoadGraveyardZones();
+    sWorld.LoadGraveyardZones();
 
     SendGlobalSysMessage("DB table `game_graveyard_zone` reloaded.");
 
@@ -1145,6 +1153,32 @@ bool ChatHandler::HandleReloadExpectedSpamRecords(char* /*args*/)
     sLog.outString("Reloading expected spam records...");
     sWorld.LoadSpamRecords(true);
     SendGlobalSysMessage("Reloaded expected spam records.");
+    return true;
+}
+
+bool ChatHandler::HandleReloadCreatureCooldownsCommand(char* /*args*/)
+{
+    sLog.outString("Reloading creature cooldowns...");
+    sObjectMgr.LoadCreatureCooldowns();
+    SendGlobalSysMessage("Reloaded creature cooldowns.");
+    return true;
+}
+
+bool ChatHandler::HandleReloadCreatureSpellLists(char* /*args*/)
+{
+    sLog.outString("Reloading creature spell lists...");
+    auto result = sObjectMgr.LoadCreatureSpellLists();
+    SendGlobalSysMessage("Reloaded creature spell lists.");
+    if (result)
+    {
+        sMapMgr.DoForAllMaps([result](Map* map)
+        {
+            map->GetMessager().AddMessage([result](Map* map)
+            {
+                map->GetMapDataContainer().SetCreatureSpellListContainer(result);
+            });
+        });
+    }
     return true;
 }
 
@@ -1771,7 +1805,7 @@ bool ChatHandler::HandleLearnAllCommand(char* /*args*/)
 
                     // skip passives
                     if (newSpell->HasAttribute(SPELL_ATTR_PASSIVE) ||
-                        newSpell->HasAttribute(SPELL_ATTR_HIDDEN_CLIENTSIDE) ||
+                        newSpell->HasAttribute(SPELL_ATTR_DO_NOT_DISPLAY) ||
                         newSpell->HasAttribute(SPELL_ATTR_EX2_DISPLAY_IN_STANCE_BAR))
                         continue;
                 }
@@ -2142,7 +2176,7 @@ bool ChatHandler::HandleAddItemCommand(char* args)
     // Subtract
     if (count < 0)
     {
-        plTarget->DestroyItemCount(itemId, -count, true, false);
+        plTarget->DestroyItemCount(itemId, -count, true, true);
         PSendSysMessage(LANG_REMOVEITEM, itemId, -count, GetNameLink(plTarget).c_str());
         return true;
     }
@@ -3416,9 +3450,7 @@ bool ChatHandler::HandleDieCommand(char* args)
     else
     {
         if (target->IsAlive())
-        {
-            Unit::DealDamage(player, target, target->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
-        }
+            Unit::DealDamage(player, target, target->GetHealth(), nullptr, INSTAKILL, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
     }
 
     return true;
@@ -3472,7 +3504,7 @@ bool ChatHandler::HandleDamageCommand(char* args)
     SpellSchoolMask schoolmask = SpellSchoolMask(1 << school);
 
     if (schoolmask & SPELL_SCHOOL_MASK_NORMAL)
-        damage = player->CalcArmorReducedDamage(target, damage);
+        damage = Unit::CalcArmorReducedDamage(player, target, damage);
 
     // melee damage by specific school
     if (!*args)
@@ -3539,7 +3571,7 @@ bool ChatHandler::HandleReviveCommand(char* args)
 
     if (target)
     {
-        target->ResurrectPlayer(0.5f);
+        target->ResurrectPlayer(1.0f);
         target->SpawnCorpseBones();
     }
     else
@@ -3586,7 +3618,7 @@ bool ChatHandler::HandleAuraCommand(char* args)
                 eff == SPELL_EFFECT_PERSISTENT_AREA_AURA)
         {
             int32 basePoints = spellInfo->CalculateSimpleValue(SpellEffectIndex(i));
-            int32 damage = 0; // no damage cos caster doesnt exist
+            int32 damage = basePoints;
             Aura* aur = CreateAura(spellInfo, SpellEffectIndex(i), &damage, &basePoints, holder, target);
             holder->AddAura(aur, SpellEffectIndex(i));
         }
@@ -3662,7 +3694,7 @@ bool ChatHandler::HandleLinkGraveCommand(char* args)
         return false;
     }
 
-    if (sObjectMgr.AddGraveYardLink(g_id, zoneId, GRAVEYARD_AREALINK, g_team))
+    if (player->GetMap()->GetGraveyardManager().AddGraveYardLink(g_id, zoneId, GRAVEYARD_AREALINK, g_team))
         PSendSysMessage(LANG_COMMAND_GRAVEYARDLINKED, g_id, zoneId);
     else
         PSendSysMessage(LANG_COMMAND_GRAVEYARDALRLINKED, g_id, zoneId);
@@ -3689,15 +3721,15 @@ bool ChatHandler::HandleNearGraveCommand(char* args)
     uint32 zone_id = player->GetZoneId();
     uint32 area_id = player->GetAreaId();
 
-    WorldSafeLocsEntry const* graveyard = sObjectMgr.GetClosestGraveYard(player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetMapId(), g_team);
+    WorldSafeLocsEntry const* graveyard = player->GetMap()->GetGraveyardManager().GetClosestGraveYard(player->GetPositionX(), player->GetPositionY(), player->GetPositionZ(), player->GetMapId(), g_team);
 
     if (graveyard)
     {
         uint32 g_id = graveyard->ID;
 
-        GraveYardData const* data = sObjectMgr.FindGraveYardData(g_id, area_id);
+        GraveYardData const* data = player->GetMap()->GetGraveyardManager().FindGraveYardData(g_id, area_id);
         if (!data || (g_team != TEAM_BOTH_ALLOWED && data->team != g_team && data->team != TEAM_BOTH_ALLOWED))
-            data = sObjectMgr.FindGraveYardData(g_id, zone_id);
+            data = player->GetMap()->GetGraveyardManager().FindGraveYardData(g_id, zone_id);
 
         if (!data)
         {
@@ -3832,7 +3864,10 @@ bool ChatHandler::HandleNpcInfoCommand(char* /*args*/)
 
     PSendSysMessage("Combat Timer: %u Leashing disabled: %s", target->GetCombatManager().GetCombatTimer(), target->GetCombatManager().IsLeashingDisabled() ? "true" : "false");
 
-    if (auto vector = sObjectMgr.GetAllRandomEntries(target->GetGUIDLow()))
+    PSendSysMessage("Combat Script: %s", target->AI()->GetCombatScriptStatus() ? "true" : "false");
+    PSendSysMessage("Movementflags: %u", target->m_movementInfo.moveFlags);
+
+    if (auto vector = sObjectMgr.GetAllRandomCreatureEntries(target->GetGUIDLow()))
     {
         std::string output;
         for (uint32 entry : *vector)
@@ -4639,13 +4674,13 @@ static bool HandleResetStatsOrLevelHelper(Player* player)
 
     player->setFactionForRace(player->getRace());
 
-    player->SetByteValue(UNIT_FIELD_BYTES_0, 3, powertype);
+    player->SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_POWER_TYPE, powertype);
 
     // reset only if player not in some form;
     if (player->GetShapeshiftForm() == FORM_NONE)
         player->InitDisplayIds();
 
-    player->SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_PVP);
+    player->SetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_PVP);
 
     player->SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
 
@@ -5013,7 +5048,7 @@ bool ChatHandler::HandleQuestAddCommand(char* args)
     }
 
     // ok, normal (creature/GO starting) quest
-    if (player->CanAddQuest(pQuest, true))
+    if (player->CanAddQuest(pQuest, true) && !player->IsCurrentQuest(pQuest->GetQuestId()))
     {
         player->AddQuest(pQuest, nullptr);
 
@@ -5132,7 +5167,7 @@ bool ChatHandler::HandleQuestCompleteCommand(char* args)
         {
             if (CreatureInfo const* cInfo = ObjectMgr::GetCreatureTemplate(creature))
                 for (uint16 z = 0; z < creaturecount; ++z)
-                    player->KilledMonster(cInfo, ObjectGuid());
+                    player->KilledMonster(cInfo, nullptr);
         }
         else if (creature < 0)
         {
@@ -6885,7 +6920,7 @@ bool ChatHandler::HandleArenaTeamPointSet(char* args)
     }
     team->SetRatingForAll(newRating);
     team->SaveToDB();
-    return false;
+    return true;
 }
 
 bool ChatHandler::HandleModifyGenderCommand(char* args)
@@ -6933,7 +6968,7 @@ bool ChatHandler::HandleModifyGenderCommand(char* args)
     }
 
     // Set gender
-    player->SetByteValue(UNIT_FIELD_BYTES_0, 2, gender);
+    player->SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, gender);
     player->SetUInt16Value(PLAYER_BYTES_3, 0, uint16(gender) | (player->GetDrunkValue() & 0xFFFE));
 
     // Change display ID
@@ -7308,6 +7343,12 @@ bool ChatHandler::HandleLinkCheckCommand(char* args)
 
 bool ChatHandler::HandleWarEffortCommand(char* args)
 {
+    PSendSysMessage("%s", sWorldState.GetAQPrintout().data());
+    return true;
+}
+
+bool ChatHandler::HandleWarEffortPhaseCommand(char* args)
+{
     uint32 param;
     if (!ExtractUInt32(&args, param))
     {
@@ -7315,6 +7356,26 @@ bool ChatHandler::HandleWarEffortCommand(char* args)
         return true;
     }
     sWorldState.HandleWarEffortPhaseTransition(param);
+    return true;
+}
+
+bool ChatHandler::HandleWarEffortCounterCommand(char* args)
+{
+    uint32 index;
+    if (!ExtractUInt32(&args, index) || index >= RESOURCE_MAX)
+    {
+        PSendSysMessage("Enter valid index for counter.");
+        return true;
+    }
+
+    uint32 value;
+    if (!ExtractUInt32(&args, value))
+    {
+        PSendSysMessage("Enter valid value for counter.");
+        return true;
+    }
+
+    sWorldState.AddWarEffortProgress(AQResources(index), value);
     return true;
 }
 
@@ -7332,8 +7393,8 @@ bool ChatHandler::HandleSunsReachReclamationPhaseCommand(char* args)
 
 bool ChatHandler::HandleSunsReachReclamationSubPhaseCommand(char* args)
 {
-    uint32 param;
-    if (!ExtractUInt32(&args, param))
+    int32 param;
+    if (!ExtractInt32(&args, param))
     {
         PSendSysMessage("%s", sWorldState.GetSunsReachPrintout().data());
         return true;
@@ -7359,6 +7420,38 @@ bool ChatHandler::HandleSunsReachReclamationCounterCommand(char* args)
     }
 
     sWorldState.SetSunsReachCounter(SunsReachCounters(index), value);
+    return true;
+}
+
+bool ChatHandler::HandleSunwellGateCommand(char* args)
+{
+    uint32 param;
+    if (!ExtractUInt32(&args, param))
+    {
+        PSendSysMessage("%s", sWorldState.GetSunsReachPrintout().data());
+        return true;
+    }
+    sWorldState.HandleSunwellGateTransition(param);
+    return true;
+}
+
+bool ChatHandler::HandleSunwellGateCounterCommand(char* args)
+{
+    uint32 index;
+    if (!ExtractUInt32(&args, index) || index >= COUNTERS_MAX_GATES)
+    {
+        PSendSysMessage("Enter valid index for counter.");
+        return true;
+    }
+
+    uint32 value;
+    if (!ExtractUInt32(&args, value))
+    {
+        PSendSysMessage("Enter valid value for counter.");
+        return true;
+    }
+
+    sWorldState.SetSunwellGateCounter(SunwellGateCounters(index), value);
     return true;
 }
 

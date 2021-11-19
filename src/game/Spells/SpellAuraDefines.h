@@ -350,7 +350,7 @@ enum AuraType
     SPELL_AURA_214 = 214,
     SPELL_AURA_ARENA_PREPARATION = 215,
     SPELL_AURA_HASTE_SPELLS = 216,
-    SPELL_AURA_217 = 217,
+    SPELL_AURA_MOD_MELEE_HASTE_2 = 217,
     SPELL_AURA_HASTE_RANGED = 218,
     SPELL_AURA_MOD_MANA_REGEN_FROM_STAT = 219,
     SPELL_AURA_MOD_RATING_FROM_STAT = 220,
@@ -363,10 +363,10 @@ enum AuraType
     SPELL_AURA_PERIODIC_TRIGGER_SPELL_WITH_VALUE = 227,
     SPELL_AURA_DETECT_STEALTH = 228,
     SPELL_AURA_MOD_AOE_DAMAGE_AVOIDANCE = 229,
-    SPELL_AURA_230 = 230,
+    SPELL_AURA_MOD_INCREASE_MAX_HEALTH = 230,
     SPELL_AURA_PROC_TRIGGER_SPELL_WITH_VALUE = 231,
     SPELL_AURA_MECHANIC_DURATION_MOD = 232,
-    SPELL_AURA_233 = 233,
+    SPELL_AURA_CHANGE_MODEL_FOR_ALL_HUMANOIDS = 233,
     SPELL_AURA_MECHANIC_DURATION_MOD_NOT_STACK = 234,
     SPELL_AURA_MOD_DISPEL_RESIST = 235,
     SPELL_AURA_CONTROL_VEHICLE = 236,
@@ -422,7 +422,7 @@ enum AuraType
     SPELL_AURA_ABILITY_PERIODIC_CRIT = 286,
     SPELL_AURA_DEFLECT_SPELLS = 287,
     SPELL_AURA_MOD_PARRY_FROM_BEHIND_PERCENT = 288,
-    SPELL_AURA_289 = 289,
+    SPELL_AURA_PREVENT_DURABILITY_LOSS = 289,
     SPELL_AURA_MOD_ALL_CRIT_CHANCE = 290,
     SPELL_AURA_MOD_QUEST_XP_PCT = 291,
     SPELL_AURA_OPEN_STABLE = 292,
@@ -430,8 +430,8 @@ enum AuraType
     SPELL_AURA_STOP_NATURAL_MANA_REGEN = 294,
     SPELL_AURA_295 = 295,
     SPELL_AURA_SET_VEHICLE_ID = 296,
-    SPELL_AURA_297 = 297,
-    SPELL_AURA_298 = 298,
+    SPELL_AURA_BLOCK_SPELL_FAMILY = 297,
+    SPELL_AURA_STRANGULATE = 298,
     SPELL_AURA_299 = 299,
     SPELL_AURA_SHARE_DAMAGE_PCT = 300,
     SPELL_AURA_HEAL_ABSORB = 301,
@@ -440,16 +440,16 @@ enum AuraType
     SPELL_AURA_FAKE_INEBRIATE = 304,
     SPELL_AURA_MOD_MINIMUM_SPEED = 305,
     SPELL_AURA_306 = 306,
-    SPELL_AURA_307 = 307,
-    SPELL_AURA_308 = 308,
+    SPELL_AURA_HEAL_ABSORB_TEST = 307,
+    SPELL_AURA_MOD_CRIT_CHANCE_FOR_CASTER = 308,
     SPELL_AURA_309 = 309,
     SPELL_AURA_MOD_PET_AOE_DAMAGE_AVOIDANCE = 310,
     SPELL_AURA_311 = 311,
     SPELL_AURA_312 = 312,
     SPELL_AURA_313 = 313,
     SPELL_AURA_PREVENT_RESURRECTION = 314,
-    SPELL_AURA_315 = 315,
-    SPELL_AURA_316 = 316,
+    SPELL_AURA_UNDERWATER_WALKING = 315, // TODO:
+    SPELL_AURA_PERIODIC_HASTE = 316,
     TOTAL_AURAS = 317
 };
 
@@ -462,5 +462,38 @@ enum AreaAuraType
     AREA_AURA_PET,
     AREA_AURA_OWNER
 };
+
+// Spell aura states
+enum AuraState
+{
+    // (C) used in caster aura state     (T) used in target aura state
+    // (c) used in caster aura state-not (t) used in target aura state-not
+    AURA_STATE_DEFENSE                      = 1,            // C   |
+    AURA_STATE_HEALTHLESS_20_PERCENT        = 2,            // CcT |
+    AURA_STATE_BERSERKING                   = 3,            // C T |
+    AURA_STATE_FROZEN                       = 4,            //  cT | frozen target
+    AURA_STATE_JUDGEMENT                    = 5,            // C   |
+    // AURA_STATE_UNKNOWN6                   = 6,           //     | not used
+    AURA_STATE_HUNTER_PARRY                 = 7,            // C   |
+    AURA_STATE_ROGUE_ATTACK_FROM_STEALTH    = 7,            // C   | FIX ME: not implemented yet!
+    // AURA_STATE_UNKNOWN7                   = 7,           //  c  | random/focused bursts spells (?)
+    // AURA_STATE_UNKNOWN8                   = 8,           //     | not used
+    // AURA_STATE_UNKNOWN9                   = 9,           //     | not used
+    AURA_STATE_WARRIOR_VICTORY_RUSH         = 10,           // C   | warrior victory rush
+    // AURA_STATE_UNKNOWN11                  = 11,          //    t|
+    AURA_STATE_FAERIE_FIRE                  = 12,           //  c t|
+    AURA_STATE_HEALTHLESS_35_PERCENT        = 13,           // C T |
+    AURA_STATE_CONFLAGRATE                  = 14,           //   T | per-caster
+    AURA_STATE_SWIFTMEND                    = 15,           //   T |
+    AURA_STATE_DEADLY_POISON                = 16,           //   T |
+    AURA_STATE_ENRAGE                       = 17,           // C   |
+    AURA_STATE_BLEEDING                     = 18,           // C  t|
+    AURA_STATE_UNKNOWN19                    = 19,           //     |
+    // AURA_STATE_UNKNOWN20                  = 20,          //  c  | only (45317 Suicide)
+    // AURA_STATE_UNKNOWN21                  = 21,          //     | not used
+    AURA_STATE_UNKNOWN22                    = 22,           //     | varius spells (63884, 50240)
+    AURA_STATE_HEALTH_ABOVE_75_PERCENT      = 23,           // C   |
+};
+
 /** @} */
 #endif

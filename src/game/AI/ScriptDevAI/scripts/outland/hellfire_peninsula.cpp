@@ -1119,9 +1119,9 @@ enum AledisActions // order based on priority
     ALEDIS_ACTION_MAX
 };
 
-struct npc_magister_aledisAI : public RangedCombatAI
+struct npc_magister_aledisAI : public CombatAI
 {
-    npc_magister_aledisAI(Creature* creature) : RangedCombatAI(creature, ALEDIS_ACTION_MAX)
+    npc_magister_aledisAI(Creature* creature) : CombatAI(creature, ALEDIS_ACTION_MAX)
     {
         AddTimerlessCombatAction(ALEDIS_LOW_HP, true);
         AddCombatAction(ALEDIS_ACTION_PYROBLAST, 10000, 14000);
@@ -1137,7 +1137,8 @@ struct npc_magister_aledisAI : public RangedCombatAI
 
     void Reset() override
     {
-        RangedCombatAI::Reset();
+        CombatAI::Reset();
+
         m_bAllyAttacker = false;
         m_bIsDefeated = false;
 
@@ -1300,10 +1301,6 @@ struct npc_living_flareAI : public ScriptedPetAI
                 m_uiCheckTimer = 1000;
             }
         }
-        if (m_uiStacks < 8) // reapply cosmetic effect after spellhit, for some reason it gets removed
-            m_creature->CastSpell(nullptr, SPELL_LIVING_COSMETIC, TRIGGERED_OLD_TRIGGERED);
-        else
-            m_creature->CastSpell(nullptr, SPELL_UNSTABLE_COSMETIC, TRIGGERED_OLD_TRIGGERED);
     }
 
     void MovementInform(uint32 /*uiMovementType*/, uint32 uiPointId) override
@@ -1664,9 +1661,9 @@ enum SedaiActions : uint32
     SEDAI_ACTION_SEDAI_START_ATTACK,
 };
 
-struct npc_vindicator_sedaiAI : public ScriptedAI, public CombatActions
+struct npc_vindicator_sedaiAI : public ScriptedAI
 {
-    npc_vindicator_sedaiAI(Creature* creature) : ScriptedAI(creature), CombatActions(SEDAI_COMBAT_ACTION_MAX)
+    npc_vindicator_sedaiAI(Creature* creature) : ScriptedAI(creature, SEDAI_COMBAT_ACTION_MAX)
     {
         m_creature->SetActiveObjectState(true);
         SetReactState(REACT_DEFENSIVE);
@@ -1923,7 +1920,7 @@ enum KrunActions : uint32
     KRUN_ACTION_DESPAWN
 };
 
-struct npc_krunAI : public ScriptedAI, public TimerManager
+struct npc_krunAI : public ScriptedAI
 {
     npc_krunAI(Creature* creature) : ScriptedAI(creature)
     {
@@ -1945,11 +1942,8 @@ struct npc_krunAI : public ScriptedAI, public TimerManager
             if (TemporarySpawn* summon = (TemporarySpawn*)m_creature)
                 summon->UnSummon();
         });
-    }
 
-    void Reset() override
-    {
-
+        SetReactState(REACT_PASSIVE);
     }
 
     void MovementInform(uint32 /*movementType*/, uint32 data) override
@@ -1965,11 +1959,6 @@ struct npc_krunAI : public ScriptedAI, public TimerManager
                 ResetTimer(KRUN_ACTION_EXECUTE_SEDAI, 1000);
                 break;
         }
-    }
-
-    void UpdateAI(const uint32 diff) override
-    {
-        UpdateTimers(diff);
     }
 };
 
@@ -2269,9 +2258,9 @@ struct ExposeRazorthornRoot : public SpellScript
     }
 };
 
-struct npc_razorthorn_ravager_pet : public PetAI, public TimerManager
+struct npc_razorthorn_ravager_pet : public PetAI
 {
-    npc_razorthorn_ravager_pet(Creature* creature) : PetAI(creature)
+    npc_razorthorn_ravager_pet(Creature* creature) : PetAI(creature), m_animStage(0)
     {
         AddCustomAction(1, true, [&]() { HandleAnimations(); });
     }
@@ -2338,16 +2327,6 @@ struct npc_razorthorn_ravager_pet : public PetAI, public TimerManager
         ++m_animStage;
         if (timer)
             ResetTimer(1, timer);
-    }
-
-    void UpdateAI(const uint32 diff) override
-    {
-        UpdateTimers(diff);
-
-        if (GetCombatScriptStatus())
-            return;
-
-        PetAI::UpdateAI(diff);
     }
 };
 

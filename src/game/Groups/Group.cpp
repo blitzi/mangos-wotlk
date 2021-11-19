@@ -23,6 +23,8 @@
 #include "Entities/Player.h"
 #include "Globals/ObjectMgr.h"
 #include "Entities/ObjectGuid.h"
+#include "Entities/UpdateData.h"
+#include "Entities/UpdateMask.h"
 #include "Groups/Group.h"
 #include "Tools/Formulas.h"
 #include "Globals/ObjectAccessor.h"
@@ -41,24 +43,25 @@ extern Config botConfig;
 
 GroupMemberStatus GetGroupMemberStatus(const Player* member = nullptr)
 {
-    if (!member || (!member->IsInWorld() && !member->IsBeingTeleportedFar()))
-        return MEMBER_STATUS_OFFLINE;
-
-    uint8 flags = MEMBER_STATUS_ONLINE;
-    if (member->IsPvP())
-        flags |= MEMBER_STATUS_PVP;
-    if (member->IsDead())
-        flags |= MEMBER_STATUS_DEAD;
-    if (member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
-        flags |= MEMBER_STATUS_GHOST;
-    if (member->IsPvPFreeForAll())
-        flags |= MEMBER_STATUS_PVP_FFA;
-    if (!member->IsInWorld())
-        flags |= MEMBER_STATUS_ZONE_OUT;
-    if (member->isAFK())
-        flags |= MEMBER_STATUS_AFK;
-    if (member->isDND())
-        flags |= MEMBER_STATUS_DND;
+    uint8 flags = MEMBER_STATUS_OFFLINE;
+    if (member && member->GetSession() && !member->GetSession()->PlayerLogout())
+    {
+        flags |= MEMBER_STATUS_ONLINE;
+        if (member->IsPvP())
+            flags |= MEMBER_STATUS_PVP;
+        if (member->IsDead())
+            flags |= MEMBER_STATUS_DEAD;
+        if (member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+            flags |= MEMBER_STATUS_GHOST;
+        if (member->IsPvPFreeForAll())
+            flags |= MEMBER_STATUS_PVP_FFA;
+        if (!member->IsInWorld())
+            flags |= MEMBER_STATUS_ZONE_OUT;
+        if (member->isAFK())
+            flags |= MEMBER_STATUS_AFK;
+        if (member->isDND())
+            flags |= MEMBER_STATUS_DND;
+    }
     return GroupMemberStatus(flags);
 }
 
@@ -361,6 +364,52 @@ bool Group::AddMember(ObjectGuid guid, const char* name)
         // quest related GO state dependent from raid membership
         if (isRaidGroup())
             player->UpdateForQuestWorldObjects();
+
+        // Broadcast new player group member fields to rest of the group
+        UpdateData groupData;
+
+        // Broadcast group members' fields to player
+        for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            if (itr->getSource() == player)
+                continue;
+
+            if (Player* member = itr->getSource())
+            {
+                if (player->HasAtClient(member))
+                {
+                    UpdateMask updateMask;
+                    updateMask.SetCount(member->GetValuesCount());
+                    member->MarkUpdateFieldsWithFlagForUpdate(updateMask, UF_FLAG_GROUP_ONLY);
+                    if (updateMask.HasData())
+                        member->BuildValuesUpdateBlockForPlayer(groupData, updateMask, player);
+                }
+
+                if (member->HasAtClient(player))
+                {
+                    UpdateMask updateMask;
+                    updateMask.SetCount(member->GetValuesCount());
+                    member->MarkUpdateFieldsWithFlagForUpdate(updateMask, UF_FLAG_GROUP_ONLY);
+                    if (updateMask.HasData())
+                    {
+                        UpdateData newData;
+                        player->BuildValuesUpdateBlockForPlayer(newData, updateMask, member);
+
+                        if (newData.HasData())
+                        {
+                            WorldPacket newDataPacket = newData.BuildPacket(0);
+                            member->SendDirectMessage(newDataPacket);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (groupData.HasData())
+        {
+            WorldPacket groupDataPacket = groupData.BuildPacket(0);
+            player->SendDirectMessage(groupDataPacket);
+        }
     }
 
     return true;
@@ -692,7 +741,7 @@ void Group::UpdatePlayerOutOfRange(Player* pPlayer)
 
     for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
         if (Player* player = itr->getSource())
-            if (player != pPlayer && !player->HaveAtClient(pPlayer))
+            if (player != pPlayer && !player->HasAtClient(pPlayer))
                 player->GetSession()->SendPacket(data);
 }
 
@@ -704,6 +753,7 @@ void Group::UpdatePlayerOnlineStatus(Player* player, bool online /*= true*/)
     if (!IsMember(guid))
         return;
 
+    SendUpdate();
     if (online)
     {
         player->SetGroupUpdateFlag(GROUP_UPDATE_FULL);
@@ -1065,10 +1115,10 @@ void Group::_updateMembersOnRosterChanged(Player* changed)
         {
             if (member != changed && member->IsInWorld())
             {
-                if (member->HaveAtClient(changed))
+                if (member->HasAtClient(changed))
                     update(member, changed);
 
-                if (changed->HaveAtClient(member))
+                if (changed->HasAtClient(member))
                     update(changed, member);
             }
         }
@@ -1598,7 +1648,7 @@ static void RewardGroupAtKill_helper(Player* pGroupGuy, Unit* pVictim, uint32 co
                 // normal creature (not pet/etc) can be only in !PvP case
                 if (creatureVictim->GetTypeId() == TYPEID_UNIT)
                     if (CreatureInfo const* normalInfo = creatureVictim->GetCreatureInfo())
-                        pGroupGuy->KilledMonster(normalInfo, creatureVictim->GetObjectGuid());
+                        pGroupGuy->KilledMonster(normalInfo, creatureVictim);
             }
         }
     }

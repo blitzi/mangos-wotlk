@@ -77,7 +77,7 @@ bool TargetedMovementGeneratorMedium<T, D>::Update(T& owner, const uint32& time_
         return true;
     }
 
-    if (_hasUnitStateNotMove(owner))
+    if (_hasUnitStateNotMove(owner) || owner.IsImmobilizedState())
     {
         HandleMovementFailure(owner);
         return true;
@@ -277,8 +277,16 @@ void ChaseMovementGenerator::HandleTargetedMovement(Unit& owner, const uint32& t
             if (this->i_offset == 0.f)
             {
                 if (!owner.CanReachWithMeleeAttack(this->i_target.getTarget()))
+                {
                     if (!i_target->IsFalling())
                         m_reachable = false;
+                }
+                else if (this->i_target->IsFlying() && !owner.CanFly())
+                {
+                    // if npc cant fly and target flies too high up, need to evade
+                    if (owner.GetDistanceZ(this->i_target.getTarget()) > CREATURE_Z_ATTACK_RANGE_MELEE)
+                        m_reachable = false;
+                }
             }
             else
             {
@@ -659,7 +667,7 @@ void ChaseMovementGenerator::_setLocation(Unit& owner)
 }
 
 //-----------------------------------------------//
-bool FollowMovementGenerator::_hasUnitStateNotMove(Unit& owner) { return owner.hasUnitState(UNIT_STAT_NOT_MOVE); }
+bool FollowMovementGenerator::_hasUnitStateNotMove(Unit& owner) { return owner.hasUnitState(UNIT_STAT_NOT_MOVE | UNIT_STAT_NO_FOLLOW_MOVEMENT); }
 void FollowMovementGenerator::_clearUnitStateMove(Unit& owner) { owner.clearUnitState(UNIT_STAT_FOLLOW_MOVE); }
 void FollowMovementGenerator::_addUnitStateMove(Unit& owner) { owner.addUnitState(UNIT_STAT_FOLLOW_MOVE); }
 

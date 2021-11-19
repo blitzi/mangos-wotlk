@@ -1921,99 +1921,6 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             }
             return;
         }
-
-        // If master dismounted, do so
-        case SMSG_DISMOUNT:
-        {
-            if (!GetMaster()->IsMounted() && m_bot->IsMounted())    // only execute code if master is the one who dismounted
-            {
-                WorldPacket emptyPacket;
-                m_bot->GetSession()->HandleCancelMountAuraOpcode(emptyPacket);  //updated code
-            }
-            return;
-        }
-        // if a change in speed was detected for the master
-        // make sure we have the same mount status
-        case SMSG_SPLINE_SET_RUN_SPEED:
-        {
-            WorldPacket p(packet);
-            ObjectGuid guid;
-
-            p >> guid.ReadAsPacked();
-            if (guid != GetMaster()->GetObjectGuid())
-                return;
-            if (GetMaster()->IsMounted() && !m_bot->IsMounted())
-            {
-                // Player Part
-                if (!GetMaster()->GetAurasByType(SPELL_AURA_MOUNTED).empty())
-                {
-                    int32 master_speed1 = 0;
-                    int32 master_speed2 = 0;
-                    master_speed1 = GetMaster()->GetAurasByType(SPELL_AURA_MOUNTED).front()->GetSpellProto()->EffectBasePoints[1];
-                    master_speed2 = GetMaster()->GetAurasByType(SPELL_AURA_MOUNTED).front()->GetSpellProto()->EffectBasePoints[2];
-
-                    // Bot Part
-                    // Step 1: find spell in bot spellbook that matches the speed change from master
-                    uint32 spellMount = 0;
-                    for (PlayerSpellMap::iterator itr = m_bot->GetSpellMap().begin(); itr != m_bot->GetSpellMap().end(); ++itr)
-                    {
-                        uint32 spellId = itr->first;
-                        if (itr->second.state == PLAYERSPELL_REMOVED || itr->second.disabled || IsPassiveSpell(spellId))
-                            continue;
-                        const SpellEntry* pSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
-                        if (!pSpellInfo)
-                            continue;
-
-                        if (pSpellInfo->EffectApplyAuraName[0] == SPELL_AURA_MOUNTED)
-                        {
-                            if (pSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
-                            {
-                                if (pSpellInfo->EffectBasePoints[1] == master_speed1)
-                                {
-                                    spellMount = spellId;
-                                    break;
-                                }
-                            }
-                            else if ((pSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
-                                     && (pSpellInfo->EffectApplyAuraName[2] == SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))
-                            {
-                                if ((pSpellInfo->EffectBasePoints[1] == master_speed1)
-                                        && (pSpellInfo->EffectBasePoints[2] == master_speed2))
-                                {
-                                    spellMount = spellId;
-                                    break;
-                                }
-                            }
-                            else if ((pSpellInfo->EffectApplyAuraName[2] == SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED)
-                                     && (pSpellInfo->EffectApplyAuraName[1] == SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED))
-                                if ((pSpellInfo->EffectBasePoints[2] == master_speed2)
-                                        && (pSpellInfo->EffectBasePoints[1] == master_speed1))
-                                {
-                                    spellMount = spellId;
-                                    break;
-                                }
-                        }
-                    }
-                    if (spellMount > 0 && m_bot->CastSpell(m_bot, spellMount, TRIGGERED_NONE) == SPELL_CAST_OK)
-                        return;
-
-                    // Step 2: no spell found or cast failed -> search for an item in inventory (mount)
-                    // We start with the fastest mounts as bot will not be able to outrun its master since it is following him/her
-                    uint32 skillLevels[] = { 375, 300, 225, 150, 75 };
-                    for (uint32 level : skillLevels)
-                    {
-                        Item* mount = FindMount(level);
-                        if (mount)
-                        {
-                            UseItem(mount);
-                            return;
-                        }
-                    }
-                }
-            }
-            return;
-        }
-
         // handle flying acknowledgement
         case SMSG_MOVE_SET_CAN_FLY:
         {
@@ -2489,7 +2396,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                     {
                         // calculate skill requirement
                         uint32 skillValue = m_bot->GetSkillValue(reqSkill);
-                        uint32 targetLevel = c->getLevel();
+                        uint32 targetLevel = c->GetLevel();
                         uint32 reqSkillValue = targetLevel < 10 ? 0 : targetLevel < 20 ? (targetLevel - 10) * 10 : targetLevel * 5;
                         if (skillValue >= reqSkillValue)
                         {
@@ -4012,7 +3919,7 @@ void PlayerbotAI::DoLoot()
                                                  (HasCollectFlag(COLLECT_FLAG_SKIN) && skillId == SKILL_SKINNING)))
                 {
                     // calculate skinning skill requirement
-                    uint32 targetLevel = c->getLevel();
+                    uint32 targetLevel = c->GetLevel();
                     reqSkillValue = targetLevel < 10 ? 0 : targetLevel < 20 ? (targetLevel - 10) * 10 : targetLevel * 5;
                 }
 
@@ -5760,7 +5667,7 @@ SpellCastResult PlayerbotAI::Buff(uint32 spellId, Unit* target, void (*beforeCas
         return SPELL_FAILED_BAD_IMPLICIT_TARGETS;
 
     // Select appropriate spell rank for target's level
-    spellProto = sSpellMgr.SelectAuraRankForLevel(spellProto, target->getLevel());
+    spellProto = sSpellMgr.SelectAuraRankForLevel(spellProto, target->GetLevel());
     if (!spellProto)
         return SPELL_NOT_FOUND;
 
@@ -8254,14 +8161,14 @@ void PlayerbotAI::_doSellItem(Item* const item, std::ostringstream& report, std:
         // We'll check to make sure its not a tradeskill tool, quest item etc, things that we don't want to lose.
         if (pProto->SellPrice > 0 && (pProto->Quality == ITEM_QUALITY_NORMAL || pProto->Quality == ITEM_QUALITY_UNCOMMON) && pProto->SubClass != ITEM_SUBCLASS_QUEST)
         {
-            if (pProto->RequiredLevel < (m_bot->getLevel() - m_mgr.gConfigSellLevelDiff) && pProto->SubClass != ITEM_SUBCLASS_WEAPON_MISC && pProto->FoodType == 0)
+            if (pProto->RequiredLevel < (m_bot->GetLevel() - m_mgr.gConfigSellLevelDiff) && pProto->SubClass != ITEM_SUBCLASS_WEAPON_MISC && pProto->FoodType == 0)
             {
                 if (pProto->Class == ITEM_CLASS_WEAPON)
                     autosell = 1;
                 if (pProto->Class == ITEM_CLASS_ARMOR)
                     autosell = 1;
             }
-            if (pProto->SubClass == ITEM_SUBCLASS_FOOD && (pProto->RequiredLevel < (m_bot->getLevel() - m_mgr.gConfigSellLevelDiff)))
+            if (pProto->SubClass == ITEM_SUBCLASS_FOOD && (pProto->RequiredLevel < (m_bot->GetLevel() - m_mgr.gConfigSellLevelDiff)))
             {
                 autosell = 1;
             }
@@ -8986,14 +8893,14 @@ bool PlayerbotAI::DropGarbage(bool bVerbose)
             }
             if (m_dropWhite && item->GetProto()->SellPrice > 0 && (item->GetProto()->Quality == ITEM_QUALITY_NORMAL || item->GetProto()->Quality == ITEM_QUALITY_UNCOMMON) && item->GetProto()->SubClass != ITEM_SUBCLASS_QUEST)
             {
-                if (pProto->RequiredLevel < (m_bot->getLevel() - m_mgr.gConfigSellLevelDiff) && pProto->SubClass != ITEM_SUBCLASS_WEAPON_MISC && pProto->FoodType == 0)
+                if (pProto->RequiredLevel < (m_bot->GetLevel() - m_mgr.gConfigSellLevelDiff) && pProto->SubClass != ITEM_SUBCLASS_WEAPON_MISC && pProto->FoodType == 0)
                 {
                     if (pProto->Class == ITEM_CLASS_WEAPON)
                         autodrop = true;
                     if (pProto->Class == ITEM_CLASS_ARMOR)
                         autodrop = true;
                 }
-                if (pProto->SubClass == ITEM_SUBCLASS_FOOD && (pProto->RequiredLevel < (m_bot->getLevel() - m_mgr.gConfigSellLevelDiff)))
+                if (pProto->SubClass == ITEM_SUBCLASS_FOOD && (pProto->RequiredLevel < (m_bot->GetLevel() - m_mgr.gConfigSellLevelDiff)))
                 {
                     autodrop = true;
                 }
@@ -9026,14 +8933,14 @@ bool PlayerbotAI::DropGarbage(bool bVerbose)
                     }
                     if (m_dropWhite && item->GetProto()->SellPrice > 0 && (item->GetProto()->Quality == ITEM_QUALITY_NORMAL || item->GetProto()->Quality == ITEM_QUALITY_UNCOMMON) && item->GetProto()->SubClass != ITEM_SUBCLASS_QUEST)
                     {
-                        if (pProto->RequiredLevel < (m_bot->getLevel() - m_mgr.gConfigSellLevelDiff) && pProto->SubClass != ITEM_SUBCLASS_WEAPON_MISC && pProto->FoodType == 0)
+                        if (pProto->RequiredLevel < (m_bot->GetLevel() - m_mgr.gConfigSellLevelDiff) && pProto->SubClass != ITEM_SUBCLASS_WEAPON_MISC && pProto->FoodType == 0)
                         {
                             if (pProto->Class == ITEM_CLASS_WEAPON)
                                 autodrop = true;
                             if (pProto->Class == ITEM_CLASS_ARMOR)
                                 autodrop = true;
                         }
-                        if (pProto->SubClass == ITEM_SUBCLASS_FOOD && (pProto->RequiredLevel < (m_bot->getLevel() - m_mgr.gConfigSellLevelDiff)))
+                        if (pProto->SubClass == ITEM_SUBCLASS_FOOD && (pProto->RequiredLevel < (m_bot->GetLevel() - m_mgr.gConfigSellLevelDiff)))
                         {
                             autodrop = true;
                         }
@@ -11181,7 +11088,7 @@ void PlayerbotAI::_HandleCommandQuest(std::string& text, Player& fromPlayer)
                         {
                             if (CreatureInfo const* cInfo = ObjectMgr::GetCreatureTemplate(creature))
                                 for (uint16 z = 0; z < creaturecount; ++z)
-                                    groupMember->KilledMonster(cInfo, ObjectGuid());
+                                    groupMember->KilledMonster(cInfo, nullptr);
                         }
                         else if (creature < 0)
                         {

@@ -406,8 +406,7 @@ void WorldSession::SendSpiritResurrect() const
     WorldSafeLocsEntry const* corpseGrave = nullptr;
     Corpse* corpse = _player->GetCorpse();
     if (corpse)
-        corpseGrave = sObjectMgr.GetClosestGraveYard(
-                          corpse->GetPositionX(), corpse->GetPositionY(), corpse->GetPositionZ(), corpse->GetMapId(), _player->GetTeam());
+        corpseGrave = _player->GetMap()->GetGraveyardManager().GetClosestGraveYard(corpse->GetPositionX(), corpse->GetPositionY(), corpse->GetPositionZ(), corpse->GetMapId(), _player->GetTeam());
 
     // now can spawn bones
     _player->SpawnCorpseBones();
@@ -415,8 +414,7 @@ void WorldSession::SendSpiritResurrect() const
     // teleport to nearest from corpse graveyard, if different from nearest to player ghost
     if (corpseGrave)
     {
-        WorldSafeLocsEntry const* ghostGrave = sObjectMgr.GetClosestGraveYard(
-                _player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetMapId(), _player->GetTeam());
+        WorldSafeLocsEntry const* ghostGrave = _player->GetMap()->GetGraveyardManager().GetClosestGraveYard(_player->GetPositionX(), _player->GetPositionY(), _player->GetPositionZ(), _player->GetMapId(), _player->GetTeam());
 
         if (corpseGrave != ghostGrave)
             _player->TeleportTo(corpseGrave->map_id, corpseGrave->x, corpseGrave->y, corpseGrave->z, corpseGrave->o);
@@ -811,7 +809,7 @@ void WorldSession::HandleUnstablePet(WorldPacket& recv_data)
     }
 
     Pet* newpet = new Pet(HUNTER_PET);
-    if (!newpet->LoadPetFromDB(_player, creature_id, petnumber))
+    if (!newpet->LoadPetFromDB(_player, newpet->GetPetSpawnPosition(_player), creature_id, petnumber))
     {
         delete newpet;
         newpet = nullptr;
@@ -957,7 +955,7 @@ void WorldSession::HandleStableSwapPet(WorldPacket& recv_data)
 
     // summon unstabled pet
     Pet* newpet = new Pet;
-    if (!newpet->LoadPetFromDB(_player, creature_id, pet_number))
+    if (!newpet->LoadPetFromDB(_player, newpet->GetPetSpawnPosition(_player), creature_id, pet_number))
     {
         delete newpet;
 

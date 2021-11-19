@@ -171,11 +171,11 @@ enum SpellEffects
     SPELL_EFFECT_PULL_TOWARDS_DEST         = 145,
     SPELL_EFFECT_ACTIVATE_RUNE             = 146,
     SPELL_EFFECT_QUEST_FAIL                = 147,
-    SPELL_EFFECT_TRIGGER_MISSILE_SPELL_WITH_VALUE = 148, // TODO: Implement
+    SPELL_EFFECT_TRIGGER_MISSILE_SPELL_WITH_VALUE = 148,
     SPELL_EFFECT_CHARGE_DEST               = 149,
     SPELL_EFFECT_QUEST_OFFER               = 150,
     SPELL_EFFECT_TRIGGER_SPELL_2           = 151,
-    SPELL_EFFECT_SUMMON_RAF_FRIEND         = 152, // TODO: Implement
+    SPELL_EFFECT_SUMMON_RAF_FRIEND         = 152,
     SPELL_EFFECT_CREATE_PET                = 153,
     SPELL_EFFECT_TEACH_TAXI_NODE           = 154,
     SPELL_EFFECT_TITAN_GRIP                = 155,
@@ -183,7 +183,7 @@ enum SpellEffects
     SPELL_EFFECT_CREATE_ITEM_2             = 157,
     SPELL_EFFECT_MILLING                   = 158,
     SPELL_EFFECT_ALLOW_RENAME_PET          = 159,
-    SPELL_EFFECT_FORCE_CAST_2              = 160, // TODO: Implement
+    SPELL_EFFECT_FORCE_CAST_2              = 160,
     SPELL_EFFECT_TALENT_SPEC_COUNT         = 161,
     SPELL_EFFECT_TALENT_SPEC_SELECT        = 162,
     SPELL_EFFECT_163                       = 163,

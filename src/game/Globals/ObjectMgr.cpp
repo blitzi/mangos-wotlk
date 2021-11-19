@@ -986,6 +986,160 @@ std::vector<std::pair<TypeID, uint32>> const& ObjectMgr::GetDbGuidsForTransport(
     return (*m_guidsForMap.find(mapId)).second;
 }
 
+CreatureImmunityVector const* ObjectMgr::GetCreatureImmunitySet(uint32 entry, uint32 setId) const
+{
+    auto itr = m_creatureImmunities.find(entry);
+    if (itr == m_creatureImmunities.end())
+        return nullptr;
+
+    auto& setIds = (*itr).second;
+    auto setItr = setIds.find(setId);
+    if (setItr == setIds.end())
+        return nullptr;
+
+    return &(*setItr).second;
+}
+
+CreatureSpellList* ObjectMgr::GetCreatureSpellList(uint32 Id) const
+{
+    auto itr = m_spellListContainer->spellLists.find(Id);
+    if (itr == m_spellListContainer->spellLists.end())
+        return nullptr;
+
+    return &(*itr).second;
+}
+
+void ObjectMgr::LoadCreatureImmunities()
+{
+    uint32 count = 0;
+    QueryResult* result = WorldDatabase.Query("SELECT Entry, SetId, Type, Value FROM creature_immunities");
+
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+
+            uint32 entry = fields[0].GetUInt32();
+            if (!sCreatureStorage.LookupEntry<CreatureInfo>(entry))
+            {
+                sLog.outErrorDb("LoadCreatureImmunities: Entry %u does not exist.", entry);
+                continue;
+            }
+            uint32 setId = fields[1].GetUInt32();
+            uint32 type = fields[2].GetUInt32();
+            if (type >= MAX_SPELL_IMMUNITY)
+            {
+                sLog.outErrorDb("LoadCreatureImmunities: Invalid type %u.", type);
+                continue;
+            }
+            uint32 value = fields[3].GetUInt32();
+            m_creatureImmunities[entry][setId].push_back({ type, value });
+            ++count;
+        } while (result->NextRow());
+    }
+    delete result;
+
+    sLog.outString(">> Loaded %u creature_immunities definitions", count);
+    sLog.outString();
+}
+
+std::shared_ptr<CreatureSpellListContainer> ObjectMgr::LoadCreatureSpellLists()
+{
+    std::shared_ptr<CreatureSpellListContainer> newContainer = std::make_shared<CreatureSpellListContainer>();
+    uint32 count = 0;
+
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, Type, Param1, Param2, Param3 FROM creature_spell_targeting"));
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+
+            CreatureSpellListTargeting target;
+            target.Id = fields[0].GetUInt32();
+            target.Type = fields[1].GetUInt32();
+
+            if (target.Type > SPELL_LIST_TARGETING_MAX)
+            {
+                sLog.outErrorDb("LoadCreatureSpellLists: Invalid creature_spell_targeting type %u. Skipping.", target.Type);
+                continue;
+            }
+
+            target.Param1 = fields[2].GetUInt32();
+            target.Param2 = fields[3].GetUInt32();
+            target.Param3 = fields[4].GetUInt32();
+            newContainer->targeting[target.Id] = target;
+        } while (result->NextRow());
+    }
+
+    result.reset(WorldDatabase.Query("SELECT Id, Name, ChanceSupportAction, ChanceRangedAttack FROM creature_spell_list_entry"));
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            CreatureSpellList list;
+            list.Id = fields[0].GetUInt32();
+            list.Name = fields[1].GetCppString();
+            if (list.Name.empty())
+            {
+                sLog.outErrorDb("LoadCreatureSpellLists: Invalid creature_spell_list_entry empty name.");
+                continue;
+            }
+
+            list.ChanceSupportAction = fields[2].GetUInt32();
+            list.ChanceRangedAttack = fields[3].GetUInt32();
+            list.Disabled = false;
+            newContainer->spellLists[list.Id] = list;
+        } while (result->NextRow());
+    }
+
+    result.reset(WorldDatabase.Query("SELECT Id, Position, SpellId, Flags, TargetId, ScriptId, Availability, Probability, InitialMin, InitialMax, RepeatMin, RepeatMax FROM creature_spell_list"));
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            CreatureSpellListSpell spell;
+            spell.Id = fields[0].GetUInt32();
+            spell.Position = fields[1].GetUInt32();
+            spell.SpellId = fields[2].GetUInt32();
+            spell.Flags = fields[3].GetUInt32();
+
+            if (!sSpellTemplate.LookupEntry<SpellEntry>(spell.SpellId))
+            {
+                sLog.outErrorDb("LoadCreatureSpellLists: Invalid creature_spell_list %u spell %u does not exist. Skipping.", spell.Id, spell.SpellId);
+                continue;
+            }
+
+            uint32 targetId = fields[4].GetUInt32();
+            auto itr = newContainer->targeting.find(targetId);
+            if (itr == newContainer->targeting.end())
+            {
+                sLog.outErrorDb("LoadCreatureSpellLists: Invalid creature_spell_list %u target %u. Skipping.", spell.Id, targetId);
+                continue;
+            }
+            spell.Target = &(*itr).second;
+
+            spell.ScriptId = fields[5].GetUInt32();
+            spell.Availability = fields[6].GetUInt32();
+            spell.Probability = fields[7].GetUInt32();
+            spell.InitialMin = fields[8].GetUInt32();
+            spell.InitialMax = fields[9].GetUInt32();
+            spell.RepeatMin = fields[10].GetUInt32();
+            spell.RepeatMax = fields[11].GetUInt32();
+            newContainer->spellLists[spell.Id].Spells.emplace(spell.Position, spell);
+        } while (result->NextRow());
+    }
+
+    m_spellListContainer = newContainer;
+    sLog.outString(">> Loaded %u creature_spell_list definitions", count);
+    sLog.outString();
+
+    return newContainer;
+}
+
 void ObjectMgr::LoadEquipmentTemplates()
 {
     sEquipmentStorage.Load();
@@ -1062,7 +1216,7 @@ CreatureModelInfo const* ObjectMgr::GetCreatureModelRandomGender(uint32 display_
 
 uint32 ObjectMgr::GetModelForRace(uint32 sourceModelId, uint32 racemask)
 {
-    uint32 modelId = 0;
+    uint32 modelId = sourceModelId;
 
     CreatureModelRaceMapBounds bounds = m_mCreatureModelRaceMap.equal_range(sourceModelId);
 
@@ -1390,7 +1544,7 @@ void ObjectMgr::LoadCreatureSpawnDataTemplates()
 
 void ObjectMgr::LoadCreatureSpawnEntry()
 {
-    mCreatureSpawnEntryMap.clear();
+    m_creatureSpawnEntryMap.clear();
 
     QueryResult* result = WorldDatabase.Query("SELECT guid, entry FROM creature_spawn_entry");
 
@@ -1423,7 +1577,7 @@ void ObjectMgr::LoadCreatureSpawnEntry()
             continue;
         }
 
-        auto& entries = mCreatureSpawnEntryMap[guid];
+        auto& entries = m_creatureSpawnEntryMap[guid];
         entries.push_back(entry);
 
         ++count;
@@ -1496,7 +1650,7 @@ void ObjectMgr::LoadCreatures()
             CreatureConditionalSpawn const* cSpawn = GetCreatureConditionalSpawn(guid);
             if (!cSpawn)
             {
-                if (uint32 randomEntry = sObjectMgr.GetRandomEntry(guid))
+                if (uint32 randomEntry = sObjectMgr.GetRandomCreatureEntry(guid))
                     entry = randomEntry;
                 else
                 {
@@ -1752,6 +1906,10 @@ void ObjectMgr::LoadGameObjects()
         uint32 guid         = fields[ 0].GetUInt32();
         uint32 entry        = fields[ 1].GetUInt32();
 
+        if (entry == 0)
+            if (uint32 randomEntry = sObjectMgr.GetRandomGameObjectEntry(guid))
+                entry = randomEntry;
+
         GameObjectInfo const* gInfo = GetGameObjectInfo(entry);
         if (!gInfo)
         {
@@ -1923,6 +2081,53 @@ void ObjectMgr::LoadGameObjectAddon()
     }
 
     sLog.outString(">> Loaded %u gameobject addons", sGameObjectDataAddonStorage.GetRecordCount());
+    sLog.outString();
+}
+
+void ObjectMgr::LoadGameObjectSpawnEntry()
+{
+    m_gameobjectSpawnEntryMap.clear();
+
+    QueryResult* result = WorldDatabase.Query("SELECT guid, entry FROM gameobject_spawn_entry");
+
+    if (!result)
+    {
+        BarGoLink bar(1);
+        bar.step();
+        sLog.outErrorDb(">> Loaded gameobject_spawn_entry, table is empty!");
+        sLog.outString();
+        return;
+    }
+
+    BarGoLink bar(result->GetRowCount());
+
+    uint32 count = 0;
+
+    do
+    {
+        bar.step();
+
+        Field* fields = result->Fetch();
+
+        uint32 guid = fields[0].GetUInt32();
+        uint32 entry = fields[1].GetUInt32();
+
+        GameObjectInfo const* info = GetGameObjectInfo(entry);
+        if (!info)
+        {
+            sLog.outErrorDb("Table `gameobject_spawn_entry` has gameobject (GUID: %u) with non existing gameobject entry %u, skipped.", guid, entry);
+            continue;
+        }
+
+        auto& entries = m_gameobjectSpawnEntryMap[guid];
+        entries.push_back(entry);
+
+        ++count;
+    } while (result->NextRow());
+
+    delete result;
+
+    sLog.outString(">> Loaded %u gameobject_spawn_entry entries", count);
     sLog.outString();
 }
 
@@ -2522,6 +2727,9 @@ void ObjectMgr::LoadItemPrototypes()
                         sLog.outErrorDb("Item (Entry: %u) has broken spell in spellid_%d (%u)", i, j + 1, proto->Spells[j].SpellId);
                         const_cast<ItemPrototype*>(proto)->Spells[j].SpellId = 0;
                     }
+
+                    else if (spellInfo->speed > 0 && proto->Spells[j].SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && proto->Spells[j].SpellTrigger != ITEM_SPELLTRIGGER_CHANCE_ON_HIT)
+                        sLog.outErrorDb("Item (Entry: %u) spell %u %s has travel speed.", i, spellInfo->Id, spellInfo->SpellName[0]);
                 }
             }
         }
@@ -3847,18 +4055,6 @@ void ObjectMgr::BuildPlayerLevelInfo(uint8 race, uint8 _class, uint8 level, Play
     }
 }
 
-CreatureTemplateSpells const* ObjectMgr::GetCreatureTemplateSpellSet(uint32 entry, uint32 setId) const
-{
-    auto itr = m_creatureTemplateSpells.find(entry);
-    if (itr != m_creatureTemplateSpells.end())
-    {
-        auto itrSecond = (*itr).second.find(setId);
-        if (itrSecond != (*itr).second.end())
-            return &(*itrSecond).second;
-    }
-    return nullptr;
-}
-
 /* ********************************************************************************************* */
 /* *                                Static Wrappers                                              */
 /* ********************************************************************************************* */
@@ -4752,37 +4948,6 @@ void ObjectMgr::LoadQuests()
             qinfo->SetSpecialFlag(QUEST_SPECIAL_FLAGS_PLAYER_KILL);
     }
 
-    // check QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT for spell with SPELL_EFFECT_QUEST_COMPLETE
-    for (uint32 i = 0; i < sSpellTemplate.GetMaxEntry(); ++i)
-    {
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(i);
-        if (!spellInfo)
-            continue;
-
-        for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
-        {
-            if (spellInfo->Effect[j] != SPELL_EFFECT_QUEST_COMPLETE)
-                continue;
-
-            uint32 quest_id = spellInfo->EffectMiscValue[j];
-
-            Quest const* quest = GetQuestTemplate(quest_id);
-
-            // some quest referenced in spells not exist (outdated spells)
-            if (!quest)
-                continue;
-
-            // Exclude false positive of quests 8354 & 10162
-            if (!quest->HasSpecialFlag(QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT) && spellInfo->Id != 24875 && quest_id != 8354 && spellInfo->Id != 33824 && quest_id != 10162)
-            {
-                sLog.outErrorDb("Spell (id: %u) have SPELL_EFFECT_QUEST_COMPLETE for quest %u , but quest does not have SpecialFlags QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT (2) set. Quest SpecialFlags should be corrected to enable this objective.", spellInfo->Id, quest_id);
-
-                // this will prevent quest completing without objective
-                const_cast<Quest*>(quest)->SetSpecialFlag(QUEST_SPECIAL_FLAG_EXPLORATION_OR_EVENT);
-            }
-        }
-    }
-
     sLog.outString(">> Loaded " SIZEFMTD " quests definitions", mQuestTemplates.size());
     sLog.outString();
 }
@@ -5091,6 +5256,8 @@ void ObjectMgr::LoadInstanceEncounters()
                 }
                 break;
             }
+            case ENCOUNTER_CREDIT_SCRIPT:
+                break;
             default:
                 sLog.outErrorDb("Table `instance_encounters` has an invalid credit type (%u) for encounter %u (%s), skipped!", creditType, entry, dungeonEncounter->encounterName[0]);
                 continue;
@@ -7881,8 +8048,20 @@ void ObjectMgr::LoadSpellTemplate()
     for (uint32 i = 1; i < sSpellTemplate.GetMaxEntry(); ++i)
     {
         SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(i);
-        if (spell && spell->Category)
-            sSpellCategoryStore[spell->Category].insert(i);
+        if (spell)
+        {
+            if (spell->Category)
+                sSpellCategoryStore[spell->Category].insert(i);
+
+            if (spell->SpellFamilyName == SPELLFAMILY_ROGUE)
+            {
+                for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+                {
+                    if (spell->Effect[i] == SPELL_EFFECT_ENCHANT_ITEM_TEMPORARY)
+                        m_roguePoisonEnchantIds[spell->EffectMiscValue[i]] = true;
+                }
+            }
+        }
 
         // DBC not support uint64 fields but SpellEntry have SpellFamilyFlags mapped at 2 uint32 fields
         // uint32 field already converted to bigendian if need, but must be swapped for correct uint64 bigendian view
@@ -7948,7 +8127,7 @@ void ObjectMgr::LoadBroadcastText()
 {
     uint32 count = 0;
 
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, Text, Text1, LanguageID, EmoteID1, EmoteID2, EmoteID3, EmoteDelay1, EmoteDelay2, EmoteDelay3 FROM broadcast_text"));
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, Text, Text1, ChatTypeID, LanguageID, SoundEntriesID1, EmoteID1, EmoteID2, EmoteID3, EmoteDelay1, EmoteDelay2, EmoteDelay3 FROM broadcast_text"));
 
     if (!result)
     {
@@ -7975,13 +8154,15 @@ void ObjectMgr::LoadBroadcastText()
 
         bct.maleText[DEFAULT_LOCALE] = fields[1].GetCppString();
         bct.femaleText[DEFAULT_LOCALE] = fields[2].GetCppString();
-        bct.languageId = Language(fields[3].GetUInt32());
-        bct.emoteIds[0] = fields[4].GetUInt32();
-        bct.emoteIds[1] = fields[5].GetUInt32();
-        bct.emoteIds[2] = fields[6].GetUInt32();
-        bct.emoteDelays[0] = fields[7].GetUInt32();
-        bct.emoteDelays[1] = fields[8].GetUInt32();
-        bct.emoteDelays[2] = fields[9].GetUInt32();
+        bct.chatTypeId = ChatType(fields[3].GetUInt32());
+        bct.languageId = Language(fields[4].GetUInt32());
+        bct.soundId1 = fields[5].GetUInt32();
+        bct.emoteIds[0] = fields[6].GetUInt32();
+        bct.emoteIds[1] = fields[7].GetUInt32();
+        bct.emoteIds[2] = fields[8].GetUInt32();
+        bct.emoteDelays[0] = fields[9].GetUInt32();
+        bct.emoteDelays[1] = fields[10].GetUInt32();
+        bct.emoteDelays[2] = fields[11].GetUInt32();
 
         ++count;
     } while (result->NextRow());
@@ -9975,28 +10156,50 @@ void ObjectMgr::LoadCreatureTemplateSpells()
         {
             Field* fields = result->Fetch();
 
-            CreatureTemplateSpells templateSpells;
+            uint32 entry = fields[0].GetUInt32();
+            uint32 setId = fields[1].GetUInt32();
 
-            templateSpells.entry = fields[0].GetUInt32();
-            templateSpells.setId = fields[1].GetUInt32();
-            for (uint32 i = 0; i < CREATURE_MAX_SPELLS; ++i)
-                templateSpells.spells[i] = fields[2 + i].GetUInt32();
-
-            if (!sCreatureStorage.LookupEntry<CreatureInfo>(templateSpells.entry))
+            if (!sCreatureStorage.LookupEntry<CreatureInfo>(entry))
             {
-                sLog.outErrorDb("LoadCreatureTemplateSpells: Spells found for creature entry %u, but creature does not exist, skipping", templateSpells.entry);
+                sLog.outErrorDb("LoadCreatureTemplateSpells: Spells found for creature entry %u, but creature does not exist, skipping", entry);
                 continue;
             }
-            for (uint8 i = 0; i < CREATURE_MAX_SPELLS; ++i)
-            {
-                if (templateSpells.spells[i] && !sSpellTemplate.LookupEntry<SpellEntry>(templateSpells.spells[i]) && templateSpells.spells[i] != 2) // 2 is attack which is hardcoded in client
-                {
-                    sLog.outErrorDb("LoadCreatureTemplateSpells: Spells found for creature entry %u, assigned spell %u does not exist, set to 0", templateSpells.entry, templateSpells.spells[i]);
-                    templateSpells.spells[i] = 0;
-                }
-            }
 
-            m_creatureTemplateSpells[templateSpells.entry].emplace(templateSpells.setId, templateSpells);
+            auto& spellList = m_spellListContainer->spellLists[entry * 100 + setId];
+            spellList.Disabled = true;
+            auto& spells = spellList.Spells;
+
+            for (uint32 i = 0; i < CREATURE_MAX_SPELLS; ++i)
+            {
+                uint32 spellId = fields[2 + i].GetUInt32();
+                if (!spellId)
+                    continue;
+
+                if (!sSpellTemplate.LookupEntry<SpellEntry>(spellId) && spellId != 2) // 2 is attack which is hardcoded in client
+                {
+                    sLog.outErrorDb("LoadCreatureTemplateSpells: Spells found for creature entry %u, assigned spell %u does not exist, set to 0", entry, spellId);
+                    continue;
+                }
+
+                CreatureSpellListSpell spell;
+                spell.Id = entry * 100 + setId;
+                spell.Position = i;
+                spell.SpellId = spellId;
+                spell.Flags = 0;
+                spell.Target = &m_spellListContainer->targeting[1];
+                spell.InitialMin = 0;
+                spell.InitialMax = 0;
+
+                auto cooldown = GetCreatureCooldownRange(entry, spellId);
+
+                spell.RepeatMin = cooldown.first;
+                spell.RepeatMax = cooldown.second;
+
+                spell.Availability = 100;
+                spell.Probability = 0;
+                spell.ScriptId = 0;
+                spells.emplace(i, spell);
+            }            
         } while (result->NextRow());
     }
 
@@ -10006,6 +10209,7 @@ void ObjectMgr::LoadCreatureTemplateSpells()
 
 void ObjectMgr::LoadCreatureCooldowns()
 {
+    // not deleting on reload because some cooldowns are SD2 based - instead we overwrite only
     uint32 count = 0;
     QueryResult* result = WorldDatabase.Query("SELECT Entry, SpellId, CooldownMin, CooldownMax FROM creature_cooldowns");
 
@@ -10034,7 +10238,7 @@ void ObjectMgr::LoadCreatureCooldowns()
                 sLog.outErrorDb("LoadCreatureCooldowns: Cooldowns are both 0 for entry %u spellId %u - redundant entry.", entry, spellId);
                 continue;
             }
-            m_creatureCooldownMap[entry].emplace(spellId, std::make_pair(cooldownMin, cooldownMax));
+            m_creatureCooldownMap[entry][spellId] = std::make_pair(cooldownMin, cooldownMax);
         } while (result->NextRow());
     }
     delete result;
@@ -10163,41 +10367,79 @@ GameObjectDataPair const* FindGOData::GetResult() const
     return i_anyData;
 }
 
-bool DoDisplayText(WorldObject* source, int32 entry, Unit const* target /*=nullptr*/)
+bool DoDisplayText(WorldObject* source, int32 entry, Unit const* target, uint32 chatTypeOverride)
 {
-    MangosStringLocale const* data = sObjectMgr.GetMangosStringLocale(entry);
+    uint32 sound, emote, type = 0;
+    Language lang = LANG_UNIVERSAL;
+    std::vector<std::string> content;
+    Gender sourceGender = source->IsUnit() ? (Gender)((Unit*)source)->getGender() : GENDER_NONE;
 
-    if (!data)
+    if (BroadcastText const* bct = sObjectMgr.GetBroadcastText(entry))
+    {
+        lang = bct->languageId;
+        type = bct->chatTypeId;
+        sound = bct->soundId1;
+        emote = bct->emoteIds[0];
+        content = bct->maleText;
+
+        if ((sourceGender == GENDER_FEMALE || sourceGender == GENDER_NONE) && !bct->femaleText[DEFAULT_LOCALE].empty() && bct->femaleText.size() > 0)
+            content = bct->femaleText;
+
+        if (bct->maleText.size() > 0 && !bct->maleText[DEFAULT_LOCALE].empty())
+            content = bct->maleText;
+    }
+    else if (MangosStringLocale const* data = sObjectMgr.GetMangosStringLocale(entry))
+    {
+        lang = data->LanguageId;
+        type = data->Type;
+        sound = data->SoundId;
+        emote = data->Emote;
+        if (BroadcastText const* bct = data->broadcastText)
+        {
+            if ((sourceGender == GENDER_FEMALE || sourceGender == GENDER_NONE) && !bct->femaleText[DEFAULT_LOCALE].empty() && bct->femaleText.size() > 0)
+                content = bct->femaleText;
+
+            if (bct->maleText.size() > 0 && !bct->maleText[DEFAULT_LOCALE].empty())
+                content = bct->maleText;
+        }
+        else
+            content = data->Content;
+    }
+
+    if (chatTypeOverride > 0)
+        type = chatTypeOverride;
+
+    if (content.empty())
     {
         _DoStringError(entry, "DoScriptText with source %s could not find text entry %i.", source->GetGuidStr().c_str(), entry);
         return false;
     }
 
-    if (data->SoundId)
+    if (sound)
     {
-        switch (data->Type)
+        switch (type)
         {
             case CHAT_TYPE_ZONE_YELL:
             case CHAT_TYPE_ZONE_EMOTE:
-                source->PlayDirectSound(data->SoundId, PlayPacketParameters(PLAY_ZONE, source->GetZoneId()));
+                source->PlayDirectSound(sound, PlayPacketParameters(PLAY_ZONE, source->GetZoneId()));
                 break;
             case CHAT_TYPE_WHISPER:
             case CHAT_TYPE_BOSS_WHISPER:
                 // An error will be displayed for the text
                 if (target && target->GetTypeId() == TYPEID_PLAYER)
-                    source->PlayDirectSound(data->SoundId, PlayPacketParameters(PLAY_TARGET, (Player const*)target));
+                    source->PlayDirectSound(sound, PlayPacketParameters(PLAY_TARGET, (Player const*)target));
                 break;
             default:
-                source->PlayDirectSound(data->SoundId);
+                source->PlayDirectSound(sound);
                 break;
         }
     }
 
-    if (data->Emote)
+    if (emote)
     {
         if (source->GetTypeId() == TYPEID_UNIT || source->GetTypeId() == TYPEID_PLAYER)
         {
-            ((Unit*)source)->HandleEmote(data->Emote);
+            ((Unit*)source)->HandleEmote(emote);
         }
         else
         {
@@ -10206,12 +10448,12 @@ bool DoDisplayText(WorldObject* source, int32 entry, Unit const* target /*=nullp
         }
     }
 
-    if ((data->Type == CHAT_TYPE_WHISPER || data->Type == CHAT_TYPE_BOSS_WHISPER) && (!target || target->GetTypeId() != TYPEID_PLAYER))
+    if ((type == CHAT_TYPE_WHISPER || type == CHAT_TYPE_BOSS_WHISPER || type == CHAT_TYPE_PARTY) && (!target || target->GetTypeId() != TYPEID_PLAYER))
     {
-        _DoStringError(entry, "DoDisplayText entry %i cannot whisper without target unit (TYPEID_PLAYER).", entry);
+        _DoStringError(entry, "DoDisplayText entry %i cannot whisper/party chat without target unit (TYPEID_PLAYER).", entry);
         return false;
     }
 
-    source->MonsterText(data, target);
+    source->MonsterText(content, type, lang, target);
     return true;
 }

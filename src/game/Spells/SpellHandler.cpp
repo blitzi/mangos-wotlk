@@ -291,6 +291,9 @@ void WorldSession::HandleGameObjectUseOpcode(WorldPacket& recv_data)
 
     DEBUG_LOG("WORLD: Received opcode CMSG_GAMEOBJ_USE guid: %s", guid.GetString().c_str());
 
+    if (_player->IsBeingTeleported())
+        return;
+
     GameObject* obj = _player->GetMap()->GetGameObject(guid);
     if (!obj)
         return;
@@ -450,6 +453,7 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
     bool handled = false;
     Spell* spell = new Spell(caster, spellInfo, triggeredByAura ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE, caster->GetObjectGuid(), triggeredByAura ? triggeredByAura->GetSpellProto() : nullptr);
     spell->m_cast_count = cast_count;                       // set count of casts
+    spell->m_clientCast = true;
     if (!triggeredByAura && (caster->HasGCD(spellInfo) || !caster->IsSpellReady(*spellInfo)))
     {
         if (caster->HasGCDOrCooldownWithinMargin(*spellInfo))
@@ -486,10 +490,6 @@ void WorldSession::HandleCancelCastOpcode(WorldPacket& recvPacket)
         return;
 
     if (!_player->IsClientControlled(_player))
-        return;
-
-    // FIXME: hack, ignore unexpected client cancel Deadly Throw cast
-    if (spellId == 26679)
         return;
 
     if (mover->IsNonMeleeSpellCasted(false))

@@ -581,6 +581,8 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                     break;
                 case EVENT_T_DEATH_PREVENTED:
                     break;
+                case EVENT_T_TARGET_NOT_REACHABLE:
+                    break;
                 default:
                     sLog.outErrorEventAI("Creature %u using not checked at load event (%u) in event %u. Need check code update?", temp.creature_id, temp.event_id, i);
                     break;
@@ -1075,7 +1077,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                         IsValidTargetType(temp.event_type, action.type, action.setFacing.target, i, j + 1);
                         break;
                     case ACTION_T_SET_SPELL_SET:
-                        if (!sObjectMgr.GetCreatureTemplateSpellSet(creature_id, action.spellSet.setId))
+                        if (!sObjectMgr.GetCreatureSpellList(action.spellSet.setId))
                         {
                             sLog.outErrorEventAI("Event %u Action %u uses invalid spell set %u. Setting to 0.", i, j + 1, action.spellSet.setId);
                             action.spellSet.setId = 0;
@@ -1084,6 +1086,14 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                         break;
                     case ACTION_T_SET_IMMOBILIZED_STATE:
                     case ACTION_T_SET_DESPAWN_AGGREGATION:
+                        break;
+                    case ACTION_T_SET_IMMUNITY_SET:
+                        if (!sObjectMgr.GetCreatureImmunitySet(creature_id, action.immunitySet.setId))
+                        {
+                            sLog.outErrorEventAI("Event %u Action %u uses invalid immunity set %u. Setting to 0.", i, j + 1, action.immunitySet.setId);
+                            action.immunitySet.setId = 0;
+                            break;
+                        }
                         break;
                     default:
                         sLog.outErrorEventAI("Event %u Action %u have currently not checked at load action type (%u). Need check code update?", i, j + 1, temp.action[j].type);
@@ -1130,9 +1140,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
             {
                 bool ainame = strcmp(cInfo->AIName, "EventAI") == 0 || strcmp(cInfo->AIName, "GuardianAI") == 0;
                 bool hasevent = m_CreatureEventAI_Event_Map.find(i) != m_CreatureEventAI_Event_Map.end();
-                if (ainame && !hasevent)
-                    sLog.outErrorEventAI("EventAI not has script for creature entry (%u), but AIName = '%s'.", i, cInfo->AIName);
-                else if (!ainame && hasevent)
+                if (!ainame && hasevent)
                     sLog.outErrorEventAI("EventAI has script for creature entry (%u), but AIName = '%s' instead 'EventAI'.", i, cInfo->AIName);
             }
         }

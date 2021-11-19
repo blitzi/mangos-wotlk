@@ -136,7 +136,7 @@ SpellCastResult Pet::TryLoadFromDB(Unit* owner, uint32 petentry /*= 0*/, uint32 
     return SPELL_CAST_OK; // If errors occur down the line, one must think about data consistency
 }
 
-bool Pet::LoadPetFromDB(Player* owner, uint32 petentry /*= 0*/, uint32 petnumber /*= 0*/, bool current /*= false*/, uint32 healthPercentage /*= 0*/, bool permanentOnly /*= false*/, bool forced /*= false*/)
+bool Pet::LoadPetFromDB(Player* owner, Position const& spawnPos, uint32 petentry /*= 0*/, uint32 petnumber /*= 0*/, bool current /*= false*/, uint32 healthPercentage /*= 0*/, bool permanentOnly /*= false*/, bool forced /*= false*/)
 {
     m_loading = true;
 
@@ -230,7 +230,7 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petentry /*= 0*/, uint32 petnumber
 
     Map* map = owner->GetMap();
 
-    CreatureCreatePos pos(owner, owner->GetOrientation(), PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
+    CreatureCreatePos pos(owner->GetMap(), spawnPos.x, spawnPos.y, spawnPos.z, spawnPos.o, owner->GetPhaseMask());
 
     uint32 guid = pos.GetMap()->GenerateLocalLowGuid(HIGHGUID_PET);
     if (!Create(guid, pos, creatureInfo, pet_number))
@@ -262,12 +262,12 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petentry /*= 0*/, uint32 petnumber
     SetUInt32Value(UNIT_NPC_FLAGS, UNIT_NPC_FLAG_NONE);
     SetName(fields[8].GetString());
 
-    SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_AURAS);
+    SetByteValue(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PVP_FLAG, UNIT_BYTE2_FLAG_AURAS);
     SetUInt32Value(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
 
     if (getPetType() == HUNTER_PET)
     {
-        SetByteFlag(UNIT_FIELD_BYTES_2, 2, fields[9].GetBool() ? UNIT_CAN_BE_ABANDONED : UNIT_CAN_BE_RENAMED | UNIT_CAN_BE_ABANDONED);
+        SetByteFlag(UNIT_FIELD_BYTES_2, UNIT_BYTES_2_OFFSET_PET_FLAGS, fields[9].GetBool() ? UNIT_CAN_BE_ABANDONED : UNIT_CAN_BE_RENAMED | UNIT_CAN_BE_ABANDONED);
         SetMaxPower(POWER_HAPPINESS, GetCreatePowers(POWER_HAPPINESS));
         SetPower(POWER_HAPPINESS, fields[12].GetUInt32());
         SetPowerType(POWER_FOCUS);
@@ -527,6 +527,13 @@ void Pet::SavePetToDB(PetSaveMode mode, Player* owner)
     }
 }
 
+Position Pet::GetPetSpawnPosition(Player* owner)
+{
+    Position pos;
+    owner->GetFirstCollisionPosition(pos, 2.f, owner->GetOrientation() + M_PI_F / 2);
+    return pos;
+}
+
 void Pet::DeleteFromDB(uint32 guidlow, bool separate_transaction)
 {
     if (separate_transaction)
@@ -640,9 +647,9 @@ void Pet::Update(const uint32 diff)
         {
             // unsummon pet that lost owner
             Unit* owner = GetOwner();
-            if (!owner ||
+            if ((!owner ||
                     (!IsWithinDistInMap(owner, GetMap()->GetVisibilityDistance()) && (owner->HasCharm() && !owner->HasCharm(GetObjectGuid()))) ||
-                    (isControlled() && !owner->GetPetGuid()))
+                    (isControlled() && !owner->GetPetGuid())) && (!IsGuardian() || !IsInCombat()))
             {
                 Unsummon(PET_SAVE_REAGENTS);
                 return;
@@ -786,12 +793,18 @@ void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= nullptr*/)
                     p_owner->GetTemporaryUnsummonedPetNumber() != GetCharmInfo()->GetPetNumber())
                 mode = PET_SAVE_NOT_IN_SLOT;
 
-            if (mode == PET_SAVE_REAGENTS)
+            uint32 spellId = GetUInt32Value(UNIT_CREATED_BY_SPELL);
+            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+            // save minion for resummoning at resurrection in BGs
+            // only save the summon spell in the case where the minion did not die before the warlock, otherwise reset it
+            if (mode == PET_SAVE_REAGENTS && p_owner->getClass() == CLASS_WARLOCK && p_owner->InBattleGround() && isControlled() && !isTemporarySummoned() && spellInfo)
+                p_owner->SetBGPetSpell(spellId);
+            else
+                p_owner->SetBGPetSpell(0);
+
+            if (mode == PET_SAVE_REAGENTS && !p_owner->InBattleGround()) // don't restore reagents in BGs - minion will be automatically ressurected
             {
                 // returning of reagents only for players, so best done here
-                uint32 spellId = GetUInt32Value(UNIT_CREATED_BY_SPELL);
-                SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
-
                 if (spellInfo)
                 {
                     for (uint32 i = 0; i < MAX_SPELL_REAGENTS; ++i)
@@ -946,9 +959,9 @@ bool Pet::CreateBaseAtCreature(Creature* creature)
     else
         SetName(creature->GetNameForLocaleIdx(sObjectMgr.GetDbc2StorageLocaleIndex()));
 
-    SetByteValue(UNIT_FIELD_BYTES_0, 1, CLASS_WARRIOR);
-    SetByteValue(UNIT_FIELD_BYTES_0, 2, GENDER_NONE);
-    SetByteValue(UNIT_FIELD_BYTES_0, 3, POWER_FOCUS);
+    SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_CLASS, CLASS_WARRIOR);
+    SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_GENDER, GENDER_NONE);
+    SetByteValue(UNIT_FIELD_BYTES_0, UNIT_BYTES_0_OFFSET_POWER_TYPE, POWER_FOCUS);
     SetSheath(SHEATH_STATE_MELEE);
 
     SetByteValue(UNIT_FIELD_BYTES_2, 1, UNIT_BYTE2_FLAG_AURAS);
@@ -1195,6 +1208,8 @@ void Pet::InitPetScalingAuras()
             CastSpell(nullptr, 34958, TRIGGERED_NONE);
             break;
         case 12740: // Infernal - Warlock - unique - isnt updated on stat changes
+        case 18541: // Doomguard - Ritual of Doom
+        case 18662: // Doomguard - Curse of Doom
             CastSpell(nullptr, 36186, TRIGGERED_NONE);
             CastSpell(nullptr, 36188, TRIGGERED_NONE);
             CastSpell(nullptr, 36189, TRIGGERED_NONE);
@@ -2188,7 +2203,7 @@ bool Pet::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* ci
     if (!InitEntry(cinfo->Entry))
         return false;
 
-    cPos.SelectFinalPoint(this);
+    cPos.SelectFinalPoint(this, false);
 
     if (!cPos.Relocate(this))
         return false;
@@ -2196,7 +2211,7 @@ bool Pet::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* ci
     SetSheath(SHEATH_STATE_MELEE);
 
     if (getPetType() == MINI_PET)                           // always non-attackable
-        SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE);
+        SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING);
 
     if (getPetType() == SUMMON_PET)
         SetCorpseDelay(5);
@@ -2272,13 +2287,13 @@ void Pet::CastOwnerTalentAuras()
                 switch (seTalent->Id)
                 {
                     case 34455: // Ferocious Inspiration Rank 1
-                        CastSpell(this, 75593, TRIGGERED_OLD_TRIGGERED); // Ferocious Inspiration 1%
+                        CastSpell(nullptr, 75593, TRIGGERED_OLD_TRIGGERED); // Ferocious Inspiration 1%
                         break;
                     case 34459: // Ferocious Inspiration Rank 2
-                        CastSpell(this, 75446, TRIGGERED_OLD_TRIGGERED); // Ferocious Inspiration 2%
+                        CastSpell(nullptr, 75446, TRIGGERED_OLD_TRIGGERED); // Ferocious Inspiration 2%
                         break;
                     case 34460: // Ferocious Inspiration Rank 3
-                        CastSpell(this, 75447, TRIGGERED_OLD_TRIGGERED); // Ferocious Inspiration 3%
+                        CastSpell(nullptr, 75447, TRIGGERED_OLD_TRIGGERED); // Ferocious Inspiration 3%
                         break;
                 }
             }
@@ -2292,7 +2307,7 @@ void Pet::CastPetAura(PetAura const* aura)
     if (!auraId)
         return;
 
-    CastSpell(this, auraId, TRIGGERED_OLD_TRIGGERED);
+    CastSpell(nullptr, auraId, TRIGGERED_OLD_TRIGGERED);
 }
 
 struct DoPetLearnSpell

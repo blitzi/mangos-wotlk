@@ -21,13 +21,13 @@
 
 struct EarthShield : public AuraScript
 {
-    int32 OnAuraValueCalculate(Aura* aura, Unit* caster, int32 value) const override
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
     {
-        Unit* target = aura->GetTarget();
-        if (Unit* caster = aura->GetCaster())
+        Unit* target = data.target;
+        if (Unit* caster = data.caster)
         {
-            value = caster->SpellHealingBonusDone(target, aura->GetSpellProto(), value, SPELL_DIRECT_DAMAGE);
-            value = target->SpellHealingBonusTaken(caster, aura->GetSpellProto(), value, SPELL_DIRECT_DAMAGE);
+            value = caster->SpellHealingBonusDone(target, data.spellProto, value, SPELL_DIRECT_DAMAGE);
+            value = target->SpellHealingBonusTaken(caster, data.spellProto, value, SPELL_DIRECT_DAMAGE);
         }
         return value;
     }
@@ -49,8 +49,18 @@ struct ItemShamanT10Elemental2PBonus : public AuraScript
     }
 };
 
+struct AncestralAwakening : public SpellScript
+{
+    void OnInit(Spell* spell) const override
+    {
+        spell->SetMaxAffectedTargets(1);
+        spell->SetFilteringScheme(EFFECT_INDEX_0, false, SCHEME_PRIORITIZE_HEALTH);
+    }
+};
+
 void LoadShamanScripts()
 {
     RegisterAuraScript<EarthShield>("spell_earth_shield");
     RegisterAuraScript<ItemShamanT10Elemental2PBonus>("spell_item_shaman_t10_elemental_2p_bonus");
+    RegisterSpellScript<AncestralAwakening>("spell_ancestral_awakening");
 }

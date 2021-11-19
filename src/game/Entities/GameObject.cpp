@@ -121,7 +121,11 @@ void GameObject::AddToWorld()
 {
     ///- Register the gameobject for guid lookup
     if (!IsInWorld())
+    {
         GetMap()->GetObjectsStore().insert<GameObject>(GetObjectGuid(), (GameObject*)this);
+        if (GetDbGuid())
+            GetMap()->AddDbGuidObject(this);
+    }
 
     if (m_model)
         GetMap()->InsertGameObjectModel(*m_model);
@@ -135,12 +139,6 @@ void GameObject::AddToWorld()
     {
         if (GameObject* linkedGO = SummonLinkedTrapIfAny())
             SetLinkedTrap(linkedGO);
-
-        if (InstanceData* iData = GetMap()->GetInstanceData())
-            iData->OnObjectSpawn(this);
-
-        if (AI())
-            AI()->JustSpawned();
     }
 
     // Make active if required
@@ -173,6 +171,8 @@ void GameObject::RemoveFromWorld()
             GetMap()->RemoveGameObjectModel(*m_model);
 
         GetMap()->GetObjectsStore().erase<GameObject>(GetObjectGuid(), (GameObject*)nullptr);
+        if (GetDbGuid())
+            GetMap()->RemoveDbGuidObject(this);
     }
 
     WorldObject::RemoveFromWorld();
@@ -260,6 +260,15 @@ bool GameObject::Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMa
             SetGoState(goinfo->transport.startOpen ? GO_STATE_ACTIVE : GO_STATE_READY);
             SetGoAnimProgress(animprogress);
             break;
+        case GAMEOBJECT_TYPE_GENERIC:
+        case GAMEOBJECT_TYPE_SPELL_FOCUS:
+        case GAMEOBJECT_TYPE_GOOBER:
+        case GAMEOBJECT_TYPE_CHEST:
+            SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE | GO_DYNFLAG_LO_SPARKLE);
+            break;
+        case GAMEOBJECT_TYPE_QUESTGIVER:
+            SetUInt32Value(GAMEOBJECT_DYNAMIC, GO_DYNFLAG_LO_ACTIVATE);
+            break;
         case GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING:
             ForceGameObjectHealth(GetMaxHealth(), nullptr);
             break;
@@ -293,6 +302,8 @@ void GameObject::Update(const uint32 diff)
         //((Transport*)this)->Update(p_time);
         return;
     }
+
+    m_events.Update(diff);
 
     switch (m_lootState)
     {
@@ -411,6 +422,7 @@ void GameObject::Update(const uint32 diff)
 
                             // respawn timer
                             GetMap()->Add(this);
+                            AIM_Initialize();
                             break;
                     }
                 }
@@ -625,7 +637,8 @@ void GameObject::Update(const uint32 diff)
                     return; // SetLootState and return because go is treated as "burning flag" due to GetGoAnimProgress() being 100 and would be removed on the client
                 case GAMEOBJECT_TYPE_CHEST:
                     m_despawnTimer = 0;
-                    if (m_goInfo->chest.chestRestockTime)
+                    // consumable confirmed to override chest restock
+                    if (!m_goInfo->chest.consumable && m_goInfo->chest.chestRestockTime)
                     {
                         m_reStockTimer = time(nullptr) + m_goInfo->chest.chestRestockTime;
                         SetLootState(GO_NOT_READY);
@@ -702,6 +715,14 @@ void GameObject::Update(const uint32 diff)
             if (IsInWorld())
                 UpdateObjectVisibility();
 
+            if (IsUsingNewSpawningSystem()) // does not work nicely with pooling right now
+            {
+                m_respawnTime = std::numeric_limits<time_t>::max();
+                if (m_respawnDelay)
+                    GetMap()->GetSpawnManager().AddGameObject(m_respawnDelay, GetDbGuid());
+                AddObjectToRemoveList();
+            }
+
             break;
         }
     }
@@ -719,6 +740,14 @@ void GameObject::Update(const uint32 diff)
 
     if (m_AI)
         m_AI->UpdateAI(diff);
+
+    WorldObject::Update(diff);
+}
+
+void GameObject::Heartbeat()
+{
+    if (AI())
+        AI()->OnHeartbeat();
 }
 
 void GameObject::Refresh()
@@ -728,7 +757,10 @@ void GameObject::Refresh()
         return;
 
     if (IsSpawned())
+    {
         GetMap()->Add(this);
+        AIM_Initialize();
+    }
 }
 
 void GameObject::AddUniqueUse(Player* player)
@@ -856,7 +888,14 @@ bool GameObject::LoadFromDB(uint32 dbGuid, Map* map, uint32 newGuid, GenericTran
     uint8 animprogress = data->animprogress;
     GOState go_state = data->go_state;
 
+    GameObjectInfo const* goinfo = ObjectMgr::GetGameObjectInfo(entry);
+    if (goinfo && (goinfo->ExtraFlags & GAMEOBJECT_EXTRA_FLAG_DYNGUID) != 0 && dbGuid == newGuid)
+        newGuid = map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT);
+
     m_dbGuid = dbGuid;
+
+    if (uint32 randomEntry = sObjectMgr.GetRandomGameObjectEntry(GetDbGuid()))
+        entry = randomEntry;
 
     if (!Create(newGuid, entry, map, phaseMask, x, y, z, ang, data->rotation, animprogress, go_state))
         return false;
@@ -892,6 +931,7 @@ bool GameObject::LoadFromDB(uint32 dbGuid, Map* map, uint32 newGuid, GenericTran
         }
     }
 
+    map->Add(this);
     AIM_Initialize();
 
     if (transport)
@@ -941,6 +981,18 @@ void GameObject::SetOwnerGuid(ObjectGuid guid)
 Unit* GameObject::GetOwner() const
 {
     return ObjectAccessor::GetUnit(*this, GetOwnerGuid());
+}
+
+WorldObject* GameObject::GetSpawner() const
+{
+    if (!IsInWorld())
+        return nullptr;
+
+    ObjectGuid spawnerGuid = GetSpawnerGuid();
+    if (spawnerGuid.IsGameObject())
+        return GetMap()->GetGameObject(spawnerGuid);
+    else
+        return GetMap()->GetUnit(spawnerGuid);
 }
 
 GameObjectInfo const* GameObject::GetGOInfo() const
@@ -1203,8 +1255,8 @@ GameObject* GameObject::SummonLinkedTrapIfAny() const
         linkedGO->SetUInt32Value(GAMEOBJECT_LEVEL, GetUInt32Value(GAMEOBJECT_LEVEL));
     }
 
-    linkedGO->AIM_Initialize();
     GetMap()->Add(linkedGO);
+    linkedGO->AIM_Initialize();
 
     return linkedGO;
 }
@@ -1281,6 +1333,30 @@ void GameObject::ResetDoorOrButton()
     SwitchDoorOrButton(false);
     SetLootState(GO_JUST_DEACTIVATED);
     m_cooldownTime = 0;
+}
+
+void GameObject::UseOpenableObject(bool open, uint32 withRestoreTime /*=0*/, bool useAlternativeState /*=false*/)
+{
+    if (open)
+    {
+        if (GetGoState() == GO_STATE_READY)
+        {
+            if (GetLootState() == GO_READY)
+                UseDoorOrButton(withRestoreTime, useAlternativeState);
+            else
+                ResetDoorOrButton();
+        }
+    }
+    else
+    {
+        if (GetGoState() == GO_STATE_ACTIVE)
+        {
+            if (GetLootState() == GO_READY)
+                UseDoorOrButton(withRestoreTime, useAlternativeState);
+            else
+                ResetDoorOrButton();
+        }
+    }
 }
 
 void GameObject::UseDoorOrButton(uint32 time_to_restore, bool alternative /* = false */)
@@ -1435,9 +1511,11 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             float radius = float(goInfo->trap.diameter) / 2.0f;
             bool IsBattleGroundTrap = !radius && goInfo->trap.cooldown == 3 && m_respawnTime == 0;
 
-            // FIXME: when GO casting will be implemented trap must cast spell to target
+            if (goInfo->trap.spellId == 6636)
+                caster = nullptr;
+
             if (goInfo->trap.spellId)
-                if (caster->CastSpell(user, goInfo->trap.spellId, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, GetObjectGuid()) != SPELL_CAST_OK)
+                if (CastSpell(caster, user, goInfo->trap.spellId, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, GetObjectGuid()) != SPELL_CAST_OK)
                     return;
             // use template cooldown if provided
             m_cooldownTime = time(nullptr) + (goInfo->trap.cooldown ? goInfo->trap.cooldown : uint32(4));
@@ -1548,7 +1626,10 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             else
                 SetGoState(GO_STATE_ACTIVE);
 
-            m_cooldownTime = time(nullptr) + info->GetAutoCloseTime();
+            if (GetGOInfo()->id != 185871)
+                m_cooldownTime = time(nullptr) + info->GetAutoCloseTime();
+            else // hypothesis - consumable GOs despawn immediately
+                m_cooldownTime = time(nullptr) + 1;
 
             if (user->GetTypeId() == TYPEID_PLAYER)
             {
@@ -1601,6 +1682,9 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             // cast this spell later if provided
             spellId = info->goober.spellId;
             triggeredFlags = TRIGGERED_OLD_TRIGGERED;
+            // TODO: GO Casting - make caster of goober spells be GO or owner
+            if (Unit* owner = GetOwner())
+                spellCaster = owner;
 
             // database may contain a dummy spell, so it need replacement by actually existing
             switch (spellId)
@@ -1780,6 +1864,8 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
 
             if (info->summoningRitual.animSpell)
                 player->CastSpell(player, info->summoningRitual.animSpell, TRIGGERED_NONE);
+            else
+                player->CastSpell(player, GetSpellId(), TRIGGERED_CHANNEL_ONLY);
 
             // full amount unique participants including original summoner, need more
             if (GetUniqueUseCount() < info->summoningRitual.reqParticipants)
@@ -2241,10 +2327,6 @@ struct SpawnGameObjectInMapsWorker
             if (!pGameobject->LoadFromDB(i_guid, map, i_guid))
             {
                 delete pGameobject;
-            }
-            else
-            {
-                map->Add(pGameobject);
             }
         }
     }
@@ -2710,6 +2792,12 @@ uint32 GameObject::GetScriptId() const
 void GameObject::AIM_Initialize()
 {
     m_AI.reset(sScriptDevAIMgr.GetGameObjectAI(this));
+
+    if (AI())
+        AI()->JustSpawned();
+
+    if (InstanceData* iData = GetMap()->GetInstanceData())
+        iData->OnObjectSpawn(this);
 }
 
 bool GameObject::IsAtInteractDistance(Player const* player, uint32 maxRange) const
@@ -2822,6 +2910,12 @@ SpellCastResult GameObject::CastSpell(Unit* temporaryCaster, Unit* Victim, Spell
         return SPELL_NOT_FOUND;
     }
 
+    if (IsChanneledSpell(spellInfo)) // GOs cannot cast channeled spells
+    {
+        sLog.outError("CastSpell: GO entry %u attempted casting spellId %u", GetEntry(), spellInfo->Id);
+        return SPELL_FAILED_ERROR;
+    }
+
     if (castItem)
         DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "WORLD: cast Item spellId - %i", spellInfo->Id);
 
@@ -2833,7 +2927,8 @@ SpellCastResult GameObject::CastSpell(Unit* temporaryCaster, Unit* Victim, Spell
         triggeredBy = triggeredByAura->GetSpellProto();
     }
 
-    Spell* spell = new Spell(temporaryCaster, spellInfo, triggeredFlags, GetObjectGuid(), triggeredBy);
+    Spell* spell = new Spell(this, spellInfo, triggeredFlags, GetObjectGuid(), triggeredBy);
+    spell->SetFakeCaster(temporaryCaster);
 
     SpellCastTargets targets;
     targets.setUnitTarget(Victim);
@@ -2844,9 +2939,19 @@ SpellCastResult GameObject::CastSpell(Unit* temporaryCaster, Unit* Victim, Spell
         if (WorldObject* caster = spell->GetCastingObject())
             targets.setSource(caster->GetPositionX(), caster->GetPositionY(), caster->GetPositionZ());
 
-    spell->m_CastItem = castItem;
-    spell->SetTrueCaster(this);
+    spell->SetCastItem(castItem);
     return spell->SpellStart(&targets, triggeredByAura);
+}
+
+void GameObject::GenerateLootFor(Player* player)
+{
+    if (!m_loot)
+        m_loot = new Loot(player, this, LOOT_SKINNING, true);
+}
+
+void GameObject::SetCooldown(uint32 cooldown)
+{
+    m_cooldownTime = time(nullptr) + cooldown;
 }
 
 QuaternionData GameObject::GetWorldRotation() const
@@ -2869,4 +2974,24 @@ QuaternionData GameObject::GetWorldRotation() const
 const QuaternionData GameObject::GetLocalRotation() const
 {
     return m_localRotation;
+}
+
+void GameObject::ForcedDespawn(uint32 timeMSToDespawn)
+{
+    if (timeMSToDespawn)
+    {
+        ForcedDespawnDelayGameObjectEvent* pEvent = new ForcedDespawnDelayGameObjectEvent(*this);
+
+        m_events.AddEvent(pEvent, m_events.CalculateTime(timeMSToDespawn));
+        return;
+    }
+
+    SetForcedDespawn();
+    SetLootState(GO_JUST_DEACTIVATED);
+}
+
+bool ForcedDespawnDelayGameObjectEvent::Execute(uint64 /*e_time*/, uint32 /*p_time*/)
+{
+    m_owner.ForcedDespawn();
+    return true;
 }
