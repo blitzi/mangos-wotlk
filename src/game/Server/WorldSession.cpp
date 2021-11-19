@@ -1335,7 +1335,7 @@ void WorldSession::SetDelayedAnticheat(std::unique_ptr<SessionAnticheatInterface
     m_delayedAnticheat = std::move(anticheat);
 }
 
-#ifdef BUILD_PLAYERBOT
+#ifdef ENABLE_PLAYERBOTS
 
 void WorldSession::SetNoAnticheat()
 {

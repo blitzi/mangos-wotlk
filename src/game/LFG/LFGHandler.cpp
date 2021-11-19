@@ -621,14 +621,10 @@ void WorldSession::SendLfgUpdateList(uint32 dungeonID)
 
         for (GroupReference *itr2 = pGroup->GetFirstMember(); itr2 != NULL; itr2 = itr2->next())
         {
-            data << uint8(plr->GetLevel());
-            data << uint8(plr->getClass());
-            data << uint8(plr->getRace());
             Player* player = itr2->getSource();
-
-            if (!player || player == pLeader)
+            if (!player || player == pLeader)            
                 continue;
-
+            
             sLFGMgr.GetLFGPlayerState(player->GetObjectGuid())->AddFlags(LFG_MEMBER_FLAG_GROUPLEADER |
                 LFG_MEMBER_FLAG_GROUPGUID |
                 LFG_MEMBER_FLAG_STATUS);

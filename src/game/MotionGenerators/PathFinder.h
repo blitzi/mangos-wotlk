@@ -121,7 +121,6 @@ private:
 
         bool                    m_ignoreNormalization;
 
-        dtQueryFilter m_filter;                     // use single filter for all movements, update it when needed
     const dtNavMeshQuery* m_defaultNavMeshQuery;     // the nav mesh query used to find the path
     uint32                  m_defaultMapId;
 

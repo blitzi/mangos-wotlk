@@ -307,7 +307,7 @@ class WorldSession
         void SetDelayedAnticheat(std::unique_ptr<SessionAnticheatInterface>&& anticheat);
         SessionAnticheatInterface* GetAnticheat() const { return m_anticheat.get(); }
 
-#ifdef BUILD_PLAYERBOT
+#ifdef ENABLE_PLAYERBOTS
         void SetNoAnticheat();
 #endif
 

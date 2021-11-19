@@ -149,6 +149,7 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
     m_isInvisible(false), m_ignoreMMAP(false), m_forceAttackingCapability(false), m_countSpawns(false),
     m_creatureInfo(nullptr),
     m_noXP(false), m_noLoot(false), m_noReputation(false), m_ignoringFeignDeath(false),
+    m_checkForHelp(true),
     m_immunitySet(UINT32_MAX)
 {
     m_regenTimer = 200;

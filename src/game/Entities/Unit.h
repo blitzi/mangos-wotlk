@@ -1426,7 +1426,7 @@ class Unit : public WorldObject
 
         // faction template id
         uint32 GetFaction() const override { return GetUInt32Value(UNIT_FIELD_FACTIONTEMPLATE); }
-        void setFaction(uint32 faction) { SetUInt32Value(UNIT_FIELD_FACTIONTEMPLATE, faction); }
+        void SetFaction(uint32 faction) { SetUInt32Value(UNIT_FIELD_FACTIONTEMPLATE, faction); }
         FactionTemplateEntry const* GetFactionTemplateEntry() const;
         void RestoreOriginalFaction();
         bool IsNeutralToAll() const;
