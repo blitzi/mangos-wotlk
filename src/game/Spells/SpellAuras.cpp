@@ -4140,6 +4140,8 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
     // remove SPELL_AURA_EMPATHY
     target->RemoveSpellsCausingAura(SPELL_AURA_EMPATHY);
 
+    uint32 prevModifier = m_modifier.m_amount;
+
     if (ssEntry->modelID_A)
     {
         // i will asume that creatures will always take the defined model from the dbc
@@ -4249,7 +4251,7 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
         // remove other shapeshift before applying a new one
         target->RemoveSpellsCausingAura(SPELL_AURA_MOD_SHAPESHIFT, GetHolder());
 
-        if (m_modifier.m_amount > 0)
+        if (m_modifier.m_amount != prevModifier)
             target->SetDisplayId(m_modifier.m_amount);
 
         // now only powertype must be set
