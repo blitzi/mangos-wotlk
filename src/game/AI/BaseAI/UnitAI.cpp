@@ -55,7 +55,8 @@ UnitAI::UnitAI(Unit* unit, uint32 combatActions) :
     // Caster AI components
     m_rangedMode(false), m_rangedModeSetting(TYPE_NONE), m_chaseDistance(0.f), m_currentRangedMode(false),
     m_mainSpellId(0), m_mainSpellCost(0), m_mainSpellInfo(nullptr), m_mainSpellMinRange(0.f),
-    m_mainAttackMask(SPELL_SCHOOL_MASK_NONE), m_distancingCooldown(false), m_spellListCooldown(true)
+    m_mainAttackMask(SPELL_SCHOOL_MASK_NONE), m_distancingCooldown(false), m_spellListCooldown(true),
+    m_DetectHelpTimer(HELP_FRIENDLY_UNIT_TIMER)
 {
     AddCustomAction(GENERIC_ACTION_DISTANCE, true, [&]() { m_distancingCooldown = false; });
     AddCustomAction(GENERIC_ACTION_SPELL_LIST, true, [&]() { m_spellListCooldown = false; });
@@ -504,12 +505,25 @@ void UnitAI::CheckForHelp(Unit* who, Unit* me, float distance)
         {
             if (me->CanAssistInCombatAgainst(who, victim))
             {
-                AttackStart(victim);
-                if (who->AI() && who->AI()->GetAIOrder() == ORDER_FLEEING)
-                    who->GetMotionMaster()->InterruptPanic();
+                if (!m_HelpVictim)
+                {
+                    m_DetectHelpTimer = HELP_FRIENDLY_UNIT_TIMER;
+
+                    m_HelpMe = me->GetObjectGuid();
+                    m_HelpWho = who->GetObjectGuid();
+                    m_HelpVictim = victim->GetObjectGuid();
+                }
             }
         }
     }
+}
+
+void UnitAI::ClearHelpVictim()
+{
+    m_DetectHelpTimer = 0;
+    m_HelpMe.Clear();
+    m_HelpWho.Clear();
+    m_HelpVictim.Clear();
 }
 
 void UnitAI::DetectOrAttack(Unit* who)
@@ -1035,6 +1049,7 @@ void UnitAI::OnSpellInterrupt(SpellEntry const* spellInfo)
 
 void UnitAI::UpdateAI(const uint32 diff)
 {
+    UpdateHelpTimer(diff);
     UpdateTimers(diff, m_unit->IsInCombat());
 
     bool combat = m_unit->SelectHostileTarget();
@@ -1076,6 +1091,41 @@ void UnitAI::UpdateAI(const uint32 diff)
     }
 
     DoMeleeAttackIfReady();
+}
+
+void UnitAI::UpdateHelpTimer(const uint32 diff)
+{
+    if (m_DetectHelpTimer)
+    {
+        if (m_DetectHelpTimer <= diff)
+        {
+            Unit* helpMe = m_unit->GetMap()->GetUnit(m_HelpMe);
+            Unit* helpWho = m_unit->GetMap()->GetUnit(m_HelpWho);
+            Unit* helpVictim = m_unit->GetMap()->GetUnit(m_HelpVictim);
+
+            if (helpMe && helpWho && helpVictim)
+            {
+                if (helpMe->CanInitiateAttack() && helpMe->CanAttackOnSight(helpVictim) && helpVictim->isInAccessablePlaceFor(helpMe) && helpVictim->IsVisibleForOrDetect(helpMe, helpMe, false))
+                {
+                    if (helpMe->IsWithinDistInMap(helpWho, 10) && helpMe->IsWithinLOSInMap(helpWho, true))
+                    {
+                        if (helpMe->CanAssistInCombatAgainst(helpWho, helpVictim))
+                        {
+                            AttackStart(helpVictim);
+                            m_unit->TriggerAggroLinkingEvent(helpVictim);
+
+                            if (helpWho->AI() && helpWho->AI()->GetAIOrder() == ORDER_FLEEING)
+                                helpWho->GetMotionMaster()->InterruptPanic();
+                        }
+                    }
+                }
+            }
+
+            ClearHelpVictim();
+        }
+        else
+            m_DetectHelpTimer -= diff;
+    }
 }
 
 SpellSchoolMask UnitAI::GetMainAttackSchoolMask() const

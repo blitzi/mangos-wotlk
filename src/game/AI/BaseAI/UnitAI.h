@@ -40,6 +40,7 @@ class Spell;
 struct CreatureSpellListTargeting;
 struct CreatureSpellList;
 
+#define HELP_FRIENDLY_UNIT_TIMER 1500
 #define TIME_INTERVAL_LOOK   5000
 #define VISIBILITY_RANGE    10000
 #define DISTANCING_CONSTANT 1.f
@@ -308,6 +309,8 @@ class UnitAI : public CombatActions
          */
         virtual void UpdateAI(const uint32 /*diff*/);
 
+        void UpdateHelpTimer(const uint32 diff);
+
         ///== State checks =================================
 
         /**
@@ -411,7 +414,8 @@ class UnitAI : public CombatActions
          * Notifies AI on object heartbeat
          */
         virtual void OnHeartbeat() {}
-
+        
+        void ClearHelpVictim();
         void CheckForHelp(Unit* /*who*/, Unit* /*me*/, float /*dist*/);
         void DetectOrAttack(Unit* who);
         bool CanTriggerStealthAlert(Unit* who, float attackRadius) const;
@@ -546,6 +550,12 @@ class UnitAI : public CombatActions
 
         /// Pointer to the Creature controlled by this AI
         Unit* m_unit;
+
+        ObjectGuid m_HelpMe;
+        ObjectGuid m_HelpWho;
+        ObjectGuid m_HelpVictim;
+
+        uint32 m_DetectHelpTimer;
 
         /// How should an enemy be chased
         float m_attackDistance;
