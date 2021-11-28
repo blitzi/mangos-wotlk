@@ -747,6 +747,23 @@ void Map::Update(const uint32& t_diff)
         // If player is using far sight, visit that object too
         if (WorldObject* viewPoint = GetWorldObject(player->GetFarSightGuid()))
             VisitNearbyCellsOf(viewPoint, grid_object_update, world_object_update);
+
+        // Handle updates for creatures in combat with player
+        if (player->IsInCombat())
+        {
+            std::vector<Creature*> updateList;
+            Unit::AttackerSet attackers = player->getAttackers();
+
+            for (Unit* u : attackers)
+            {
+                if (u->IsCreature())
+                    updateList.push_back(static_cast<Creature*>(u));
+            }
+
+            // Process deferred update list for player
+            for (Creature* c : updateList)
+                VisitNearbyCellsOf(c, grid_object_update, world_object_update);
+        }
     }
 
     // non-player active objects
