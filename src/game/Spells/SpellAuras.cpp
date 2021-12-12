@@ -2357,6 +2357,15 @@ void Aura::TriggerSpell()
                 triggerTarget->CastCustomSpell(triggerTarget, trigger_spell_id, &mana, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
                 return;
             }
+            // Mind Sear (target 76/16) if let m_target cast, will damage caster
+            case 48045:
+            case 53023:
+            {
+                if (Unit* caster = GetCaster())
+                    caster->CastSpell(GetTarget(), trigger_spell_id, TRIGGERED_OLD_TRIGGERED);
+				
+				return;
+            }
         }
     }
     int32 basePoints[] = { 0,0,0 };

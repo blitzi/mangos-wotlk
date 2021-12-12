@@ -105,9 +105,19 @@ enum
 struct PainSuppression : public AuraScript
 {
     void OnApply(Aura* aura, bool apply) const override
-    {
+    {        
         if (apply)
             aura->GetTarget()->CastSpell(aura->GetTarget(), SPELL_PAIN_SUPPRESSION_THREAT_REDUCTION, TRIGGERED_OLD_TRIGGERED, nullptr, aura, aura->GetCasterGuid());
+    }
+};
+
+struct MindSear : public SpellScript
+{
+    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex /*eff*/) const override
+    {
+        if (target->GetObjectGuid() == spell->m_targets.getUnitTargetGuid())
+            return false;
+        return true;
     }
 };
 
@@ -179,4 +189,5 @@ void LoadPriestScripts()
     RegisterSpellScript<DivineHymn>("spell_divine_hymn");
     RegisterSpellScript<HymnOfHope>("spell_hymn_of_hope");
     RegisterSpellScript<CircleOfHealing>("spell_circle_of_healing");
+    RegisterSpellScript<MindSear>("spell_mind_sear");
 }

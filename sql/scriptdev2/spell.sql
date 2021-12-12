@@ -702,7 +702,10 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (34865,'spell_circle_of_healing'),
 (34866,'spell_circle_of_healing'),
 (48088,'spell_circle_of_healing'),
-(48089,'spell_circle_of_healing');
+(48089,'spell_circle_of_healing'),
+(49821,'spell_mind_sear'),
+(53022,'spell_mind_sear');
+
 
 -- Paladin
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
