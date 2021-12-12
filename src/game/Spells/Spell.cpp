@@ -1292,7 +1292,7 @@ void Spell::DoAllEffectOnTarget(TargetInfo* target)
             Unit::ProcDamageAndSpell(ProcSystemArguments(affectiveCaster, unitTarget, affectiveCaster ? procAttacker : uint32(PROC_FLAG_NONE), procVictim, procEx, addhealth, m_attackType, m_spellInfo, this, gain, true));
     }
     // Do damage and triggers
-    else if (m_damage)
+    else if (m_damage && affectiveCaster)
     {
         // Fill base damage struct (unitTarget - is real spell target)
         SpellNonMeleeDamage spellDamageInfo(caster, unitTarget, m_spellInfo->Id, m_spellSchoolMask, this);
