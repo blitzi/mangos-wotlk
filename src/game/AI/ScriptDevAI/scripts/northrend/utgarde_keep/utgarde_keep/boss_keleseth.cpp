@@ -142,15 +142,19 @@ struct mob_vrykul_skeletonAI : public ScriptedAI
 
     void UpdateAI(const uint32 uiDiff) override
     {
+        if (!m_pInstance)
+            return;
+
+        Creature* pKeleseth = m_pInstance->GetSingleCreatureFromStorage(NPC_KELESETH);
+
+        if (!pKeleseth || !pKeleseth->IsAlive())
+            return;
+
         if (m_uiAttackTimer)
         {
             if (m_uiAttackTimer <= uiDiff)
-            {
-                if (m_pInstance)
-                {
-                    if (Creature* pKeleseth = m_pInstance->GetSingleCreatureFromStorage(NPC_KELESETH))
-                        AttackStart(pKeleseth->GetVictim());
-                }
+            {                                     
+                AttackStart(pKeleseth->GetVictim());                
 
                 m_uiCastTimer = urand(5000, 10000);
                 m_uiAttackTimer = 0;
