@@ -17344,7 +17344,7 @@ void Player::_LoadQuestStatus(QueryResult* result)
             uint32 quest_id = fields[0].GetUInt32();
             // used to be new, no delete?
             Quest const* pQuest = sObjectMgr.GetQuestTemplate(quest_id);
-            if (pQuest)
+            if (pQuest && !pQuest->IsAutoComplete())
             {
                 // find or create
                 QuestStatusData& questStatusData = mQuestStatus[quest_id];
