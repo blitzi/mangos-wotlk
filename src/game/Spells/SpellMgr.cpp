@@ -153,7 +153,7 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell*
     if (spellInfo->HasAttribute(SPELL_ATTR_RANGED) && (!spell || !spell->IsAutoRepeat()))
         castTime += 500;
 
-    if (spell)
+    if (caster)
     {
         if (Player* modOwner = caster->GetSpellModOwner())
             modOwner->ApplySpellMod(spellInfo->Id, SPELLMOD_CASTING_TIME, castTime, consume);
@@ -163,7 +163,7 @@ uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell*
             Unit* unitCaster = static_cast<Unit*>(caster);
             if (!spellInfo->HasAttribute(SPELL_ATTR_ABILITY) && !spellInfo->HasAttribute(SPELL_ATTR_TRADESPELL) && !spellInfo->HasAttribute(SPELL_ATTR_EX3_IGNORE_CASTER_MODIFIERS))
                 castTime = int32(castTime * unitCaster->GetFloatValue(UNIT_MOD_CAST_SPEED));
-            else if (spell->IsRangedSpell() && !spell->IsAutoRepeat())
+            else if (spell && spell->IsRangedSpell() && !spell->IsAutoRepeat())
                 castTime = int32(castTime * unitCaster->m_modAttackSpeedPct[RANGED_ATTACK]);
         }
     }
