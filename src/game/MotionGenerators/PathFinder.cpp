@@ -866,7 +866,7 @@ void PathFinder::NormalizePath()
     if (!sWorld.getConfig(CONFIG_BOOL_PATH_FIND_NORMALIZE_Z) || m_ignoreNormalization)
         return;
 
-    GenericTransport* transport;
+    GenericTransport* transport = NULL;
     if (m_sourceUnit)
         transport = m_sourceUnit->GetTransport();
 
