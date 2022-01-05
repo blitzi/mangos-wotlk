@@ -40,7 +40,7 @@ class Spell;
 struct CreatureSpellListTargeting;
 struct CreatureSpellList;
 
-#define HELP_FRIENDLY_UNIT_TIMER 1500
+#define HELP_FRIENDLY_UNIT_TIMER 1000
 #define TIME_INTERVAL_LOOK   5000
 #define VISIBILITY_RANGE    10000
 #define DISTANCING_CONSTANT 1.f
