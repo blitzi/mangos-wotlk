@@ -567,7 +567,7 @@ void instance_pit_of_saron::Update(uint32 uiDiff)
     {
         if (m_uiSummonUndeadTimer <= uiDiff)
         {
-            DoSpawnTyrannusUndead();
+           // DoSpawnTyrannusUndead();
             m_uiSummonUndeadTimer = urand(15000, 20000);
         }
         else
