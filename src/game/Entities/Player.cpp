@@ -14097,6 +14097,9 @@ bool Player::CanCompleteQuest(uint32 quest_id) const
     if (qInfo->IsAutoComplete() && CanTakeQuest(qInfo, false))
         return true;
 
+	if (qInfo->GetQuestStartScript() == 7777777)
+		return true;
+
     if (status != QUEST_STATUS_INCOMPLETE)
         return false;
 
