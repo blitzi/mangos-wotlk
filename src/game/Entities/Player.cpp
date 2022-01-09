@@ -12744,7 +12744,7 @@ void Player::UpdateItemDuration(uint32 time, bool realtimeonly)
     if (m_itemDuration.empty())
         return;
 
-    DEBUG_LOG("Player::UpdateItemDuration(%u,%u)", time, realtimeonly);
+    DEBUG_LOG("Player::UpdateItemDuration(%u,%s)", time, realtimeonly ? "true" : "false");
 
     for (ItemDurationList::const_iterator itr = m_itemDuration.begin(); itr != m_itemDuration.end();)
     {
@@ -21347,7 +21347,7 @@ void Player::SendTransferAbortedByLockStatus(MapEntry const* mapEntry, AreaLockS
         case AREA_LOCKSTATUS_DIFFICULTY_REQUIREMENT:
         {
             auto data = sMapDifficultyStore.LookupEntry(miscRequirement);
-            GetSession()->SendAreaTriggerMessage(data->areaTriggerText[GetSession()->GetSessionDbcLocale()]);
+            GetSession()->SendAreaTriggerMessage("%s", data->areaTriggerText[GetSession()->GetSessionDbcLocale()]);
             break;
         }
         case AREA_LOCKSTATUS_ZONE_IN_COMBAT:
