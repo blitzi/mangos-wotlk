@@ -465,6 +465,7 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 -- Wotlk
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (43182,'spell_drink'),
+(43183,'spell_drink'),
 (16836,'spell_brambles'),
 (16839,'spell_brambles'),
 (16840,'spell_brambles'),
@@ -1009,7 +1010,6 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (42308, 'spell_drink_animation'),
 (42312, 'spell_drink_animation'),
 (43154, 'spell_drink_animation'),
-(43183, 'spell_drink_animation'),
 (44107, 'spell_drink_animation'),
 (44109, 'spell_drink_animation'),
 (44110, 'spell_drink_animation'),
