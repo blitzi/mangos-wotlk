@@ -52,6 +52,8 @@ void CreatureAI::Reset()
 void CreatureAI::EnterCombat(Unit* enemy)
 {
     UnitAI::EnterCombat(enemy);
+    if (m_creature->IsCritter())
+        m_creature->SetInPanic(30000);
     if (enemy && (m_creature->IsGuard() || m_creature->IsCivilian()))
     {
         // Send Zone Under Attack message to the LocalDefense and WorldDefense Channels
@@ -65,6 +67,7 @@ void CreatureAI::AttackStart(Unit* who)
     if (!who || HasReactState(REACT_PASSIVE))
         return;
 
+    bool targetChange = m_unit->GetVictim() != nullptr && m_unit->GetVictim() != who;
     if (m_creature->Attack(who, m_meleeEnabled))
     {
         m_creature->EngageInCombatWith(who);
@@ -73,7 +76,7 @@ void CreatureAI::AttackStart(Unit* who)
         if (m_creature->IsCivilian())
             m_creature->CastSpell(m_creature, 43783, TRIGGERED_OLD_TRIGGERED);
 
-        HandleMovementOnAttackStart(who);
+        HandleMovementOnAttackStart(who, targetChange);
 
         // for controlled vehicles set the creature in combat with the passengers
         if (who->IsVehicle())
@@ -204,6 +207,19 @@ void CreatureAI::DoCallForHelp(float radius)
     m_creature->CallForHelp(radius);
 }
 
+void CreatureAI::OnCallForHelp(Unit* caller, Unit* enemy)
+{
+    if (FactionTemplateEntry const* factionTemplate = m_creature->GetFactionTemplateEntry())
+    {
+        if (factionTemplate->factionFlags & FACTION_TEMPLATE_FLEE_FROM_CALL_FOR_HELP)
+        {
+            m_creature->SetInPanic(10000);
+            return;
+        }
+    }
+    AttackStart(enemy);
+}
+
 void CreatureAI::HandleAssistanceCall(Unit* sender, Unit* invoker)
 {
     if (m_creature->IsInCombat() || !invoker)
@@ -223,4 +239,12 @@ void CreatureAI::AddUnreachabilityCheck()
 CreatureSpellList const& CreatureAI::GetSpellList() const
 {
     return m_creature->GetSpellList();
+}
+
+void CreatureAI::TimedFleeingEnded()
+{
+    UnitAI::TimedFleeingEnded();
+    if (FactionTemplateEntry const* factionTemplate = m_creature->GetFactionTemplateEntry())
+        if (factionTemplate->factionFlags & FACTION_TEMPLATE_FLEE_FROM_CALL_FOR_HELP)
+            EnterEvadeMode();
 }

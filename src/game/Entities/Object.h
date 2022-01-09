@@ -684,6 +684,7 @@ struct TempSpawnSettings
     ObjectGuid ownerGuid;
     uint32 spawnDataEntry = 0;
     int32 movegen = -1;
+    WorldObject* dbscriptTarget = nullptr;
 
     // TemporarySpawnWaypoint subsystem
     bool tempSpawnMovegen = false;
@@ -1099,6 +1100,7 @@ class WorldObject : public Object
         virtual void SendMessageToSet(WorldPacket const& data, bool self) const;
         virtual void SendMessageToSetInRange(WorldPacket const& data, float dist, bool self) const;
         void SendMessageToSetExcept(WorldPacket const& data, Player const* skipped_receiver) const;
+        virtual void SendMessageToAllWhoSeeMe(WorldPacket const& data, bool self) const;
 
         void MonsterSay(const char* text, uint32 language, Unit const* target = nullptr) const;
         void MonsterYell(const char* text, uint32 language, Unit const* target = nullptr) const;
@@ -1150,8 +1152,8 @@ class WorldObject : public Object
         static Creature* SummonCreature(TempSpawnSettings settings, Map* map, uint32 phaseMask);
         Creature* SummonCreature(uint32 id, float x, float y, float z, float ang, TempSpawnType spwtype, uint32 despwtime, bool asActiveObject = false, bool setRun = false, uint32 pathId = 0, uint32 faction = 0, uint32 modelId = 0, bool spawnCounting = false, bool forcedOnTop = false);
 
-        static GameObject* SpawnGameObject(uint32 dbGuid, Map* map, GenericTransport* transport = nullptr);
-        static Creature* SpawnCreature(uint32 dbGuid, Map* map, GenericTransport* transport = nullptr);
+        static GameObject* SpawnGameObject(uint32 dbGuid, Map* map, uint32 forcedEntry = 0, GenericTransport * transport = nullptr);
+        static Creature* SpawnCreature(uint32 dbGuid, Map* map, uint32 forcedEntry = 0, GenericTransport* transport = nullptr);
 
         bool isActiveObject() const { return m_isActiveObject || m_viewPoint.hasViewers(); }
         void SetActiveObjectState(bool active);

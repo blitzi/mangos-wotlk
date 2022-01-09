@@ -161,7 +161,8 @@ Map::Map(uint32 id, time_t expiry, uint32 InstanceId, uint8 SpawnMode)
       m_VisibleDistance(DEFAULT_VISIBILITY_DISTANCE), m_persistentState(nullptr),
       m_activeNonPlayersIter(m_activeNonPlayers.end()), m_onEventNotifiedIter(m_onEventNotifiedObjects.end()),
       i_gridExpiry(expiry), m_TerrainData(sTerrainMgr.LoadTerrain(id)),
-      i_data(nullptr), i_script_id(0), m_transportsIterator(m_transports.begin()), i_defaultLight(GetDefaultMapLight(id)), m_spawnManager(*this)
+      i_data(nullptr), i_script_id(0), m_transportsIterator(m_transports.begin()), i_defaultLight(GetDefaultMapLight(id)), m_spawnManager(*this),
+      m_variableManager(this)
 {
     m_weatherSystem = new WeatherSystem(this);
 }
@@ -198,6 +199,10 @@ void Map::Initialize(bool loadInstanceData /*= true*/)
     m_graveyardManager.Init(this);
 
     LoadTransports();
+
+    m_variableManager.Initialize();
+
+    m_spawnManager.Initialize();
 }
 
 void Map::InitVisibilityDistance()
@@ -1181,6 +1186,27 @@ MapDifficultyEntry const* Map::GetMapDifficulty() const
     return GetMapDifficultyData(GetId(), GetDifficulty());
 }
 
+void Map::ChangeMapDifficulty(Difficulty difficulty)
+{
+    i_spawnMode = difficulty;
+    auto& objectStore = GetObjectsStore();
+    for (auto itr = objectStore.begin<Creature>(); itr != objectStore.end<Creature>(); ++itr)
+    {
+        Creature* creature = itr->second;
+        if (creature->IsClientControlled())
+            continue;
+        CreatureData const* data = sObjectMgr.GetCreatureData(creature->GetDbGuid());
+        creature->UpdateEntry(creature->GetEntry(), data);
+    }
+    SetNewDifficultyCooldown(GetCurrentClockTime() + std::chrono::milliseconds(300000));
+}
+
+void Map::SetNewDifficultyCooldown(TimePoint const& newCooldown)
+{
+    if (m_dynamicDifficultyCooldown < newCooldown)
+        m_dynamicDifficultyCooldown = newCooldown;
+}
+
 uint32 Map::GetMaxPlayers() const
 {
     if (MapDifficultyEntry const* mapDiff = GetMapDifficulty())
@@ -1741,11 +1767,12 @@ bool DungeonMap::Add(Player* player)
                 // players also become permanently bound when they enter
                 if (groupBind->perm)
                 {
-                    WorldPacket data(SMSG_INSTANCE_SAVE_CREATED, 4);
-                    data << uint32(0);
-                    player->GetSession()->SendPacket(data);
-                    player->BindToInstance(GetPersistanceState(), true);
-                    sCalendarMgr.SendCalendarRaidLockoutAdd(player, GetPersistanceState());
+                    WorldPacket data(SMSG_PENDING_RAID_LOCK, 9);
+                    data << uint32(60000);
+                    data << uint32(groupBind->state ? groupBind->state->GetCompletedEncountersMask() : 0);
+                    data << uint8(0);
+                    player->SendDirectMessage(data);
+                    player->SetPendingBind(GetId(), GetInstanceId(), 60000);
                 }
             }
         }

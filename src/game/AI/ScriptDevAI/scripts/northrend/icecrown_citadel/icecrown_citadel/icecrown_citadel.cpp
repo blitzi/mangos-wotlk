@@ -936,6 +936,11 @@ void instance_icecrown_citadel::SetData(uint32 uiType, uint32 uiData)
         SaveToDB();
         OUT_SAVE_INST_DATA_COMPLETE;
     }
+
+    if (uiData == FAIL || uiData == DONE) // this would need to be done in all dynamic difficulty instances but wotlk only really needs it in icc
+    {
+        instance->SetNewDifficultyCooldown(instance->GetCurrentClockTime() + std::chrono::milliseconds(60000));
+    }
 }
 
 void instance_icecrown_citadel::JustDidDialogueStep(int32 iEntry)

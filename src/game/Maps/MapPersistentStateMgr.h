@@ -101,6 +101,8 @@ class MapPersistentState
             return itr != m_goRespawnTimes.end() ? itr->second : 0;
         }
         void SaveGORespawnTime(uint32 loguid, time_t t);
+        time_t GetObjectRespawnTime(uint32 typeId, uint32 loguid) const;
+        void SaveObjectRespawnTime(uint32 typeId, uint32 loguid, time_t t);
 
         // pool system
         void InitPools();
@@ -115,6 +117,8 @@ class MapPersistentState
         void RemoveCreatureFromGrid(uint32 guid, CreatureData const* data);
         void AddGameobjectToGrid(uint32 guid, GameObjectData const* data);
         void RemoveGameobjectFromGrid(uint32 guid, GameObjectData const* data);
+
+        static Difficulty GetSaveDifficulty(Difficulty difficulty, MapEntry const* entry);
     protected:
         virtual bool CanBeUnload() const = 0;               // body provided for subclasses
 
@@ -223,13 +227,17 @@ class DungeonPersistentState : public MapPersistentState
         /* Remove players bind to this state */
         void UnbindThisState();
 
+        typedef PlayerList PlayerListType;
+        typedef std::list<Group*> GroupListType;
+
+        PlayerListType& GetPlayerList() { return m_playerList; }
+        GroupListType& GetGroupList() { return m_groupList; }
+
     protected:
         bool CanBeUnload() const override;                  // overwrite MapPersistentState::CanBeUnload
         bool HasBounds() const { return !m_playerList.empty() || !m_groupList.empty(); }
 
     private:
-        typedef PlayerList PlayerListType;
-        typedef std::list<Group*> GroupListType;
 
         time_t m_resetTime;
         bool m_canReset;
@@ -361,6 +369,8 @@ class MapPersistentStateManager : public MaNGOS::Singleton<MapPersistentStateMan
         void GetStatistics(uint32& numStates, uint32& numBoundPlayers, uint32& numBoundGroups);
 
         void Update() { m_Scheduler.Update(); }
+
+        time_t GetSubsequentResetTime(uint32 mapid, Difficulty difficulty, time_t resetTime) const;
     private:
         typedef std::unordered_map<uint32 /*InstanceId or MapId*/, MapPersistentState*> PersistentStateMap;
 

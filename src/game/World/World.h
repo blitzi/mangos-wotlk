@@ -30,6 +30,8 @@
 #include "Entities/Object.h"
 #include "Multithreading/Messager.h"
 #include "Globals/GraveyardManager.h"
+#include "LFG/LFG.h"
+#include "LFG/LFGQueue.h"
 
 #include <set>
 #include <list>
@@ -39,6 +41,7 @@
 #include <utility>
 #include <vector>
 #include <array>
+#include <thread>
 
 class Object;
 class ObjectGuid;
@@ -85,7 +88,7 @@ enum WorldTimers
     WUPDATE_DELETECHARS = 4,
     WUPDATE_AHBOT       = 5,
     WUPDATE_GROUPS      = 6,
-    WUPDATE_WARDEN      = 7, // This is here for headache merge error issues
+    WUPDATE_RAID_BROWSER= 7,
     WUPDATE_METRICS     = 8, // not used if BUILD_METRICS is not set
     WUPDATE_COUNT       = 9
 };
@@ -693,6 +696,12 @@ class World
         GraveyardManager& GetGraveyardManager() { return m_graveyardManager; }
 
         void SendGMTextFlags(uint32 accountFlag, int32 stringId, std::string type, const char* message);
+
+        LfgRaidBrowser& GetRaidBrowser() { return m_raidBrowser; }
+        LFGQueue& GetLFGQueue() { return m_lfgQueue; }
+
+        void StartLFGQueueThread();
+        void BroadcastToGroup(ObjectGuid groupGuid, std::vector<WorldPacket> const& packets);
     protected:
         void _UpdateGameTime();
         // callback for UpdateRealmCharacters
@@ -820,6 +829,12 @@ class World
         std::array<std::atomic<uint32>, MAX_CLASSES> m_onlineClasses;
 
         GraveyardManager m_graveyardManager;
+
+        // World is owner to differentiate from Dungeon finder where queue is completely disjoint
+        LfgRaidBrowser m_raidBrowser;
+        // Housing this here but logically it is completely asynchronous - TODO: Separate this and unify with BG queue
+        LFGQueue m_lfgQueue;
+        std::thread m_lfgQueueThread;
 };
 
 extern uint32 realmID;

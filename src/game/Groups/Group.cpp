@@ -33,8 +33,6 @@
 #include "Maps/MapManager.h"
 #include "Maps/MapPersistentStateMgr.h"
 #include "Spells/SpellAuras.h"
-#include "LFG.h"
-#include "LFGMgr.h"
 #ifdef BUILD_PLAYERBOT
 #include "PlayerBot/Base/PlayerbotMgr.h"
 #include "Config/Config.h"
@@ -69,7 +67,7 @@ GroupMemberStatus GetGroupMemberStatus(const Player* member = nullptr)
 //============== Group ==============================
 //===================================================
 
-Group::Group(GroupType type) : m_Id(0), m_leaderLastOnline(0), m_groupType(type),
+Group::Group() : m_Id(0), m_leaderLastOnline(0), m_groupFlags(GROUP_FLAG_NORMAL),
     m_dungeonDifficulty(REGULAR_DIFFICULTY), m_raidDifficulty(REGULAR_DIFFICULTY),
     m_bgGroup(nullptr), m_bfGroup(nullptr), m_lootMethod(FREE_FOR_ALL), m_lootThreshold(ITEM_QUALITY_UNCOMMON),
     m_subGroupsCounts(nullptr)
@@ -96,9 +94,6 @@ Group::~Group()
         for (BoundInstancesMap::iterator itr2 = m_boundInstance.begin(); itr2 != m_boundInstance.end(); ++itr2)
             itr2->second.state->RemoveGroup(this);
 
-    if (isLFDGroup())
-        sLFGMgr.RemoveLFGState(GetObjectGuid());
-
     // Sub group counters clean up
     delete[] m_subGroupsCounts;
 }
@@ -109,9 +104,9 @@ bool Group::Create(ObjectGuid guid, const char* name)
     m_leaderName = name;
     m_leaderLastOnline = time(nullptr);
 
-    m_groupType  = isBattleGroup() ? GROUPTYPE_BGRAID : GROUPTYPE_NORMAL;
+    m_groupFlags  = IsBattleGroup() ? GROUP_FLAGS_BGRAID : GROUP_FLAG_NORMAL;
 
-    if (m_groupType & GROUPTYPE_RAID)
+    if (m_groupFlags & GROUP_FLAG_RAID)
         _initRaidSubGroupsCounter();
 
     m_lootMethod = GROUP_LOOT;
@@ -121,7 +116,7 @@ bool Group::Create(ObjectGuid guid, const char* name)
 
     m_dungeonDifficulty = DUNGEON_DIFFICULTY_NORMAL;
     m_raidDifficulty = RAID_DIFFICULTY_10MAN_NORMAL;
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
     {
         m_Id = sObjectMgr.GenerateGroupLowGuid();
 
@@ -148,13 +143,13 @@ bool Group::Create(ObjectGuid guid, const char* name)
                                    m_targetIcons[2].GetRawValue(), m_targetIcons[3].GetRawValue(),
                                    m_targetIcons[4].GetRawValue(), m_targetIcons[5].GetRawValue(),
                                    m_targetIcons[6].GetRawValue(), m_targetIcons[7].GetRawValue(),
-                                   uint8(m_groupType), uint32(m_dungeonDifficulty), uint32(m_raidDifficulty));
+                                   uint8(m_groupFlags), uint32(m_dungeonDifficulty), uint32(m_raidDifficulty));
     }
 
     if (!AddMember(guid, name))
         return false;
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.CommitTransaction();
 
     _updateLeaderFlag();
@@ -176,9 +171,9 @@ bool Group::LoadGroupFromDB(Field* fields)
 
     m_leaderLastOnline = time(nullptr);
 
-    m_groupType  = GroupType(fields[13].GetUInt8());
+    m_groupFlags  = GroupType(fields[13].GetUInt8());
 
-    if (m_groupType & GROUPTYPE_RAID)
+    if (m_groupFlags & GROUP_FLAG_RAID)
         _initRaidSubGroupsCounter();
 
     uint32 diff = fields[14].GetUInt8();
@@ -200,14 +195,11 @@ bool Group::LoadGroupFromDB(Field* fields)
     for (int i = 0; i < TARGET_ICON_COUNT; ++i)
         m_targetIcons[i] = ObjectGuid(fields[5 + i].GetUInt64());
 
-    if (isLFDGroup())
-        sLFGMgr.CreateLFGState(GetObjectGuid());
-
     m_currentLooterGuid = m_masterLooterGuid;
     return true;
 }
 
-bool Group::LoadMemberFromDB(uint32 guidLow, uint8 subgroup, bool assistant, LFGRoleMask roles)
+bool Group::LoadMemberFromDB(uint32 guidLow, uint8 subgroup, bool assistant)
 {
     MemberSlot member;
     member.guid      = ObjectGuid(HIGHGUID_PLAYER, guidLow);
@@ -227,28 +219,21 @@ bool Group::LoadMemberFromDB(uint32 guidLow, uint8 subgroup, bool assistant, LFG
     }
     member.lastMap = uint32(lastMap);
 
-    member.roles = roles;
     m_memberSlots.push_back(member);
 
     SubGroupCounterIncrease(subgroup);
-
-    if (Player* player = sObjectMgr.GetPlayer(member.guid))
-    {
-        if (player->IsInWorld())
-            sLFGMgr.GetLFGPlayerState(player->GetObjectGuid())->SetRoles(roles);
-    }
 
     return true;
 }
 
 void Group::ConvertToRaid()
 {
-    m_groupType = GroupType(m_groupType | GROUPTYPE_RAID);
+    m_groupFlags = GroupType(m_groupFlags | GROUP_FLAG_RAID);
 
     _initRaidSubGroupsCounter();
 
-    if (!isBattleGroup())
-        CharacterDatabase.PExecute("UPDATE `groups` SET groupType = %u WHERE groupId='%u'", uint8(m_groupType), m_Id);
+    if (!IsBattleGroup())
+        CharacterDatabase.PExecute("UPDATE `groups` SET groupType = %u WHERE groupId='%u'", uint8(m_groupFlags), m_Id);
     SendUpdate();
 
     // update quest related GO states (quest activity dependent from raid membership)
@@ -262,7 +247,7 @@ bool Group::AddInvite(Player* player)
     if (!player || player->GetGroupInvite())
         return false;
     Group* group = player->GetGroup();
-    if (group && group->isBattleGroup())
+    if (group && group->IsBattleGroup())
         group = player->GetOriginalGroup();
     if (group)
         return false;
@@ -330,14 +315,11 @@ bool Group::AddMember(ObjectGuid guid, const char* name)
 
     SendUpdate();
 
-    if (isLFDGroup())
-        sLFGMgr.AddMemberToLFDGroup(guid);
-
     if (Player* player = sObjectMgr.GetPlayer(guid))
     {
         _updateMembersOnRosterChanged(player);
 
-        if (!IsLeader(player->GetObjectGuid()) && !isBattleGroup())
+        if (!IsLeader(player->GetObjectGuid()) && !IsBattleGroup())
         {
             // reset the new member's instances, unless he is currently in one of them
             // including raid/heroic instances that they are not permanently bound to!
@@ -352,17 +334,14 @@ bool Group::AddMember(ObjectGuid guid, const char* name)
                     player->SendDungeonDifficulty(true);
                 }
                 if (player->GetRaidDifficulty() != GetRaidDifficulty())
-                {
-                    player->SetRaidDifficulty(GetRaidDifficulty());
-                    player->SendRaidDifficulty(true);
-                }
+                    player->SendRaidDifficulty(true, GetRaidDifficulty());
             }
         }
         player->SetGroupUpdateFlag(GROUP_UPDATE_FULL);
         UpdatePlayerOutOfRange(player);
 
         // quest related GO state dependent from raid membership
-        if (isRaidGroup())
+        if (IsRaidGroup())
             player->UpdateForQuestWorldObjects();
 
         // Broadcast new player group member fields to rest of the group
@@ -450,7 +429,7 @@ uint32 Group::RemoveMember(ObjectGuid guid, uint8 method)
         if (player)
         {
             // quest related GO state dependent from raid membership
-            if (isRaidGroup())
+            if (IsRaidGroup())
                 player->UpdateForQuestWorldObjects();
 
             WorldPacket data;
@@ -517,7 +496,7 @@ void Group::Disband(bool hideDestroy)
 
         // we cannot call _removeMember because it would invalidate member iterator
         // if we are removing player from battleground raid
-        if (isBattleGroup())
+        if (IsBattleGroup())
             player->RemoveFromBattleGroundRaid();
         else
         {
@@ -529,14 +508,11 @@ void Group::Disband(bool hideDestroy)
         }
 
         // quest related GO state dependent from raid membership
-        if (isRaidGroup())
+        if (IsRaidGroup())
             player->UpdateForQuestWorldObjects();
 
         if (!player->GetSession())
             continue;
-
-        if (isLFDGroup())
-            sLFGMgr.RemoveMemberFromLFDGroup(player->GetGroup(), player->GetObjectGuid());
 
         WorldPacket data;
         if (!hideDestroy)
@@ -564,7 +540,7 @@ void Group::Disband(bool hideDestroy)
 
     RemoveAllInvites();
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
     {
         CharacterDatabase.BeginTransaction();
         CharacterDatabase.PExecute("DELETE FROM `groups` WHERE groupId='%u'", m_Id);
@@ -681,15 +657,14 @@ void Group::SendUpdateTo(Player* player)
 
         // guess size
         WorldPacket data(SMSG_GROUP_LIST, (1 + 1 + 1 + 1 + 8 + 4 + GetMembersCount() * 20));
-        data << uint8(m_groupType);                         // group type (flags in 3.3)
+        data << uint8(m_groupFlags);                         // group type (flags in 3.3)
         data << uint8(citr->group);                         // groupid
         data << uint8(GetFlags(*citr));                     // group flags
-        data << uint8(isBattleGroup() ? 1 : 0);             // 2.0.x, isBattleGroundGroup?
-        if (m_groupType & GROUPTYPE_LFD)
+        data << uint8(IsBattleGroup() ? 1 : 0);             // 2.0.x, isBattleGroundGroup?
+        if (m_groupFlags & GROUP_FLAG_LFG)
         {
-            uint32 dungeonID = sLFGMgr.GetLFGGroupState(GetObjectGuid())->GetDungeonId();
-            data << uint8(sLFGMgr.GetLFGGroupState(GetObjectGuid())->GetState() == LFG_STATE_FINISHED_DUNGEON ? 2 : 0);
-            data << uint32(dungeonID);
+            data << uint8(0);
+            data << uint32(0);
         }
         data << GetObjectGuid();                            // group guid
         data << uint32(0);                                  // 3.3, this value increments every time SMSG_GROUP_LIST is sent
@@ -703,7 +678,7 @@ void Group::SendUpdateTo(Player* player)
             data << uint8(GetGroupMemberStatus(sObjectMgr.GetPlayer(citr2->guid)));
             data << uint8(citr2->group);                    // groupid
             data << uint8(GetFlags(*citr2));                // group flags
-            data << (isLFGGroup() ? uint8(citr2->roles) : uint8(0));  // 3.3, role?
+            data << uint8(0);                               // 3.3, role?
         }
 
         ObjectGuid masterLootGuid = (m_lootMethod == MASTER_LOOT) ? m_masterLooterGuid : ObjectGuid();
@@ -715,7 +690,10 @@ void Group::SendUpdateTo(Player* player)
             data << uint8(m_lootThreshold);                 // loot threshold
             data << uint8(m_dungeonDifficulty);             // Dungeon Difficulty
             data << uint8(m_raidDifficulty);                // Raid Difficulty
-            data << uint8(0);                               // 3.3, dynamic difficulty?
+            bool isDynamicHeroic = false;
+            if (player->IsInWorld() && player->GetMap()->GetEntry()->IsDynamicDifficultyMap())
+                isDynamicHeroic = player->GetMap()->IsHeroic();
+            data << uint8(isDynamicHeroic);                 // Dynamic Difficulty - isHeroic
         }
 
         session->SendPacket(data);
@@ -766,7 +744,7 @@ void Group::UpdatePlayerOnlineStatus(Player* player, bool online /*= true*/)
 void Group::UpdateOfflineLeader(time_t time, uint32 delay)
 {
     // Do not update BG groups, BGs take care of offliners
-    if (isBattleGroup())
+    if (IsBattleGroup())
         return;
 
     // Check leader presence
@@ -787,9 +765,9 @@ void Group::UpdateOfflineLeader(time_t time, uint32 delay)
     _chooseLeader(true);
 }
 
-void Group::BroadcastPacket(WorldPacket const& packet, bool ignorePlayersInBGRaid, int group, ObjectGuid ignore)
+void Group::BroadcastPacket(WorldPacket const& packet, bool ignorePlayersInBGRaid, int group, ObjectGuid ignore) const
 {
-    for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
+    for (GroupReference const* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         Player* pl = itr->getSource();
         if (!pl || (ignore && pl->GetObjectGuid() == ignore) || (ignorePlayersInBGRaid && pl->GetGroup() != this))
@@ -800,9 +778,41 @@ void Group::BroadcastPacket(WorldPacket const& packet, bool ignorePlayersInBGRai
     }
 }
 
-void Group::BroadcastReadyCheck(WorldPacket const& packet)
+void Group::BroadcastPacketInMap(WorldObject const* who, WorldPacket const& packet, int group, ObjectGuid ignore) const
 {
-    for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
+    for (auto itr = GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        Player* pl = itr->getSource();
+        if (!pl || (ignore && pl->GetObjectGuid() == ignore))
+            continue;
+
+        if (!pl->IsInMap(who))
+            continue;
+
+        if (pl->GetSession() && (group == -1 || itr->getSubGroup() == group))
+            pl->GetSession()->SendPacket(packet);
+    }
+}
+
+void Group::BroadcastPacketInRange(WorldObject const* who, WorldPacket const& packet, bool ignorePlayersInBGRaid, int group, ObjectGuid ignore) const
+{
+    for (auto itr = GetFirstMember(); itr != nullptr; itr = itr->next())
+    {
+        Player* pl = itr->getSource();
+        if (!pl || (ignore && pl->GetObjectGuid() == ignore) || (ignorePlayersInBGRaid && pl->GetGroup() != this))
+            continue;
+
+        if (!pl->IsAtGroupRewardDistance(who))
+            continue;
+
+        if (pl->GetSession() && (group == -1 || itr->getSubGroup() == group))
+            pl->GetSession()->SendPacket(packet);
+    }
+}
+
+void Group::BroadcastReadyCheck(WorldPacket const& packet) const
+{
+    for (GroupReference const* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         Player* pl = itr->getSource();
         if (pl && pl->GetSession())
@@ -830,12 +840,6 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant)
 {
     // get first not-full group
     uint8 groupid = 0;
-
-    LFGRoleMask roles = LFG_ROLE_MASK_NONE;
-
-    if (isLFGGroup() && sObjectMgr.GetPlayer(guid))
-        roles = sLFGMgr.GetLFGPlayerState(guid)->GetRoles();
-
     if (m_subGroupsCounts)
     {
         bool groupFound = false;
@@ -852,10 +856,10 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant)
             return false;
     }
 
-    return _addMember(guid, name, isAssistant, groupid, roles);
+    return _addMember(guid, name, isAssistant, groupid);
 }
 
-bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint8 group, LFGRoleMask roles)
+bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint8 group)
 {
     if (IsFull())
         return false;
@@ -876,7 +880,6 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint
     member.name      = name;
     member.group     = group;
     member.assistant = isAssistant;
-    member.roles = roles;
     member.lastMap   = lastMap;
     m_memberSlots.push_back(member);
 
@@ -886,7 +889,7 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint
     {
         player->SetGroupInvite(nullptr);
         // if player is in group and he is being added to BG raid group, then call SetBattleGroundRaid()
-        if (player->GetGroup() && isBattleGroup())
+        if (player->GetGroup() && IsBattleGroup())
             player->SetBattleRaid(this, group);
         // if player is in bg raid and we are adding him to normal group, then call SetOriginalGroup()
         else if (player->GetGroup())
@@ -904,17 +907,17 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint
         }
     }
 
-    if (!isRaidGroup())                                     // reset targetIcons for non-raid-groups
+    if (!IsRaidGroup())                                     // reset targetIcons for non-raid-groups
     {
         for (auto& m_targetIcon : m_targetIcons)
             m_targetIcon.Clear();
     }
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
     {
         // insert into group table
-        CharacterDatabase.PExecute("INSERT INTO group_member(groupId,memberGuid,assistant,subgroup,roles) VALUES('%u','%u','%u','%u','%u')",
-                                   m_Id, member.guid.GetCounter(), ((member.assistant == 1) ? 1 : 0), member.group, member.roles);
+        CharacterDatabase.PExecute("INSERT INTO group_member(groupId,memberGuid,assistant,subgroup) VALUES('%u','%u','%u','%u')",
+                                   m_Id, member.guid.GetCounter(), ((member.assistant == 1) ? 1 : 0), member.group);
     }
 
     return true;
@@ -926,7 +929,7 @@ bool Group::_removeMember(ObjectGuid guid)
     if (player)
     {
         // if we are removing player from battleground raid
-        if (isBattleGroup())
+        if (IsBattleGroup())
             player->RemoveFromBattleGroundRaid();
         else
         {
@@ -946,7 +949,7 @@ bool Group::_removeMember(ObjectGuid guid)
         m_memberSlots.erase(slot);
     }
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.PExecute("DELETE FROM group_member WHERE memberGuid='%u'", guid.GetCounter());
 
     if (m_leaderGuid == guid)                               // leader was removed
@@ -978,7 +981,7 @@ void Group::_chooseLeader(bool offline /*= false*/)
             continue;
 
         // Prioritize assistants for raids
-        if (isRaidGroup() && !citr->assistant)
+        if (IsRaidGroup() && !citr->assistant)
         {
             if (first.IsEmpty())
                 first = citr->guid;
@@ -1010,7 +1013,7 @@ void Group::_setLeader(ObjectGuid guid)
     if (slot == m_memberSlots.end())
         return;
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
     {
         uint32 slot_lowguid = slot->guid.GetCounter();
 
@@ -1135,7 +1138,7 @@ bool Group::_setMembersGroup(ObjectGuid guid, uint8 group)
 
     SubGroupCounterIncrease(group);
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.PExecute("UPDATE group_member SET subgroup='%u' WHERE memberGuid='%u'", group, guid.GetCounter());
 
     return true;
@@ -1148,7 +1151,7 @@ bool Group::_setAssistantFlag(ObjectGuid guid, const bool& state)
         return false;
 
     slot->assistant = state;
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.PExecute("UPDATE group_member SET assistant='%u' WHERE memberGuid='%u'", (state) ? 1 : 0, guid.GetCounter());
     return true;
 }
@@ -1170,7 +1173,7 @@ bool Group::_setMainTank(ObjectGuid guid)
 
     m_mainTankGuid = guid;
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.PExecute("UPDATE `groups` SET mainTank='%u' WHERE groupId='%u'", m_mainTankGuid.GetCounter(), m_Id);
 
     return true;
@@ -1193,7 +1196,7 @@ bool Group::_setMainAssistant(ObjectGuid guid)
 
     m_mainAssistantGuid = guid;
 
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.PExecute("UPDATE `groups` SET mainAssistant='%u' WHERE groupId='%u'",
                                    m_mainAssistantGuid.GetCounter(), m_Id);
 
@@ -1212,7 +1215,7 @@ bool Group::SameSubGroup(Player const* member1, Player const* member2) const
 // allows setting subgroup for offline members
 void Group::ChangeMembersGroup(ObjectGuid guid, uint8 group)
 {
-    if (!isRaidGroup())
+    if (!IsRaidGroup())
         return;
 
     Player* player = sObjectMgr.GetPlayer(guid);
@@ -1237,7 +1240,7 @@ void Group::ChangeMembersGroup(ObjectGuid guid, uint8 group)
 // only for online members
 void Group::ChangeMembersGroup(Player* player, uint8 group)
 {
-    if (!player || !isRaidGroup())
+    if (!player || !IsRaidGroup())
         return;
 
     uint8 prevSubGroup = player->GetSubGroup();
@@ -1351,7 +1354,7 @@ GroupJoinBattlegroundResult Group::CanJoinBattleGroundQueue(BattleGround const* 
 void Group::SetDungeonDifficulty(Difficulty difficulty)
 {
     m_dungeonDifficulty = difficulty;
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.PExecute("UPDATE `groups` SET difficulty = %u WHERE groupId='%u'", m_dungeonDifficulty, m_Id);
 
     for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
@@ -1364,19 +1367,22 @@ void Group::SetDungeonDifficulty(Difficulty difficulty)
     }
 }
 
-void Group::SetRaidDifficulty(Difficulty difficulty)
+void Group::SetRaidDifficulty(Difficulty difficulty, bool send)
 {
     m_raidDifficulty = difficulty;
-    if (!isBattleGroup())
+    if (!IsBattleGroup())
         CharacterDatabase.PExecute("UPDATE `groups` SET raiddifficulty = %u WHERE groupId='%u'", m_raidDifficulty, m_Id);
+
+    if (!send)
+        return;
 
     for (GroupReference* itr = GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         Player* player = itr->getSource();
         if (!player->GetSession() || player->GetLevel() < LEVELREQUIREMENT_HEROIC)
             continue;
-        player->SetRaidDifficulty(difficulty);
-        player->SendRaidDifficulty(true);
+
+        player->SendRaidDifficulty(true, difficulty);
     }
 }
 
@@ -1405,7 +1411,7 @@ bool Group::SetPlayerMap(ObjectGuid guid, uint32 mapid)
 
 void Group::ResetInstances(InstanceResetMethod method, bool isRaid, Player* SendMsgTo)
 {
-    if (isBattleGroup())
+    if (IsBattleGroup())
         return;
 
     // method can be INSTANCE_RESET_ALL, INSTANCE_RESET_CHANGE_DIFFICULTY, INSTANCE_RESET_GROUP_DISBAND
@@ -1515,7 +1521,7 @@ InstanceGroupBind* Group::GetBoundInstance(uint32 mapid)
     if (!mapEntry)
         return nullptr;
 
-    Difficulty difficulty = GetDifficulty(mapEntry->IsRaid());
+    Difficulty difficulty = MapPersistentState::GetSaveDifficulty(GetDifficulty(mapEntry->IsRaid()), mapEntry);
 
     // some instances only have one difficulty
     MapDifficultyEntry const* mapDiff = GetMapDifficultyData(mapid, difficulty);
@@ -1543,7 +1549,7 @@ InstanceGroupBind* Group::GetBoundInstance(Map* aMap, Difficulty difficulty)
 
 InstanceGroupBind* Group::BindToInstance(DungeonPersistentState* state, bool permanent, bool load)
 {
-    if (state && !isBattleGroup())
+    if (state && !IsBattleGroup())
     {
         InstanceGroupBind& bind = m_boundInstances[state->GetDifficulty()][state->GetMapId()];
         if (bind.state)
@@ -1679,7 +1685,7 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
         uint32 xp = (PvP || !not_gray_member_with_max_level || pVictim->GetTypeId() != TYPEID_UNIT) ? 0 : MaNGOS::XP::Gain(not_gray_member_with_max_level, static_cast<Creature*>(pVictim));
 
         /// skip in check PvP case (for speed, not used)
-        bool is_raid = PvP ? false : sMapStore.LookupEntry(pVictim->GetMapId())->IsRaid() && isRaidGroup();
+        bool is_raid = PvP ? false : sMapStore.LookupEntry(pVictim->GetMapId())->IsRaid() && IsRaidGroup();
         bool is_dungeon = PvP ? false : sMapStore.LookupEntry(pVictim->GetMapId())->IsDungeon();
         float group_rate = MaNGOS::XP::xp_in_group_rate(count, is_raid);
 
@@ -1706,84 +1712,4 @@ void Group::RewardGroupAtKill(Unit* pVictim, Player* player_tap)
                 RewardGroupAtKill_helper(player_tap, pVictim, count, PvP, group_rate, sum_level, is_dungeon, not_gray_member_with_max_level, member_with_max_level, xp);
         }
     }
-}
-
-bool Group::ConvertToLFG(LFGType type)
-{
-    if (isBattleGroup())
-        return false;
-
-    switch (type)
-    {
-    case LFG_TYPE_DUNGEON:
-    case LFG_TYPE_QUEST:
-    case LFG_TYPE_ZONE:
-    case LFG_TYPE_HEROIC_DUNGEON:
-        if (isRaidGroup())
-            return false;
-        m_groupType = GroupType(m_groupType | GROUPTYPE_LFD);
-        break;
-    case LFG_TYPE_RANDOM_DUNGEON:
-        if (isRaidGroup())
-            return false;
-        m_groupType = GroupType(m_groupType | GROUPTYPE_LFD | GROUPTYPE_UNK1);
-        break;
-    case LFG_TYPE_RAID:
-        if (!isRaidGroup())
-            ConvertToRaid();
-        m_groupType = GroupType(m_groupType | GROUPTYPE_LFD);
-        break;
-    default:
-        return false;
-    }
-
-    m_lootMethod = NEED_BEFORE_GREED;
-    SendUpdate();
-
-    if (IsNeedSave())
-    {
-        static SqlStatementID updGroup;
-        CharacterDatabase.CreateStatement(updGroup, "UPDATE groups SET groupType = ? WHERE groupId = ?")
-            .PExecute(uint8(m_groupType), GetObjectGuid().GetCounter());
-    }
-    return true;
-}
-
-void Group::SetGroupRoles(ObjectGuid guid, LFGRoleMask roles)
-{
-    for (member_witerator itr = m_memberSlots.begin(); itr != m_memberSlots.end(); ++itr)
-    {
-        if (itr->guid == guid)
-        {
-            itr->roles = roles;
-
-            if (IsNeedSave())
-            {
-                static SqlStatementID updGroupMember;
-                CharacterDatabase.CreateStatement(updGroupMember, "UPDATE group_member SET roles = ? WHERE memberGuid = ?")
-                    .PExecute(uint8(itr->roles), itr->guid.GetCounter());
-            }
-
-            SendUpdate();
-            return;
-        }
-    }
-}
-
-LFGRoleMask Group::GetGroupRoles(ObjectGuid guid)
-{
-    for (member_witerator itr = m_memberSlots.begin(); itr != m_memberSlots.end(); ++itr)
-    {
-        if (itr->guid == guid)
-            return itr->roles;
-    }
-    return LFG_ROLE_MASK_NONE;
-}
-
-bool Group::IsNeedSave() const
-{
-    if (GetGroupType() & GROUPTYPE_BG)
-        return false;
-
-    return m_bgGroup == NULL;
 }

@@ -499,7 +499,7 @@ bool Battlefield::CanAddPlayerToRaid(Player* player)
         }
 
         DEBUG_LOG("Battlefield: Trying to create new group for %s!", player->GetGuidStr().c_str());
-        group = new Group(GROUPTYPE_NORMAL);
+        group = new Group();
         group->SetBattlefieldGroup(this);
         if (group->Create(player->GetObjectGuid(), player->GetName()))
             DEBUG_LOG("Battlefield: Successfully created new group %s", group->GetGuidStr().c_str());

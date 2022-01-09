@@ -22,6 +22,9 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (15125,'spell_effect_summon_no_follow_movement'),
 (21688,'spell_effect_summon_no_follow_movement'),
 (22372,'spell_effect_summon_no_follow_movement'),
+(4130,'spell_banish_exile'),
+(4131,'spell_banish_exile'),
+(4132,'spell_banish_exile'),
 (6467,'spell_unarmed_woodcutter'),
 (7054,'spell_forsaken_skill'),
 (12639,'spell_summon_hakkar'),
@@ -75,7 +78,11 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (26767,'spell_cthun_tentacles_summon'),
 (26769,'spell_cthun_periodic_eye_trigger'),
 (28282,'spell_ashbringer_item'),
-(28441,'spell_ab_effect_000');
+(28441,'spell_ab_effect_000'),
+(28265,'spell_scourge_strike'),
+(28091,'spell_despawner_self'),
+(28345,'spell_communique_trigger'),
+(31315,'spell_summon_boss');
 
 -- TBC
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
@@ -92,6 +99,11 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (43706,'spell_drink'),
 (46755,'spell_drink'),
 (49472,'spell_drink'),
+(28851,'spell_increased_healing_done_dummy'),
+(28853,'spell_increased_healing_done_dummy'),
+(32403,'spell_increased_healing_done_dummy'),
+(34246,'spell_increased_healing_done_dummy'),
+(34294,'spell_increased_healing_done_dummy'),
 (15600,'spell_reduced_proc_chance_past60'),
 (42144,'spell_horseman_create_water_bucket'),
 (42074,'spell_horseman_fire'),
@@ -378,6 +390,8 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (36577,'spell_effect_summon_no_follow_movement'),
 (38876,'spell_effect_summon_no_follow_movement'),
 (46875,'spell_effect_summon_no_follow_movement'),
+(41480,'spell_veras_deadly_poison'),
+(41485,'spell_veras_deadly_poison_tick'),
 (70388,'spell_seed_of_corruption_npc'),
 (45091,'spell_spar_auras'),
 (45092,'spell_spar_auras'),
@@ -445,11 +459,15 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (47691,'spell_summon_mole_machine_target_picker'),
 (47375,'spell_summon_direbrew_minion'),
 (49858,'spell_make_bunny_summon_mole_machine'),
-(47514,'spell_summon_mole_machine');
+(47514,'spell_summon_mole_machine'),
+(42919,'spell_tricky_treat');
 
 -- Wotlk
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (43182,'spell_drink'),
+(16836,'spell_brambles'),
+(16839,'spell_brambles'),
+(16840,'spell_brambles'),
 (57073,'spell_drink'),
 (61830,'spell_drink'),
 (72623,'spell_drink'),
@@ -762,7 +780,8 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (19734,'spell_devour_magic'),
 (19736,'spell_devour_magic'),
 (27276,'spell_devour_magic'),
-(27277,'spell_devour_magic');
+(27277,'spell_devour_magic'),
+(63108,'spell_siphon_life_wotlk');
 
 -- Pet Scaling
 INSERT INTO spell_scripts(Id, ScriptName) VALUES

@@ -31,9 +31,7 @@
 #include "Entities/Item.h"
 #include "Server/WorldSocket.h"
 #include "Multithreading/Messager.h"
-#include "LFG/LFG.h"
-#include "LFG/LFGMgr.h"
-#include "Quests/QuestDef.h"
+#include "LFG/LFGDefines.h"
 
 #include <deque>
 #include <mutex>
@@ -46,6 +44,7 @@ struct AuctionEntry;
 struct AuctionHouseEntry;
 struct DeclinedName;
 struct TradeStatusInfo;
+struct LFGQueueData;
 
 class ObjectGuid;
 class Creature;
@@ -264,6 +263,10 @@ class WorldSession
         void SendNotification(const char* format, ...) const ATTR_PRINTF(2, 3);
         void SendNotification(int32 string_id, ...) const;
         void SendPetNameInvalid(uint32 error, const std::string& name, DeclinedName* declinedName) const;
+        static WorldPacket BuildLfgJoinResult(LfgJoinResultData joinResult);
+        static WorldPacket BuildLfgUpdate(LfgUpdateData const& updateData, bool isGroup);
+        static WorldPacket BuildLfgRoleChosen(ObjectGuid guid, uint8 roles);
+        static WorldPacket BuildLfgRoleCheckUpdate(LFGQueueData const& data);
         void SendPartyResult(PartyOperation operation, const std::string& member, PartyResult res) const;
         void SendGroupInvite(Player* player, bool alreadyInGroup = false) const;
         void SendAreaTriggerMessage(const char* Text, ...) const ATTR_PRINTF(2, 3);
@@ -289,12 +292,7 @@ class WorldSession
         // Players connected without socket are bot
         const std::string GetRemoteAddress() const { return m_Socket ? m_Socket->GetRemoteAddress() : "disconnected/bot"; }
 #else
-#ifdef ENABLE_PLAYERBOTS
-        // Players connected without socket are bot
-        const std::string GetRemoteAddress() const { return m_Socket ? m_Socket->GetRemoteAddress() : "disconnected/bot"; }
-#else
         const std::string GetRemoteAddress() const { return m_Socket ? m_Socket->GetRemoteAddress() : "disconnected"; }
-#endif
 #endif
         const std::string& GetLocalAddress() const { return m_localAddress; }
 
@@ -439,6 +437,11 @@ class WorldSession
         void SendNotInArenaTeamPacket(uint8 type) const;
         void SendPetitionShowList(ObjectGuid guid) const;
         void SendSaveGuildEmblem(uint32 msg) const;
+
+        // LFG - Wotlk
+        void SendLfgDisabled();
+        void SendLfgOfferContinue(uint32 dungeonEntry);
+        void SendLfgTeleportError(uint8 err);
 
         static void BuildPartyMemberStatsChangedPacket(Player* player, WorldPacket& data);
 
@@ -861,45 +864,15 @@ class WorldSession
         void HandleFarSightOpcode(WorldPacket& recv_data);
         void HandleSetDungeonDifficultyOpcode(WorldPacket& recv_data);
         void HandleSetRaidDifficultyOpcode(WorldPacket& recv_data);
+        void HandleChangePlayerDifficulty(WorldPacket& recv_data);
+        void HandleSetSavedInstanceExtend(WorldPacket& recv_data);
+        void HandleInstanceLockResponse(WorldPacket& recv_data);
         void HandleSetTitleOpcode(WorldPacket& recv_data);
         void HandleRealmSplitOpcode(WorldPacket& recv_data);
         void HandleTimeSyncResp(WorldPacket& recv_data);
         void HandleWhoisOpcode(WorldPacket& recv_data);
         void HandleResetInstancesOpcode(WorldPacket& recv_data);
         void HandleHearthandResurrect(WorldPacket& recv_data);
-
-        // LFG
-        void HandleLfgJoinOpcode(WorldPacket& recv_data);
-        void HandleLfgLeaveOpcode(WorldPacket& recv_data);
-        void HandleLfgClearOpcode(WorldPacket& recv_data);
-        void HandleSetLfgCommentOpcode(WorldPacket& recv_data);
-        void HandleLfgSetRolesOpcode(WorldPacket& recv_data);
-        void HandleLfgGetStatus(WorldPacket& recv_data);
-        //
-        void HandleLfgSetBootVoteOpcode(WorldPacket& recv_data);
-        void HandleLfgProposalResultOpcode(WorldPacket& recv_data);
-        void HandleLfgPlayerLockInfoRequestOpcode(WorldPacket& recv_data);
-        void HandleLfgTeleportOpcode(WorldPacket& recv_data);
-        void HandleLfgPartyLockInfoRequestOpcode(WorldPacket& recv_data);
-        // send data
-        void SendLfgUpdatePlayer(LFGUpdateType updateType, LFGType type);
-        void SendLfgUpdateParty(LFGUpdateType updateType, LFGType type);
-        void SendLfgUpdateSearch(bool update);
-        void SendLfgJoinResult(LFGJoinResult checkResult, uint8 checkValue = 0, bool withLockMap = false);
-        void SendLfgPlayerReward(LFGDungeonEntry const* dungeon, const LFGReward* reward, const Quest* qRew, bool isSecond = false);
-        void SendLfgQueueStatus(LFGDungeonEntry const* dungeon, LFGQueueStatus* status);
-        void SendLfgRoleChosen(ObjectGuid guid, uint8 roles);
-        void SendLfgRoleCheckUpdate();
-        void SendLfgBootPlayer();
-        void SendLfgUpdateProposal(LFGProposal* proposal);
-        void SendLfgOfferContinue(LFGDungeonEntry const* dungeon);
-        void SendLfgTeleportError(LFGTeleportError msg);
-        // LFR
-        void HandleLfrSearchOpcode(WorldPacket& recv_data);
-        void HandleLfrLeaveOpcode(WorldPacket& recv_data);
-        // send data
-        void SendLfgUpdateList(uint32 dungeonID);
-        void SendLfgDisabled();
 
         // Arena Team
         void HandleInspectArenaTeamsOpcode(WorldPacket& recv_data);
@@ -1008,6 +981,20 @@ class WorldSession
 
         // Movement
         void SynchronizeMovement(MovementInfo& movementInfo);
+
+        // LFG - Wotlk
+        void HandleLfgJoinOpcode(WorldPacket& recv_data);
+        void HandleLfgLeaveOpcode(WorldPacket& recv_data);
+        void HandleLfrJoinOpcode(WorldPacket& recv_data);
+        void HandleLfrLeaveOpcode(WorldPacket& recv_data);
+        void HandleLfgSetCommentOpcode(WorldPacket& recv_data);
+        void HandleLfgSetBootVoteOpcode(WorldPacket& recv_data);
+        void HandleLfgTeleportOpcode(WorldPacket& recv_data);
+        void HandleLfgGetStatus(WorldPacket& recv_data);
+        void HandleLfgProposalResultOpcode(WorldPacket& recv_data);
+        void HandleLfgSetRolesOpcode(WorldPacket& recv_data);
+        void HandleLfgPlayerLockInfoRequestOpcode(WorldPacket& recv_data);
+        void HandleLfgPartyLockInfoRequestOpcode(WorldPacket& recv_data);
 
         std::deque<uint32> GetOutOpcodeHistory();
         std::deque<uint32> GetIncOpcodeHistory();

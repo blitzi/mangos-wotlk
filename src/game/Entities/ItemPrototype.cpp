@@ -16,26 +16,29 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "CritterAI.h"
-#include "Entities/Creature.h"
+#include "ItemPrototype.h"
+#include "Globals/SharedDefines.h"
 
-int CritterAI::Permissible(const Creature* creature)
+float ItemPrototype::GetItemLevelIncludingQuality() const
 {
-    if (creature->IsCritter())
-        return PERMIT_BASE_SPECIAL;
+    float itemLevel(ItemLevel);
+    switch (Quality)
+    {
+        case ITEM_QUALITY_POOR:
+        case ITEM_QUALITY_NORMAL:
+        case ITEM_QUALITY_UNCOMMON:
+        case ITEM_QUALITY_ARTIFACT:
+        case ITEM_QUALITY_HEIRLOOM:
+            itemLevel -= 13.f; // leaving this as a separate statement since we do not know the real behavior in this case
+            break;
+        case ITEM_QUALITY_RARE:
+            itemLevel -= 13.f;
+            break;
+        case ITEM_QUALITY_EPIC:
+        case ITEM_QUALITY_LEGENDARY:
+        default:
+            break;
+    }
 
-    return PERMIT_BASE_NO;
-}
-
-void CritterAI::EnterCombat(Unit* /*enemy*/)
-{
-    if (!m_creature->IsInPanic())
-        m_creature->SetInPanic(30000);
-}
-
-void CritterAI::UpdateAI(const uint32 /*diff*/)
-{
-    if (m_creature->IsInCombat())
-        if (!m_creature->hasUnitState(UNIT_STAT_FLEEING))
-            CreatureAI::EnterEvadeMode();
+    return std::max<float>(0.f, itemLevel);
 }

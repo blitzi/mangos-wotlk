@@ -302,6 +302,7 @@ ChatCommand* ChatHandler::getCommandTable()
         { "spawn",          SEC_GAMEMASTER,     true,  nullptr,                                             "", debugSpawnsCommandtable },
         { "debugflags",     SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleDebugObjectFlags,                "", nullptr },
         { "packetlog",      SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleDebugPacketLog,                  "", nullptr },
+        { "dbscript",       SEC_ADMINISTRATOR,  true,  &ChatHandler::HandleDebugDbscript,                   "", nullptr },
         { nullptr,          0,                  false, nullptr,                                             "", nullptr }
     };
 
@@ -523,6 +524,28 @@ ChatCommand* ChatHandler::getCommandTable()
         { nullptr,          0,                  false, nullptr,                                        "", nullptr }
     };
 
+    static ChatCommand npcFormationCommandTable[] =
+    {
+        { "info",           SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcFormationInfoCommand,    "", nullptr },
+        { "reset",          SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcFormationResetCommand,   "", nullptr },
+        { "switch",         SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcFormationSwitchCommand,  "", nullptr },
+        { nullptr,          0,                  false, nullptr,                                        "", nullptr }
+    };
+
+//     static ChatCommand npcGroupBehaviorCommandTable[] =
+//     {
+//         { "show",           SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcGroupBehaviorShowCommand, "", nullptr },
+//         { "set",            SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcGroupBehaviorSetCommand, "", nullptr },
+//         { nullptr,          0,                  false, nullptr,                                        "", nullptr }
+//     };
+
+    static ChatCommand npcGroupCommandTable[] =
+    {
+        { "info",           SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcGroupInfoCommand,        "", nullptr },
+        //{ "behavior",       SEC_GAMEMASTER,     false, nullptr,                                        "", npcGroupBehaviorCommandTable },
+        { nullptr,          0,                  false, nullptr,                                        "", nullptr }
+    };
+
     static ChatCommand npcCommandTable[] =
     {
         { "add",            SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcAddCommand,              "", nullptr },
@@ -555,6 +578,8 @@ ChatCommand* ChatHandler::getCommandTable()
         { "showloot",       SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcShowLootCommand,         "", nullptr },
         { "tempspawn",      SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcTempSpawn,               "", nullptr },
         { "evade",          SEC_GAMEMASTER,     false, &ChatHandler::HandleNpcEvade,                   "", nullptr },
+        { "formation",      SEC_GAMEMASTER,     false, nullptr,                                        "", npcFormationCommandTable },
+        { "group",          SEC_GAMEMASTER,     false, nullptr,                                        "", npcGroupCommandTable },
 
         //{ TODO: fix or remove this commands
         { "addweapon",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleNpcAddWeaponCommand,        "", nullptr },
@@ -679,6 +704,7 @@ ChatCommand* ChatHandler::getCommandTable()
         { "skill_discovery_template",    SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadSkillDiscoveryTemplateCommand,  "", nullptr },
         { "skill_extra_item_template",   SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadSkillExtraItemTemplateCommand,  "", nullptr },
         { "skill_fishing_base_level",    SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadSkillFishingBaseLevelCommand,   "", nullptr },
+        { "spawn_group",                 SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadSpawnGroupsCommand,             "", nullptr },
         { "skinning_loot_template",      SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadLootTemplatesSkinningCommand,   "", nullptr },
         { "spam_records",                SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadExpectedSpamRecords,            "", nullptr },
         { "spell_area",                  SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadSpellAreaCommand,               "", nullptr },
@@ -869,6 +895,15 @@ ChatCommand* ChatHandler::getCommandTable()
         { nullptr,          0,                  false, nullptr,                                                 "", nullptr }
     };
 
+    static ChatCommand scourgeInvasionTable[] =
+    {
+        { "show",           SEC_ADMINISTRATOR,  false, &ChatHandler::HandleScourgeInvasionCommand,              "", nullptr },
+        { "state",          SEC_ADMINISTRATOR,  false, &ChatHandler::HandleScourgeInvasionStateCommand,         "", nullptr },
+        { "battleswon",     SEC_ADMINISTRATOR,  false, &ChatHandler::HandleScourgeInvasionBattlesWonCommand,    "", nullptr },
+        { "startzone",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleScourgeInvasionStartZone,            "", nullptr },
+        { nullptr,          0,                  false, nullptr,                                                 "", nullptr }
+    };
+
     static ChatCommand sunsReachReclamationTable[] =
     {
         { "phase",          SEC_ADMINISTRATOR,  false, &ChatHandler::HandleSunsReachReclamationPhaseCommand,    "", nullptr },
@@ -882,7 +917,9 @@ ChatCommand* ChatHandler::getCommandTable()
     static ChatCommand worldStateTable[] =
     {
         { "wareffort",      SEC_ADMINISTRATOR,  false, nullptr,                                        "", warEffortTable },
+        { "scourgeinvasion",SEC_ADMINISTRATOR,  false, nullptr,                                        "", scourgeInvasionTable },
         { "sunsreach",      SEC_ADMINISTRATOR,  false, nullptr,                                        "", sunsReachReclamationTable },
+        { "variables",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleVariablePrint,              "", nullptr },
         { "expansion",      SEC_ADMINISTRATOR,  false, &ChatHandler::HandleExpansionRelease,           "", nullptr },
         { nullptr,          0,                  false, nullptr,                                        "", nullptr }
     };

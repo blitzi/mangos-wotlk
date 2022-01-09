@@ -33,6 +33,7 @@
 #include "Mails/Mail.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Maps/InstanceData.h"
+#include "Entities/Object.h"
 
 ScriptMapMapName sQuestEndScripts;
 ScriptMapMapName sQuestStartScripts;
@@ -230,6 +231,15 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
                         sLog.outErrorDb("Table `%s` has go-buddy defined by pool (SCRIPT_FLAG_BUDDY_BY_POOL %u set) but pool %u is empty, skipping.", tablename, tmp.data_flags, tmp.searchRadiusOrGuid);
                         continue;
                     }
+                }
+            }
+            else if (tmp.data_flags & SCRIPT_FLAG_BUDDY_BY_SPAWN_GROUP)
+            {
+                uint32 groupEntry = tmp.searchRadiusOrGuid;
+                if (sObjectMgr.GetSpawnGroupContainer()->spawnGroupMap.find(groupEntry) == sObjectMgr.GetSpawnGroupContainer()->spawnGroupMap.end())
+                {
+                    sLog.outErrorDb("Table `%s` has go-buddy defined by group (SCRIPT_FLAG_BUDDY_BY_SPAWN_GROUP %u set) but group %u is empty, skipping.", tablename, tmp.data_flags, tmp.searchRadiusOrGuid);
+                    continue;
                 }
             }
         }
@@ -781,6 +791,65 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
                 break;
             case SCRIPT_COMMAND_ZONE_PULSE:                 // 50
                 break;
+
+            case SCRIPT_COMMAND_SPAWN_GROUP:                // 51
+            {
+                switch (tmp.formationData.command)
+                {
+//                     case 2: // SetFormation
+//                         break;
+//                     case 3: // Add buddy to formation
+//                     {
+//                         if (!tmp.buddyEntry)
+//                         {
+//                             sLog.outErrorDb("Table `%s` has no buddy entry defined in SCRIPT_COMMAND_FORMATION for script id %u", tablename, tmp.id);
+//                             continue;
+//                         }
+//                         break;
+//                     }
+// 
+//                     case 4: // remove buddy to formation
+//                     {
+//                         if (!tmp.buddyEntry)
+//                         {
+//                             sLog.outErrorDb("Table `%s` has no buddy entry defined in SCRIPT_COMMAND_FORMATION for script id %u", tablename, tmp.id);
+//                             continue;
+//                         }
+//                         break;
+//                     }
+
+                    case 100: // switch formation shape
+                    {
+                        if (tmp.formationData.data1 >= SpawnGroupFormationType::SPAWN_GROUP_FORMATION_TYPE_COUNT)
+                        {
+                            sLog.outErrorDb("Table `%s` uses invalid formation shape id(%u) for script id %u.", tablename, tmp.formationData.data1, tmp.id);
+                            continue;
+                        }
+                        break;
+                    }
+
+                    case 101: // change formation spread
+                    {
+                        if (tmp.x < 0.5f || tmp.x > 15.0f)
+                        {
+                            sLog.outErrorDb("Table `%s` uses invalid formation spread(%f) should be in 0.5 .. 15 range for script id %u.", tablename, tmp.x, tmp.id);
+                            continue;
+                        }
+                        break;
+                    }
+
+                    case 102: // change formation options
+                    {
+                        break;
+                    }
+
+                    default:
+                        sLog.outErrorDb("Table `%s` unknown formation command %u, skipping.", tablename, tmp.formationData.command);
+                        continue;
+                }
+
+                break;
+            }
             default:
             {
                 sLog.outErrorDb("Table `%s` unknown command %u, skipping.", tablename, tmp.command);
@@ -1032,7 +1101,7 @@ void ScriptMgr::CheckScriptTexts(ScriptMapMapName const& scripts)
             {
                 for (int i : itrM->second.textId)
                 {
-                    if (i && !sObjectMgr.GetBroadcastText(i))
+                    if (i && !sObjectMgr.GetBroadcastText(i) && !sObjectMgr.GetMangosString(i, -1))
                         sLog.outErrorDb("Table `broadcast_text` is missing string id %u, used in database script table %s id %u.", i, scripts.first, itrMM->first);
                 }
 
@@ -1041,7 +1110,7 @@ void ScriptMgr::CheckScriptTexts(ScriptMapMapName const& scripts)
                     auto& vector = m_scriptTemplates[STRING_TEMPLATE][itrM->second.talk.stringTemplateId];
                     for (auto& data : vector)
                     {
-                        if (!sObjectMgr.GetBroadcastText(data.first))
+                        if (!sObjectMgr.GetBroadcastText(data.first) && !sObjectMgr.GetMangosString(data.first, -1))
                             sLog.outErrorDb("Table `broadcast_text` is missing string id %d, used in database script template table dbscript_random_templates id %u.", data.first, itrM->second.talk.stringTemplateId);
                     }
                 }
@@ -1109,9 +1178,9 @@ bool ScriptAction::GetScriptProcessTargets(WorldObject* originalSource, WorldObj
 {
     std::vector<WorldObject*> buddies;
 
-    if (m_script->buddyEntry || (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_POOL) != 0 || (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_GUID) != 0)
+    if (m_script->buddyEntry || (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_POOL) != 0 || (m_script->data_flags & (SCRIPT_FLAG_BUDDY_BY_GUID)) != 0)
     {
-        if (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_GUID)
+        if (m_script->data_flags & (SCRIPT_FLAG_BUDDY_BY_GUID))
         {
             WorldObject* buddy = nullptr;
             if (m_script->IsCreatureBuddy())
@@ -1187,6 +1256,57 @@ bool ScriptAction::GetScriptProcessTargets(WorldObject* originalSource, WorldObj
             }
             // this type can only have one buddy result
             buddies.push_back(buddy);
+        }
+        else if (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_SPAWN_GROUP) // Buddy by group
+        {
+            WorldObject* origin = originalSource ? originalSource : originalTarget;
+            if (origin->GetTypeId() == TYPEID_PLAYER && originalSource && originalSource->GetTypeId() != TYPEID_PLAYER)
+                origin = originalTarget;
+
+            SpawnGroupEntry* entry = m_map->GetMapDataContainer().GetSpawnGroup(m_script->searchRadiusOrGuid);
+            WorldObject* closest = nullptr;
+            if (entry->Type == SPAWN_GROUP_CREATURE)
+            {
+                for (auto& dbGuid : entry->DbGuids)
+                {
+                    if (Creature* creature = m_map->GetCreature(dbGuid.DbGuid))
+                    {
+                        if ((m_script->data_flags & SCRIPT_FLAG_ALL_ELIGIBLE_BUDDIES) != 0)
+                            buddies.push_back(creature);
+                        else
+                        {
+                            if (!closest)
+                                closest = creature;
+                            else if (origin->GetDistance(creature) < origin->GetDistance(closest))
+                                closest = creature;
+                        }
+                    }
+                }
+
+                if ((m_script->data_flags & SCRIPT_FLAG_ALL_ELIGIBLE_BUDDIES) == 0 && closest)
+                    buddies.push_back(closest);
+            }
+            else
+            {
+                for (auto& dbGuid : entry->DbGuids)
+                {
+                    if (GameObject* go = m_map->GetGameObject(dbGuid.DbGuid))
+                    {
+                        if ((m_script->data_flags & SCRIPT_FLAG_ALL_ELIGIBLE_BUDDIES) != 0)
+                            buddies.push_back(go);
+                        else
+                        {
+                            if (!closest)
+                                closest = go;
+                            else if (origin->GetDistance(go) < origin->GetDistance(closest))
+                                closest = go;
+                        }
+                    }
+                }
+
+                if ((m_script->data_flags & SCRIPT_FLAG_ALL_ELIGIBLE_BUDDIES) == 0 && closest)
+                    buddies.push_back(closest);
+            }
         }
         else                                                // Buddy by entry
         {
@@ -1492,6 +1612,22 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             if (LogIfNotUnit(pSource))
                 break;
 
+            Creature* creature = static_cast<Creature*>(pSource);
+
+            if (m_script->textId[0])
+            {
+                if (m_script->textId[0] == 1 || m_script->textId[0] == 2 && !creature->GetCreatureGroup())
+                {
+                    Position const& respPos = creature->GetRespawnPosition();
+                    creature->GetMotionMaster()->MovePoint(0, respPos, ForcedMovement(m_script->moveTo.forcedMovement), 0.f, true);
+                }
+                else if (m_script->textId[0] == 2)
+                {
+                    creature->GetCreatureGroup()->MoveHome();
+                }
+                break;
+            }
+
             // Just turn around
             if ((m_script->x == 0.0f && m_script->y == 0.0f && m_script->z == 0.0f) ||
                     // Check point-to-point distance, hence revert effect of bounding radius
@@ -1690,11 +1826,11 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             float z = m_script->z;
             float o = m_script->o;
             bool run = m_script->textId[0] == 1;
-            uint32 factionId = m_script->textId[1];
-            uint32 modelId = m_script->textId[2];
+            uint32 relayId = m_script->textId[1];
 
-            TempSpawnSettings settings(pSource, m_script->summonCreature.creatureEntry, x, y, z, o, m_script->summonCreature.despawnDelay ? TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN : TEMPSPAWN_DEAD_DESPAWN, m_script->summonCreature.despawnDelay, (m_script->data_flags& SCRIPT_FLAG_COMMAND_ADDITIONAL) != 0, run, m_script->summonCreature.pathId, factionId, modelId);
+            TempSpawnSettings settings(pSource, m_script->summonCreature.creatureEntry, x, y, z, o, m_script->summonCreature.despawnDelay ? TEMPSPAWN_TIMED_OOC_OR_DEAD_DESPAWN : TEMPSPAWN_DEAD_DESPAWN, m_script->summonCreature.despawnDelay, (m_script->data_flags& SCRIPT_FLAG_COMMAND_ADDITIONAL) != 0, run, m_script->summonCreature.pathId);
             settings.spawnDataEntry = m_script->textId[3];
+            settings.dbscriptTarget = pTarget;
 
             Creature* pCreature = WorldObject::SummonCreature(settings, pSource->GetMap(), pSource->GetPhaseMask());
             if (!pCreature)
@@ -1702,7 +1838,6 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                 sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed for creature (entry: %u).", m_table, m_script->id, m_script->command, m_script->summonCreature.creatureEntry);
                 break;
             }
-
             break;
         }
         case SCRIPT_COMMAND_OPEN_DOOR:                      // 11
@@ -2129,16 +2264,16 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
         }
         case SCRIPT_COMMAND_TERMINATE_SCRIPT:               // 31
         {
-            if (!pSource && (!pTarget && (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_GUID) == 0))
+            if (!pSource && (!pTarget && ((m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_GUID) == 0)))
             {
                 sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u call for nullptr, skipping.", m_table, m_script->id, m_script->command);
                 return true;
             }
 
             bool result = false;
-            if (m_script->terminateScript.npcEntry || m_script->terminateScript.poolId || (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_GUID))
+            if (m_script->terminateScript.npcEntry || m_script->terminateScript.poolId || (m_script->data_flags & (SCRIPT_FLAG_BUDDY_BY_GUID)))
             {
-                Creature* pCreatureBuddy = nullptr;
+                WorldObject* terminationBuddy = nullptr;
                 WorldObject* pSearcher = pSource ? pSource : pTarget;
                 if (!pSearcher)
                 {
@@ -2149,17 +2284,38 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                 if (pSearcher->GetTypeId() == TYPEID_PLAYER && pTarget && pTarget->GetTypeId() != TYPEID_PLAYER)
                     pSearcher = pTarget;
 
-                if (m_script->data_flags & SCRIPT_FLAG_BUDDY_BY_GUID)
+                if (m_script->data_flags & (SCRIPT_FLAG_BUDDY_BY_GUID))
                 {
-                    if (pTarget && pTarget->IsUnit() && pTarget->GetGUIDLow() == m_script->searchRadiusOrGuid)
-                        pCreatureBuddy = static_cast<Creature*>(pTarget);
+                    if (m_script->IsCreatureBuddy())
+                    {
+                        if (pTarget && pTarget->IsUnit() && pTarget->GetGUIDLow() == m_script->searchRadiusOrGuid)
+                            terminationBuddy = pTarget;
+                    }
+                    else
+                    {
+                        if (pTarget && pTarget->IsGameObject() && pTarget->GetGUIDLow() == m_script->searchRadiusOrGuid)
+                            terminationBuddy = pTarget;
+                    }
                 }
                 else if (m_script->terminateScript.npcEntry)
                 {
-                    // npc entry is provided
-                    MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck u_check(*pSearcher, m_script->terminateScript.npcEntry, true, false, m_script->terminateScript.searchDist, true);
-                    MaNGOS::CreatureLastSearcher<MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(pCreatureBuddy, u_check);
-                    Cell::VisitGridObjects(pSearcher, searcher, m_script->terminateScript.searchDist);
+                    if (m_script->IsCreatureBuddy())
+                    {
+                        // npc entry is provided
+                        Creature* creatureBuddy = nullptr;
+                        MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck u_check(*pSearcher, m_script->terminateScript.npcEntry, true, false, m_script->terminateScript.searchDist, true);
+                        MaNGOS::CreatureLastSearcher<MaNGOS::NearestCreatureEntryWithLiveStateInObjectRangeCheck> searcher(creatureBuddy, u_check);
+                        Cell::VisitGridObjects(pSearcher, searcher, m_script->terminateScript.searchDist);
+                        terminationBuddy = creatureBuddy;
+                    }
+                    else
+                    {
+                        GameObject* goBuddy = nullptr;
+                        MaNGOS::NearestGameObjectEntryInObjectRangeCheck u_check(*pSearcher, m_script->terminateScript.npcEntry, m_script->terminateScript.searchDist);
+                        MaNGOS::GameObjectLastSearcher<MaNGOS::NearestGameObjectEntryInObjectRangeCheck> searcher(goBuddy, u_check);
+                        Cell::VisitGridObjects(pSearcher, searcher, m_script->terminateScript.searchDist);
+                        terminationBuddy = goBuddy;
+                    }
                 }
                 else
                 {
@@ -2178,13 +2334,13 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                             if (buddy->IsAlive() &&
                                 (!m_script->terminateScript.searchDist || pSearcher->IsWithinDist3d(buddy->GetPositionX(), buddy->GetPositionY(), buddy->GetPositionZ(), m_script->terminateScript.searchDist)))
                             {
-                                pCreatureBuddy = buddy;
+                                terminationBuddy = buddy;
                                 break;
                             }
                         }
                     }
 
-                    if (!pCreatureBuddy)
+                    if (!terminationBuddy)
                     {
                         // buddy was not found so try explicitly chanced list
                         auto explicitlyChancedObjectList = pool.GetExplicitlyChanced();
@@ -2197,7 +2353,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                                 if (buddy->IsAlive() &&
                                     (!m_script->terminateScript.searchDist || pSearcher->IsWithinDist3d(buddy->GetPositionX(), buddy->GetPositionY(), buddy->GetPositionZ(), m_script->terminateScript.searchDist)))
                                 {
-                                    pCreatureBuddy = buddy;
+                                    terminationBuddy = buddy;
                                     break;
                                 }
                             }
@@ -2205,7 +2361,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                     }
                 }
 
-                if (!(m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL) && !pCreatureBuddy)
+                if (!(m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL) && !terminationBuddy)
                 {
                     if (m_script->terminateScript.npcEntry)
                         DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as searched npc entry(%u) was not found alive)", m_table, m_script->id, m_script->terminateScript.npcEntry);
@@ -2213,7 +2369,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                         DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as no npc in pool id(%u) was found alive)", m_table, m_script->id, m_script->terminateScript.poolId);
                     result = true;
                 }
-                else if (m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL && pCreatureBuddy)
+                else if (m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL && terminationBuddy)
                 {
                     if (m_script->terminateScript.npcEntry)
                         DETAIL_FILTER_LOG(LOG_FILTER_DB_SCRIPT, "DB-SCRIPTS: Process table `%s` id %u, terminate further steps of this script! (as searched npc entry(%u) was found alive)", m_table, m_script->id, m_script->terminateScript.npcEntry);
@@ -2309,10 +2465,12 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
 
             // if radius is provided send AI event around
             if (m_script->sendAIEvent.radius)
-                ((Creature*)pSource)->AI()->SendAIEventAround(AIEventType(m_script->sendAIEvent.eventType), (Unit*)pTarget, 0, float(m_script->sendAIEvent.radius));
+                ((Creature*)pSource)->AI()->SendAIEventAround(AIEventType(m_script->sendAIEvent.eventType), (Unit*)pTarget, 0, float(m_script->sendAIEvent.radius), m_script->sendAIEvent.value);
             // else if no radius and target is creature send AI event to target
             else if (pTarget->GetTypeId() == TYPEID_UNIT)
-                ((Creature*)pSource)->AI()->SendAIEvent(AIEventType(m_script->sendAIEvent.eventType), nullptr, (Unit*)pTarget);
+                static_cast<Unit*>(pSource)->AI()->SendAIEvent(AIEventType(m_script->sendAIEvent.eventType), nullptr, (Unit*)pTarget, m_script->sendAIEvent.value);
+            else if (pSource->IsPlayer() && pTarget->IsCreature())
+                static_cast<Unit*>(pTarget)->AI()->ReceiveAIEvent(AIEventType(m_script->sendAIEvent.eventType), (Unit*)pSource, (Unit*)pSource, m_script->sendAIEvent.value);
             break;
         }
         case SCRIPT_COMMAND_SET_FACING:                     // 36
@@ -2340,10 +2498,13 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
         {
             if (LogIfNotCreature(pSource))
                 return false;
-            if (LogIfNotUnit(pTarget))
+            if (!pTarget)
+            {
+                sLog.outDebug(" DB-SCRIPTS: Process table `%s` id %u, SCRIPT_COMMAND_MOVE_DYNAMIC called but target doesnt exist: skipping.", m_table, m_script->id);
                 return false;
+            }
 
-            Creature* source = ((Creature*)pSource);
+            Creature* source = static_cast<Creature*>(pSource);
             if (source->IsInCombat())
             {
                 sLog.outDebug(" DB-SCRIPTS: Process table `%s` id %u, SCRIPT_COMMAND_MOVE_DYNAMIC called for source guid %s but source is in combat and may lead to wrong behaviour: skipping.", m_table, m_script->id, pSource->GetGuidStr().c_str());
@@ -2353,27 +2514,27 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             float x, y, z;
             if (m_script->moveDynamic.maxDist == 0)         // Move to pTarget
             {
-                if (pTarget == pSource)
+                if (pTarget == source)
                 {
-                    sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, _MOVE_DYNAMIC called with maxDist == 0, but resultingSource == resultingTarget (== %s)", m_table, m_script->id, pSource->GetGuidStr().c_str());
+                    sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, _MOVE_DYNAMIC called with maxDist == 0, but resultingSource == resultingTarget (== %s)", m_table, m_script->id, source->GetGuidStr().c_str());
                     break;
                 }
-                pTarget->GetContactPoint(pSource, x, y, z, m_script->moveDynamic.fixedDist);
+                pTarget->GetContactPoint(source, x, y, z, m_script->moveDynamic.fixedDist);
             }
             else                                            // Calculate position
             {
                 float orientation;
                 if (m_script->data_flags & SCRIPT_FLAG_COMMAND_ADDITIONAL)
-                    orientation = pSource->GetOrientation() + m_script->o + 2 * M_PI_F;
+                    orientation = source->GetOrientation() + m_script->o + 2 * M_PI_F;
                 else
                     orientation = m_script->o;
 
-                pSource->GetRandomPoint(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ(), m_script->moveDynamic.maxDist, x, y, z,
+                source->GetRandomPoint(pTarget->GetPositionX(), pTarget->GetPositionY(), pTarget->GetPositionZ(), m_script->moveDynamic.maxDist, x, y, z,
                                         m_script->moveDynamic.minDist, (orientation == 0.0f ? nullptr : &orientation));
                 z = std::max(z, pTarget->GetPositionZ());
-                pSource->UpdateAllowedPositionZ(x, y, z);
+                source->UpdateAllowedPositionZ(x, y, z);
             }
-            ((Creature*)pSource)->GetMotionMaster()->MovePoint(1, x, y, z);
+            source->GetMotionMaster()->MovePoint(1, Position(x, y, z, 0.f), ForcedMovement(m_script->textId[0]), 0.f, true, pTarget ? pTarget->GetObjectGuid() : ObjectGuid(), m_script->textId[1]);
             break;
         }
         case SCRIPT_COMMAND_SEND_MAIL:                      // 38
@@ -2564,8 +2725,164 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             creature->AI()->AttackClosestEnemy();
             break;
         }
+        case SCRIPT_COMMAND_SPAWN_GROUP:                    // 51
+        {
+            if (LogIfNotCreature(pTarget))
+                return false;
+
+            Creature* leader = static_cast<Creature*>(pTarget);
+
+            CreatureGroup* leaderGroup = leader->GetCreatureGroup();
+            FormationSlotDataSPtr leaderSlot = leader->GetFormationSlot();
+            FormationData* leaderFormation = nullptr;
+            if (leaderSlot)
+                leaderFormation = leaderSlot->GetFormationData();
+
+            switch (m_script->formationData.command)
+            {
+//                 case 2:                         // set formation
+//                 {
+//                     if (LogIfNotCreature(pSource))
+//                         return false;
+// 
+//                     CreatureGroup* targetGroup = nullptr;
+//                     if (!m_script->formationData.data1)
+//                     {
+//                         if (!leaderGroup)
+//                         {
+//                             sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` script id %u, command %u and subcommand formation create(2) failed. Target group(%u) not found!",
+//                                 m_table, m_script->id, m_script->command, m_script->formationData.data1);
+//                             break;
+//                         }
+//                         leaderGroup->SetFormationData(nullptr);
+//                         break;
+//                     }
+//                     else
+//                     {
+//                         auto sgData = leader->GetMap()->GetSpawnManager().GetSpawnGroup(m_script->formationData.data1);
+//                         if (!sgData || !sgData->GetCreatureGroup())
+//                         {
+//                             sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` script id %u, command %u and subcommand formation create(2) failed. Target group(%u) not found!",
+//                                 m_table, m_script->id, m_script->command, m_script->formationData.data1);
+//                             break;
+//                         }
+//                         targetGroup = sgData->GetCreatureGroup();
+//                     }
+// 
+//                     if (targetGroup->GetFormationData())
+//                     {
+//                         //
+//                         break;
+//                     }
+// 
+//                     FormationEntrySPtr fEntry = std::make_shared<FormationEntry>();
+//                     fEntry->GroupId = targetGroup->GetGroupId();
+//                     fEntry->Type = static_cast<SpawnGroupFormationType>(m_script->textId[0]);
+//                     fEntry->Spread = m_script->x;
+//                     fEntry->Options = m_script->textId[1];
+//                     fEntry->MovementType = m_script->textId[2]; // todo need to check that data!!!
+//                     fEntry->MovementID = m_script->textId[3];
+//                     fEntry->Comment = "Dynamically created formation!";
+// 
+//                     targetGroup->SetFormationData(fEntry);
+//                     break;
+//                 }
+//                 case 3: // add creature to the formation
+//                 {
+//                     if (LogIfNotCreature(pSource))
+//                         return false;
+// 
+//                     if (!leaderFormation)
+//                     {
+//                         sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed. %s is not in formation!",
+//                             m_table, m_script->id, m_script->command, leader->GetGuidStr().c_str());
+//                         break;
+//                     }
+//                     leaderFormation->Add(static_cast<Creature*>(pSource));
+//                     break;
+//                 }
+//                 case 4: // remove creature from the formation
+//                 {
+//                     if (LogIfNotCreature(pSource))
+//                         return false;
+// 
+//                     if (!leaderFormation)
+//                     {
+//                         sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed. %s is not in formation!",
+//                             m_table, m_script->id, m_script->command, leader->GetGuidStr().c_str());
+//                         break;
+//                     }
+//                     leaderFormation->Remove(static_cast<Creature*>(pSource));
+//                     break;
+//                 }
+                case 100: // switch formation shape
+                {
+                    if (!leaderFormation)
+                    {
+                        sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed. %s is not in formation!",
+                            m_table, m_script->id, m_script->command, leader->GetGuidStr().c_str());
+                        break;
+                    }
+
+                    if (m_script->formationData.data1 < static_cast<uint32>(SpawnGroupFormationType::SPAWN_GROUP_FORMATION_TYPE_COUNT))
+                    {
+                        if (!leaderFormation->SwitchFormation(static_cast<SpawnGroupFormationType>(m_script->formationData.data1)))
+                            sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u subcommand changeShape(%u) failed.",
+                                m_table, m_script->id, m_script->command, m_script->formationData.command);
+                    }
+                    else
+                    {
+                        sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u subcommand switchShape(%u) failed, wrong shape id(%u).",
+                            m_table, m_script->id, m_script->command, m_script->formationData.command, m_script->formationData.data1);
+                        return true;
+                    }
+                    break;
+                }
+                case 101:  // set formation spread
+                {
+                    if (!leaderFormation)
+                    {
+                        sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed. %s is not in formation!",
+                            m_table, m_script->id, m_script->command, leader->GetGuidStr().c_str());
+                        break;
+                    }
+
+                    if (m_script->x <= 15)
+                    {
+                        leaderFormation->SetSpread(m_script->x);
+                    }
+                    else
+                    {
+                        sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u subcommand changeSpread(%u) failed, wrong shape id(%f).",
+                            m_table, m_script->id, m_script->command, m_script->formationData.command, m_script->x);
+                        return true;
+                    }
+                    break;
+                }
+                case 102:  // set formation options
+                {
+                    if (!leaderFormation)
+                    {
+                        sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed. %s is not in formation!",
+                            m_table, m_script->id, m_script->command, leader->GetGuidStr().c_str());
+                        break;
+                    }
+
+                    leaderFormation->SetOptions(m_script->formationData.data1);
+                    break;
+                }
+
+                default:
+                    sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u failed. Invalid value for formation command!",
+                        m_table, m_script->id, m_script->command, m_script->formationData.command);
+                    break;
+            }
+
+            break;
+        }
         default:
-            sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u unknown command used.", m_table, m_script->id, m_script->command);
+            sLog.outErrorDb(" DB-SCRIPTS: Process table `%s` id %u, command %u unknown command used.",
+                m_table, m_script->id, m_script->command);
             break;
     }
 

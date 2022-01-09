@@ -1,6 +1,4 @@
-/*
- * This file is part of the CMaNGOS Project. See AUTHORS file for Copyright information
- *
+/* This file is part of the ScriptDev2 Project. See AUTHORS file for Copyright information
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -16,23 +14,18 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef MANGOS_CRITTERAI_H
-#define MANGOS_CRITTERAI_H
+#include "AI/ScriptDevAI/include/sc_common.h"
+#include "Spells/Scripts/SpellScript.h"
 
-#include "CreatureAI.h"
-#include "Entities/ObjectGuid.h"
-
-class CritterAI : public CreatureAI
+struct TrickyTreat : public AuraScript
 {
-    public:
-
-        explicit CritterAI(Creature* creature) : CreatureAI(creature) {}
-
-        void EnterCombat(Unit* /*enemy*/) override;
-        void UpdateAI(const uint32 /*diff*/) override;
-
-        static int Permissible(const Creature* creature);
-    protected:
-        std::string GetAIName() override { return "CritterAI"; }
+    void OnPeriodicDummy(Aura* aura) const override
+    {
+        aura->GetTarget()->CastSpell(nullptr, 42966, TRIGGERED_OLD_TRIGGERED); // Upset Tummy
+    }
 };
-#endif
+
+void AddSC_hallows_end()
+{
+    RegisterAuraScript<TrickyTreat>("spell_tricky_treat");
+}

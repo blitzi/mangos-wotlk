@@ -514,6 +514,9 @@ void Unit::TriggerAggroLinkingEvent(Unit* enemy)
 {
     if (IsLinkingEventTrigger())
         GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_AGGRO, static_cast<Creature*>(this), enemy);
+
+    if (IsCreature() && static_cast<Creature*>(this)->GetCreatureGroup())
+        static_cast<Creature*>(this)->GetCreatureGroup()->TriggerLinkingEvent(CREATURE_GROUP_EVENT_AGGRO, enemy);
 }
 
 void Unit::TriggerEvadeEvents()
@@ -526,7 +529,27 @@ void Unit::TriggerEvadeEvents()
     if (m_isCreatureLinkingTrigger)
         GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_EVADE, static_cast<Creature*>(this));
 
-    CallForAllControlledUnits([](Unit* unit) { unit->HandleExitCombat(); }, CONTROLLED_PET | CONTROLLED_GUARDIANS | CONTROLLED_CHARM | CONTROLLED_TOTEMS);
+    if (IsCreature() && static_cast<Creature*>(this)->GetCreatureGroup())
+        static_cast<Creature*>(this)->GetCreatureGroup()->TriggerLinkingEvent(CREATURE_GROUP_EVENT_EVADE, this);
+
+    CallForAllControlledUnits([](Unit* unit) { unit->HandleExitCombat(false); }, CONTROLLED_PET | CONTROLLED_GUARDIANS | CONTROLLED_CHARM | CONTROLLED_TOTEMS);
+}
+
+void Unit::TriggerHomeEvents()
+{
+    AI()->JustReachedHome();
+
+    if (!hasUnitState(UNIT_STAT_NO_FOLLOW_MOVEMENT))
+    {
+        Unit* target = GetMaster();
+        if (target && (!target->GetTransportInfo() || target->GetTransportInfo()->GetTransport() != this))
+            GetMotionMaster()->MoveFollow(target, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE, false, IsPlayer() && !HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED));
+        else if (IsLinkingEventTrigger())
+            GetMap()->GetCreatureLinkingHolder()->TryFollowMaster((Creature*)this);
+    }
+
+    if (IsCreature() && static_cast<Creature*>(this)->GetCreatureGroup())
+        static_cast<Creature*>(this)->GetCreatureGroup()->TriggerLinkingEvent(CREATURE_GROUP_EVENT_HOME, this);
 }
 
 void Unit::EvadeTimerExpired()
@@ -1033,7 +1056,7 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
             data << victim->GetObjectGuid();                // victim
 
             if (tapperGroup)
-                tapperGroup->BroadcastPacket(data, false, tapperGroup->GetMemberGroup(responsiblePlayer->GetObjectGuid()), responsiblePlayer->GetObjectGuid());
+                tapperGroup->BroadcastPacketInRange(victim, data, false, tapperGroup->GetMemberGroup(responsiblePlayer->GetObjectGuid()));
 
             responsiblePlayer->SendDirectMessage(data);
         }
@@ -1073,9 +1096,15 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
     /*
     *  Actions for the victim
     */
-    if (victim->GetTypeId() == TYPEID_PLAYER)          // Killed player
+    if (victim->IsPlayer())          // Killed player
     {
-        Player* playerVictim = (Player*)victim;
+        Player* playerVictim = static_cast<Player*>(victim);
+
+        if (victim->GetFormationSlot())
+        {
+            // simply remove player from the formation on death event
+            victim->GetFormationSlot()->GetFormationData()->Remove(playerVictim);
+        }
 
 
         playerVictim->SetPvPDeath(responsiblePlayer != nullptr);
@@ -1340,6 +1369,13 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
 
     if (victim->IsLinkingEventTrigger())
         victim->GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_DIE, victim);
+
+    if (victim->GetCreatureGroup())
+    {
+        auto fData = victim->GetCreatureGroup()->GetFormationData();
+        if (fData)
+            fData->OnDeath(victim);
+    }
 
     // Dungeon specific stuff
     if (victim->GetInstanceId())
@@ -4844,7 +4880,7 @@ void Unit::_UpdateSpells(uint32 time)
     std::string logging;
     for (uint32 spellId : updatedSpellIds)
         logging += std::to_string(spellId) + ",";
-    meas.add_field("spells", logging);
+    meas.add_field("spells", "\"" + logging + "\"");
 #endif
 }
 
@@ -10385,7 +10421,7 @@ bool Unit::SelectHostileTarget()
         {
             if (!GetMotionMaster()->GetCurrent()->IsReachable())
             {
-                if (!AI()->IsRangedUnit() && getThreatManager().getThreatList().size() == 1 &&
+                if (!AI()->IsRangedUnit() && getThreatManager().getThreatList().size() == 1 && target->IsFlying() &&
                     GetDistanceZ(target) > CREATURE_Z_ATTACK_RANGE_MELEE)
                 {
                     getThreatManager().modifyThreatPercent(target, -101);
@@ -13569,6 +13605,11 @@ void Unit::Uncharm(Unit* charmed, uint32 spellId)
         charmed->SetTarget(nullptr);
 
         charmed->GetMotionMaster()->UnMarkFollowMovegens();
+    }
+
+    if (GetFormationSlot())
+    {
+        GetFormationSlot()->GetFormationData()->Remove(charmed);
     }
 
     // Update possessed's client control status after altering flags

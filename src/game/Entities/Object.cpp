@@ -1872,10 +1872,10 @@ bool WorldObject::IsPositionValid() const
     return MaNGOS::IsValidMapCoord(m_position.x, m_position.y, m_position.z, m_position.o);
 }
 
-void WorldObject::MonsterSay(const char* text, uint32 /*language*/, Unit const* target) const
+void WorldObject::MonsterSay(char const* text, uint32 language, Unit const* target) const
 {
     WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_MONSTER_SAY, text, LANG_UNIVERSAL, CHAT_TAG_NONE, GetObjectGuid(), GetName(),
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_MONSTER_SAY, text, Language(language), CHAT_TAG_NONE, GetObjectGuid(), GetName(),
                                  target ? target->GetObjectGuid() : ObjectGuid(), target ? target->GetName() : "");
     SendMessageToSetInRange(data, sWorld.getConfig(CONFIG_FLOAT_LISTEN_RANGE_SAY), true);
 }
@@ -2043,6 +2043,14 @@ void WorldObject::SendMessageToSetExcept(WorldPacket const& data, Player const* 
     }
 }
 
+void WorldObject::SendMessageToAllWhoSeeMe(WorldPacket const& data, bool /*self*/) const
+{
+    if (IsInWorld())
+        for (ObjectGuid guid : m_clientGUIDsIAmAt)
+            if (Player* player = GetMap()->GetPlayer(guid))
+                player->GetSession()->SendPacket(data);
+}
+
 void WorldObject::SendObjectDeSpawnAnim(ObjectGuid guid) const
 {
     WorldPacket data(SMSG_GAMEOBJECT_DESPAWN_ANIM, 8);
@@ -2186,6 +2194,7 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
         }
     }
 
+    uint32 relayId = 0;
     if (settings.spawnDataEntry)
     {
         if (CreatureSpawnTemplate const* templateData = sObjectMgr.GetCreatureSpawnTemplate(settings.spawnDataEntry))
@@ -2206,6 +2215,7 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
                 creature->SetWalk(false);
             if (templateData->IsHovering())
                 creature->SetHover(true);
+            relayId = templateData->relayId;
         }
     }
 
@@ -2216,6 +2226,9 @@ Creature* WorldObject::SummonCreature(TempSpawnSettings settings, Map* map, uint
         creature->SetOwnerGuid(settings.ownerGuid);
 
     creature->Summon(settings.spawnType, settings.despawnTime);                  // Also initializes the AI and MMGen
+
+    if (relayId)
+        map->ScriptsStart(sRelayScripts, relayId, creature, settings.dbscriptTarget);
 
     if (settings.corpseDespawnTime)
         creature->SetCorpseDelay(settings.corpseDespawnTime);
@@ -2238,7 +2251,7 @@ Creature* WorldObject::SummonCreature(uint32 id, float x, float y, float z, floa
     return WorldObject::SummonCreature(TempSpawnSettings(this, id, x, y, z, ang, spwtype, despwtime, asActiveObject, setRun, pathId, faction, modelId, spawnCounting, forcedOnTop), GetMap(), GetPhaseMask());
 }
 
-GameObject* WorldObject::SpawnGameObject(uint32 dbGuid, Map* map, GenericTransport* transport)
+GameObject* WorldObject::SpawnGameObject(uint32 dbGuid, Map* map, uint32 forcedEntry, GenericTransport* transport)
 {
     GameObjectData const* data = sObjectMgr.GetGOData(dbGuid);
     if (!data)
@@ -2247,8 +2260,8 @@ GameObject* WorldObject::SpawnGameObject(uint32 dbGuid, Map* map, GenericTranspo
     if (data->spawnMask && !map->CanSpawn(TYPEID_GAMEOBJECT, dbGuid))
         return nullptr;
 
-    GameObject* gameobject = GameObject::CreateGameObject(data->id);
-    if (!gameobject->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT), transport))
+    GameObject* gameobject = GameObject::CreateGameObject(forcedEntry ? forcedEntry : data->id);
+    if (!gameobject->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT), forcedEntry, transport))
     {
         delete gameobject;
         return nullptr;
@@ -2256,7 +2269,7 @@ GameObject* WorldObject::SpawnGameObject(uint32 dbGuid, Map* map, GenericTranspo
     return gameobject;
 }
 
-Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map, GenericTransport* transport)
+Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map, uint32 forcedEntry, GenericTransport* transport)
 {
     CreatureData const* data = sObjectMgr.GetCreatureData(dbGuid);
     if (!data)
@@ -2265,10 +2278,12 @@ Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map, GenericTransport* 
         return nullptr;
     }
 
-    CreatureInfo const* cinfo = ObjectMgr::GetCreatureTemplate(data->id);
+    uint32 entry = forcedEntry ? forcedEntry : data->id;
+
+    CreatureInfo const* cinfo = ObjectMgr::GetCreatureTemplate(entry);
     if (!cinfo)
     {
-        sLog.outErrorDb("Creature (Entry: %u) not found in table `creature_template`, can't load. ", data->id);
+        sLog.outErrorDb("Creature (Entry: %u) not found in table `creature_template`, can't load. ", entry);
         return nullptr;
     }
 
@@ -2277,7 +2292,7 @@ Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map, GenericTransport* 
 
     Creature* creature = new Creature;
     // DEBUG_LOG("Spawning creature %u",*itr);
-    if (!creature->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(cinfo->GetHighGuid()), transport))
+    if (!creature->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(cinfo->GetHighGuid()), forcedEntry, transport))
     {
         delete creature;
         return nullptr;

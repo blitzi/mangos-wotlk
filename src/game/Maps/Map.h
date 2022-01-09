@@ -38,6 +38,7 @@
 #include "Globals/GraveyardManager.h"
 #include "Maps/SpawnManager.h"
 #include "Maps/MapDataContainer.h"
+#include "World/WorldStateVariableManager.h"
 
 #include <bitset>
 #include <functional>
@@ -217,6 +218,9 @@ class Map : public GridRefManager<NGridType>
         uint32 GetMaxPlayers() const;                       // dependent from map difficulty
         uint32 GetMaxResetDelay() const;                    // dependent from map difficulty
         MapDifficultyEntry const* GetMapDifficulty() const; // dependent from map difficulty
+        void ChangeMapDifficulty(Difficulty difficulty);
+        void SetNewDifficultyCooldown(TimePoint const& newCooldown);
+        TimePoint const& GetNewDifficultyCooldown() const { return m_dynamicDifficultyCooldown; }
 
         MapEntry const* GetEntry() const { return i_mapEntry; }
         bool Instanceable() const { return i_mapEntry && i_mapEntry->Instanceable(); }
@@ -389,6 +393,8 @@ class Map : public GridRefManager<NGridType>
 
         MapDataContainer& GetMapDataContainer() { return m_dataContainer; }
         MapDataContainer const& GetMapDataContainer() const { return m_dataContainer; }
+        WorldStateVariableManager& GetVariableManager() { return m_variableManager; }
+        WorldStateVariableManager const& GetVariableManager() const { return m_variableManager; }
 
         // debug
         std::set<ObjectGuid> m_objRemoveList; // this will eventually eat up too much memory - only used for debugging VisibleNotifier::Notify() customlog leak
@@ -511,8 +517,12 @@ class Map : public GridRefManager<NGridType>
         MapDataContainer m_dataContainer;
         std::shared_ptr<CreatureSpellListContainer> m_spellListContainer;
 
+        WorldStateVariableManager m_variableManager;
+
         ZoneDynamicInfoMap m_zoneDynamicInfo;
         uint32 i_defaultLight;
+
+        TimePoint m_dynamicDifficultyCooldown;
 };
 
 class WorldMap : public Map

@@ -146,13 +146,12 @@ private:
     dtPolyRef getPolyByLocation(const float* point, float* distance) const;
     bool HaveTile(const Vector3& p) const;
 
+    NavTerrainFlag getNavTerrain(float x, float y, float z) const;
+    void createFilter();
+    void updateFilter();
     void BuildPolyPath(const Vector3& startPos, const Vector3& endPos);
     void BuildPointPath(const float* startPoint, const float* endPoint);
     void BuildShortcut();
-
-    NavTerrain getNavTerrain(float x, float y, float z) const;
-    void createFilter();
-    void updateFilter();
 
     // smooth path aux functions
     uint32 fixupCorridor(dtPolyRef* path, uint32 npath, uint32 maxPath,

@@ -1078,7 +1078,7 @@ struct FactionTemplateEntry
                 return false;
         return enemyGroupMask == 0 && friendGroupMask == 0;
     }
-    bool IsContestedGuardFaction() const { return (factionFlags & FACTION_TEMPLATE_FLAG_CONTESTED_GUARD) != 0; }
+    bool IsContestedGuardFaction() const { return (factionFlags & FACTION_TEMPLATE_FLAG_ATTACK_PVP_ACTIVE_PLAYERS) != 0; }
 };
 
 struct GameObjectDisplayInfoEntry
@@ -1361,62 +1361,29 @@ struct ItemSetEntry
 
 struct LFGDungeonEntry
 {
-    uint32  ID;                                             // 0     m_ID
-    char*   name[16];                                       // 1-17  m_name_lang
-    uint32  minlevel;                                       // 18    m_minLevel
-    uint32  maxlevel;                                       // 19    m_maxLevel
-    uint32  reclevel;                                       // 20    m_target_level
-    uint32  recminlevel;                                    // 21    m_target_level_min
-    uint32  recmaxlevel;                                    // 22    m_target_level_max
-    uint32  map;                                            // 23    m_mapID
-    uint32  difficulty;                                     // 24    m_difficulty
-    uint32  flags;                                          // 25    m_flags
-    uint32  type;                                           // 26    m_typeID
-    uint32  faction;                                        // 27    m_faction
-    //char*   unk3;                                         // 28    m_textureFilename
-    uint32  expansion;                                      // 29    m_expansionLevel
-    uint32  index;                                          // 30    m_order_index
-    uint32  grouptype;                                      // 31    m_group_id
-    //char*   desc[16];                                     // 32-47 m_description_lang
-    //uint32 unk5                                           // 48 language flags?
-    // Helpers
-    uint32 Entry() const { return ID + (type << 24); }
-};
+    uint32 ID;                                              // 0
+    char const* Name[16];                                   // 1-16
+    //uint32 Name_lang_mask;                                // 17
+    uint32 MinLevel;                                        // 18
+    uint32 MaxLevel;                                        // 19
+    uint32 TargetLevel;                                     // 20
+    uint32 TargetLevelMin;                                  // 21
+    uint32 TargetLevelMax;                                  // 22
+    int32 MapID;                                            // 23
+    uint32 Difficulty;                                      // 24
+    uint32 Flags;                                           // 25
+    uint32 TypeID;                                          // 26
+    //int32 Faction;                                        // 27
+    //char const* TextureFilename;                          // 28
+    uint32 ExpansionLevel;                                  // 29
+    //uint32 OrderIndex;                                    // 30
+    uint32 GroupID;                                         // 31
+    //char const* Description[16];                          // 32-47
+    //uint32 Description_lang_mask;                         // 48
 
-struct LFGDungeonExpansionEntry
-{
-    uint32  ID;                                             // 0    m_ID
-    uint32  dungeonID;                                      // 1    m_lfg_id
-    uint32  expansion;                                      // 2    m_expansion_level
-    uint32  randomEntry;                                    // 3    m_random_id, inside of which is used this record
-    uint32  minlevelHard;                                   // 4    m_hard_level_min
-    uint32  maxlevelHard;                                   // 5    m_hard_level_max
-    uint32  minlevel;                                       // 6    m_target_level_min
-    uint32  maxlevel;                                       // 7    m_target_level_max
     // Helpers
-    bool IsRandom() const { return randomEntry == 0; }
+    uint32 Entry() const { return ID + (TypeID << 24); }
 };
-
-/*struct LfgDungeonsEntry
-{
-    m_ID
-    m_name_lang
-    m_minLevel
-    m_maxLevel
-    m_target_level
-    m_target_level_min
-    m_target_level_max
-    m_mapID
-    m_difficulty
-    m_flags
-    m_typeID
-    m_faction
-    m_textureFilename
-    m_expansionLevel
-    m_order_index
-    m_group_id
-    m_description_lang
-};*/
 
 /*struct LfgDungeonGroupEntry
 {
@@ -1545,10 +1512,10 @@ struct MapEntry
 
 struct MapDifficultyEntry
 {
-    // uint32      Id;                                      // 0        m_ID
+    uint32      Id;                                         // 0        m_ID
     uint32      MapId;                                      // 1        m_mapID
     uint32      Difficulty;                                 // 2        m_difficulty (for arenas: arena slot)
-    // char*       areaTriggerText[16];                     // 3-18     m_message_lang (text showed when transfer to map failed)
+    char*       areaTriggerText[16];                        // 3-18     m_message_lang (text showed when transfer to map failed)
     // uint32      textFlags;                               // 19
     uint32      resetTime;                                  // 20       m_raidDuration in secs, 0 if no fixed reset time
     uint32      maxPlayers;                                 // 21       m_maxPlayers some heroic versions have 0 when expected same amount as in normal version
@@ -1587,7 +1554,7 @@ struct PvPDifficultyEntry
     uint32      mapId;                                      // 1        m_mapID
     uint32      bracketId;                                  // 2        m_rangeIndex
     uint32      minLevel;                                   // 3        m_minLevel
-    uint32      maxLevel;                                   // 4        m_maxLevel
+    uint32      maxLevel;                                   // 4        maxLevel
     uint32      difficulty;                                 // 5        m_difficulty
 
     // helpers
@@ -1883,7 +1850,7 @@ struct SpellEntry
         uint32    procFlags;                                // 34       m_procTypeMask
         uint32    procChance;                               // 35       m_procChance
         uint32    procCharges;                              // 36       m_procCharges
-        uint32    maxLevel;                                 // 37       m_maxLevel
+        uint32    maxLevel;                                 // 37       maxLevel
         uint32    baseLevel;                                // 38       m_baseLevel
         uint32    spellLevel;                               // 39       m_spellLevel
         uint32    DurationIndex;                            // 40       m_durationIndex

@@ -180,7 +180,7 @@ void PathFinder::setArea(uint32 mapId, float x, float y, float z, uint32 area, f
 
 
     includeFlags |= (NAV_GROUND | NAV_WATER);
-    excludeFlags |= (NAV_MAGMA | NAV_SLIME | NAV_SLOPE);
+    excludeFlags |= NAV_MAGMA_SLIME;
 
 
     m_filter.setIncludeFlags(includeFlags);
@@ -912,7 +912,7 @@ void PathFinder::createFilter()
         if (!m_sourceUnit || ((Player*)m_sourceUnit)->GetPlayerbotAI()) //Blank or bot-navigation
         {
             includeFlags |= (NAV_GROUND | NAV_WATER);
-            excludeFlags |= (NAV_MAGMA | NAV_SLIME | NAV_SLOPE);
+            excludeFlags |= NAV_MAGMA_SLIME;
 
             m_filter.setAreaCost(8, 20.0f);  //Water
             m_filter.setAreaCost(11, 5.0f);  //Mob proximity
@@ -920,8 +920,8 @@ void PathFinder::createFilter()
         }
         else
         {
-            includeFlags |= (NAV_GROUND | NAV_WATER | NAV_SLOPE);
-            excludeFlags |= (NAV_MAGMA | NAV_SLIME);
+            includeFlags |= (NAV_GROUND | NAV_WATER);
+            excludeFlags |= NAV_MAGMA_SLIME;
         }
     }
     else if (m_sourceUnit->GetTypeId() == TYPEID_UNIT)
@@ -932,7 +932,7 @@ void PathFinder::createFilter()
 
         // creatures don't take environmental damage
         if (creature->CanSwim())
-            includeFlags |= (NAV_WATER | NAV_MAGMA | NAV_SLIME);           // swim
+            includeFlags |= (NAV_WATER | NAV_MAGMA_SLIME);           // swim
     }
 
     m_filter.setIncludeFlags(includeFlags);
@@ -956,7 +956,7 @@ void PathFinder::updateFilter()
     }
 }
 
-NavTerrain PathFinder::getNavTerrain(float x, float y, float z) const
+NavTerrainFlag PathFinder::getNavTerrain(float x, float y, float z) const
 {
     GridMapLiquidData data;
     if (m_sourceUnit && m_sourceUnit->GetTerrain()->getLiquidStatus(x, y, z, MAP_ALL_LIQUIDS, &data) == LIQUID_MAP_NO_WATER)
@@ -964,15 +964,14 @@ NavTerrain PathFinder::getNavTerrain(float x, float y, float z) const
 
     switch (data.type_flags)
     {
-    case MAP_LIQUID_TYPE_WATER:
-    case MAP_LIQUID_TYPE_OCEAN:
-        return NAV_WATER;
-    case MAP_LIQUID_TYPE_MAGMA:
-        return NAV_MAGMA;
-    case MAP_LIQUID_TYPE_SLIME:
-        return NAV_SLIME;
-    default:
-        return NAV_GROUND;
+        case MAP_LIQUID_TYPE_WATER:
+        case MAP_LIQUID_TYPE_OCEAN:
+            return NAV_WATER;
+        case MAP_LIQUID_TYPE_MAGMA:
+        case MAP_LIQUID_TYPE_SLIME:
+            return NAV_MAGMA_SLIME;
+        default:
+            return NAV_GROUND;
     }
 }
 

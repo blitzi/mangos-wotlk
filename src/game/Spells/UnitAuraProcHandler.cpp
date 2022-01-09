@@ -790,7 +790,7 @@ SpellAuraProcResult Unit::TriggerProccedSpell(Unit* target, std::array<int32, MA
 SpellAuraProcResult Unit::TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, SpellEntry const* spellInfo, Item* castItem, Aura* triggeredByAura, uint32 cooldown)
 {
     // default case
-    if (!target || (target != this && !target->IsAlive()))
+    if (target && (target != this && !target->IsAlive()))
         return SPELL_AURA_PROC_FAILED;
 
     if (!IsSpellReady(*spellInfo))
@@ -1723,17 +1723,6 @@ SpellAuraProcResult Unit::HandleDummyAuraProc(ProcExecutionData& data)
                 case 39437:
                 {
                     triggered_spell_id = 37378;
-                    break;
-                }
-                // Siphon Life
-                case 63108:
-                {
-                    // Glyph of Siphon Life
-                    if (Aura* aur = GetAura(56216, EFFECT_INDEX_0))
-                        triggerAmount += triggerAmount * aur->GetModifier()->m_amount / 100;
-
-                    basepoints[0] = int32(damage * triggerAmount / 100);
-                    triggered_spell_id = 63106;
                     break;
                 }
             }

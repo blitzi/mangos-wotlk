@@ -131,7 +131,8 @@ enum ScriptCommand                                          // resSource, resTar
     // datalong=UnitFlags
     // datalong2:0x00=add, 0x01=remove, 0x02=toggle
     SCRIPT_COMMAND_SET_DATA_64              = 49,           // datalong = set data param 1, datalong2 = set data param 2
-    SCRIPT_COMMAND_ZONE_PULSE               = 50,           // 
+    SCRIPT_COMMAND_ZONE_PULSE               = 50,           //
+    SCRIPT_COMMAND_SPAWN_GROUP              = 51,           // dalalong = command
 };
 
 #define MAX_TEXT_ID 4                                       // used for SCRIPT_COMMAND_TALK, SCRIPT_COMMAND_EMOTE, SCRIPT_COMMAND_CAST_SPELL, SCRIPT_COMMAND_TERMINATE_SCRIPT
@@ -147,10 +148,11 @@ enum ScriptInfoDataFlags
     SCRIPT_FLAG_BUDDY_IS_PET                = 0x020,        // buddy is a pet
     SCRIPT_FLAG_BUDDY_IS_DESPAWNED          = 0x040,        // buddy is dead or despawned
     SCRIPT_FLAG_BUDDY_BY_POOL               = 0x080,        // buddy should be part of a pool
-    SCRIPT_FLAG_BUDDY_BY_SPAWN_GROUP        = 0x100,        // buddy is from spawn group - NYI - TODO:
+    SCRIPT_FLAG_BUDDY_BY_SPAWN_GROUP        = 0x100,        // buddy is from spawn group
     SCRIPT_FLAG_ALL_ELIGIBLE_BUDDIES        = 0x200,        // multisource/multitarget - will execute for each eligible
+    SCRIPT_FLAG_BUDDY_BY_GO                 = 0x400,        // take the buddy by GO (for commands which can target both creature and GO)
 };
-#define MAX_SCRIPT_FLAG_VALID               (2 * SCRIPT_FLAG_ALL_ELIGIBLE_BUDDIES - 1)
+#define MAX_SCRIPT_FLAG_VALID               (2 * SCRIPT_FLAG_BUDDY_BY_GO - 1)
 
 struct ScriptInfo
 {
@@ -372,6 +374,7 @@ struct ScriptInfo
         {
             uint32 eventType;                               // datalong
             uint32 radius;                                  // datalong2
+            uint32 value;                                   // datalong3
         } sendAIEvent;
 
         struct                                              // SCRIPT_COMMAND_SET_FACING (36)
@@ -444,6 +447,13 @@ struct ScriptInfo
             uint32 param2;                                  // datalong2
         } setData64;
 
+        struct                                              // SCRIPT_COMMAND_SPAWN_GROUP (51)
+        {
+            uint32 command;                                 // datalong
+            uint32 data1;                                   // datalong2
+            uint32 data2;                                   // datalong3
+        } formationData;
+
         struct                                              // SCRIPT_COMMAND_LOG_KILL (99)
         {
             uint32 empty1;                                  // datalong
@@ -490,8 +500,29 @@ struct ScriptInfo
         }
     }
 
+    bool IsCreatureAndGOBuddy() const
+    {
+        switch (command)
+        {
+            case SCRIPT_COMMAND_MOVE_DYNAMIC:
+            case SCRIPT_COMMAND_TERMINATE_SCRIPT:
+            case SCRIPT_COMMAND_SET_FACING:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     bool IsCreatureBuddy() const
     {
+        if (IsCreatureAndGOBuddy())
+        {
+            if (data_flags & SCRIPT_FLAG_BUDDY_BY_GO)
+                return false;
+
+            return true;
+        }
+
         switch (command)
         {
             case SCRIPT_COMMAND_RESPAWN_GAMEOBJECT:

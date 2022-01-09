@@ -31,6 +31,8 @@ class CreatureAI : public UnitAI
 
         virtual void Reset();
 
+        virtual void OnRemoveFromWorld() {}
+
         virtual void EnterCombat(Unit* enemy) override;
         virtual void AttackStart(Unit* who) override;
         virtual void DamageTaken(Unit* dealer, uint32& damage, DamageEffectType damageType, SpellEntry const* spellInfo) override;
@@ -56,6 +58,10 @@ class CreatureAI : public UnitAI
         void AddUnreachabilityCheck(); // use in constructor
 
         CreatureSpellList const& GetSpellList() const;
+
+        void TimedFleeingEnded() override;
+
+        void OnCallForHelp(Unit* caller, Unit* enemy) override;
     protected:
         Creature* m_creature;
         bool m_deathPrevention;

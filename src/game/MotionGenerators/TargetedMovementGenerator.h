@@ -139,6 +139,8 @@ class ChaseMovementGenerator : public TargetedMovementGeneratorMedium<Unit, Chas
 
         std::pair<std::string, std::string> GetPrintout() const;
 
+        void AddDelay();
+
     protected:
         float GetDynamicTargetDistance(Unit& owner, bool forRangeCheck) const override;
         void HandleTargetedMovement(Unit& owner, const uint32& time_diff) override;
@@ -153,7 +155,9 @@ class ChaseMovementGenerator : public TargetedMovementGeneratorMedium<Unit, Chas
         virtual bool _getLocation(Unit& owner, float& x, float& y, float& z) const;
         virtual void _setLocation(Unit& owner);
 
-        bool DispatchSplineToPosition(Unit& owner, float x, float y, float z, bool walk, bool cutPath, bool target = false);
+        bool IsReachablePositionToTarget(Unit& owner, float x, float y, float z, Unit& target);
+
+        bool DispatchSplineToPosition(Unit& owner, float x, float y, float z, bool walk, bool cutPath, bool target = false, bool checkReachable = false);
         void CutPath(Unit& owner, PointsArray& path);
         void Backpedal(Unit& owner);
 
@@ -218,7 +222,7 @@ class FollowMovementGenerator : public TargetedMovementGeneratorMedium<Unit, Fol
 
         virtual bool Move(Unit& owner, float x, float y, float z);
 
-    private:
+    protected:
         virtual bool _getOrientation(Unit& owner, float& o) const;
         virtual bool _getLocation(Unit& owner, float& x, float& y, float& z, bool movingNow) const;
         virtual void _setOrientation(Unit& owner);
@@ -235,6 +239,35 @@ class FollowMovementGenerator : public TargetedMovementGeneratorMedium<Unit, Fol
 
         bool m_targetMoving;
         bool m_targetFaced;
+};
+
+// to be able to compute new path before the end of the current path (in milliseconds)
+#define FORMATION_FOLLOWERS_CHECK_OVERRIDE 400
+
+class FormationMovementGenerator : public FollowMovementGenerator
+{
+    public:
+        FormationMovementGenerator(FormationSlotDataSPtr& sData, bool main) :
+            FollowMovementGenerator(*sData->GetMaster(), sData->GetDistance(), sData->GetDistance(), main, false, false),
+            m_slot(sData), m_headingToMaster(false)
+        {
+        }
+        ~FormationMovementGenerator();
+
+        MovementGeneratorType GetMovementGeneratorType() const override { return FORMATION_MOTION_TYPE; }
+
+        virtual bool Update(Unit&, const uint32&) override;
+
+    protected:
+        void HandleTargetedMovement(Unit& owner, const uint32& time_diff) override;
+        void HandleFinalizedMovement(Unit& owner) override;
+
+    private:
+        virtual void _setLocation(Unit& owner, bool catchup) override;
+        float BuildPath(Unit& owner, PointsArray& path);
+        bool HandleMasterDistanceCheck(Unit& owner, const uint32& time_diff);
+        FormationSlotDataSPtr m_slot;
+        bool m_headingToMaster;
 };
 
 #endif

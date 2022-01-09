@@ -33,6 +33,7 @@ float GetFloatValueFromArray(Tokens const& data, uint16 index);
 
 void stripLineInvisibleChars(std::string& str);
 
+time_t GetLocalHourTimestamp(time_t time, uint8 hour, bool onlyAfterTime = true);
 std::string secsToTimeString(time_t timeInSecs, bool shortText = false, bool hoursOnly = false);
 uint32 TimeStringToSecs(const std::string& timestring);
 std::string TimeToTimestampStr(time_t t);
@@ -128,6 +129,13 @@ struct Die
     }
     uint32 chance[Sides];
 };
+
+template<typename T, typename... Args>
+T PickRandomValue(T first, Args ...rest)
+{
+    T array[sizeof...(rest) + 1] = { first, rest... };
+    return array[urand(0, (sizeof...(rest)))];
+}
 
 inline void ApplyModUInt32Var(uint32& var, int32 val, bool apply)
 {

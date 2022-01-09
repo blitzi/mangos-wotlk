@@ -333,6 +333,7 @@ class ChatHandler
         bool HandleDebugRespawnDynguid(char* args);
 
         bool HandleDebugPacketLog(char* args);
+        bool HandleDebugDbscript(char* args);
 
         bool HandleSD2HelpCommand(char* args);
         bool HandleSD2ScriptCommand(char* args);
@@ -505,6 +506,12 @@ class ChatHandler
         bool HandleNpcYellCommand(char* args);
         bool HandleNpcTempSpawn(char* args);
         bool HandleNpcEvade(char* args);
+        bool HandleNpcGroupInfoCommand(char* args);
+        //bool HandleNpcGroupBehaviorShowCommand(char* args);
+        //bool HandleNpcGroupBehaviorSetCommand(char* args);
+        bool HandleNpcFormationInfoCommand(char* args);
+        bool HandleNpcFormationResetCommand(char* args);
+        bool HandleNpcFormationSwitchCommand(char* args);
 
         // TODO: NpcCommands that needs to be fixed :
         bool HandleNpcAddWeaponCommand(char* args);
@@ -629,6 +636,7 @@ class ChatHandler
         bool HandleReloadExpectedSpamRecords(char* args);
         bool HandleReloadCreatureCooldownsCommand(char* args);
         bool HandleReloadCreatureSpellLists(char* args);
+        bool HandleReloadSpawnGroupsCommand(char* args);
 
         bool HandleResetAchievementsCommand(char* args);
         bool HandleResetAllCommand(char* args);
@@ -809,9 +817,14 @@ class ChatHandler
         bool HandleLinkCheckCommand(char* args);
 
         // worldstate
+        bool HandleVariablePrint(char* args);
         bool HandleWarEffortCommand(char* args);
         bool HandleWarEffortPhaseCommand(char* args);
         bool HandleWarEffortCounterCommand(char* args);
+        bool HandleScourgeInvasionCommand(char* args);
+        bool HandleScourgeInvasionStateCommand(char* args);
+        bool HandleScourgeInvasionBattlesWonCommand(char* args);
+        bool HandleScourgeInvasionStartZone(char* args);
         bool HandleSunsReachReclamationPhaseCommand(char* args);
         bool HandleSunsReachReclamationSubPhaseCommand(char* args);
         bool HandleSunsReachReclamationCounterCommand(char* args);

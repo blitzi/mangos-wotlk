@@ -2171,28 +2171,37 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, bool targ
             // nor try to find ground level, but randomly vary in angle
             float min_dis = GetSpellMinRange(sSpellRangeStore.LookupEntry(m_spellInfo->rangeIndex));
             float max_dis = GetSpellMaxRange(sSpellRangeStore.LookupEntry(m_spellInfo->rangeIndex));
-            float dis = rand_norm_f() * (max_dis - min_dis) + min_dis;
-            // calculate angle variation for roughly equal dimensions of target area
-            float max_angle = (max_dis - min_dis) / (max_dis + m_caster->GetObjectBoundingRadius());
-            float angle_offset = max_angle * (rand_norm_f() - 0.5f);
-            m_caster->GetNearPoint2d(x, y, dis + m_caster->GetObjectBoundingRadius(), m_caster->GetOrientation() + angle_offset);
-
-            GridMapLiquidData liqData;
-            if (!m_caster->GetTerrain()->IsInWater(x, y, m_caster->GetTerrain()->GetWaterLevel(x, y, m_caster->GetPositionZ()) - 1.0f, &liqData))
+            SpellCastResult result = SPELL_CAST_OK;
+            for (uint32 i = 0; i < 10; ++i)
             {
-                SendCastResult(SPELL_FAILED_NOT_FISHABLE);
+                float dis = rand_norm_f() * (max_dis - min_dis) + min_dis;
+                // calculate angle variation for roughly equal dimensions of target area
+                float max_angle = (max_dis - min_dis) / (max_dis + m_caster->GetObjectBoundingRadius());
+                float angle_offset = max_angle * (rand_norm_f() - 0.5f);
+                m_caster->GetNearPoint2d(x, y, dis + m_caster->GetObjectBoundingRadius(), m_caster->GetOrientation() + angle_offset);
+
+                GridMapLiquidData liqData;
+                if (!m_caster->GetTerrain()->IsInWater(x, y, m_caster->GetTerrain()->GetWaterLevel(x, y, m_caster->GetPositionZ()) - 1.0f, &liqData))
+                {
+                    result = SPELL_FAILED_NOT_FISHABLE;
+                    continue;
+                }
+
+                z = liqData.level;
+                // finally, check LoS
+                if (!m_caster->IsWithinLOS(x, y, z + 1.f))
+                {
+                    result = SPELL_FAILED_LINE_OF_SIGHT;
+                    continue;
+                }
+            }
+            if (result != SPELL_CAST_OK)
+            {
+                SendCastResult(result);
                 finish(false);
                 return;
             }
 
-            z = liqData.level;
-            // finally, check LoS
-            if (!m_caster->IsWithinLOS(x, y, z + 1.f, false, true))
-            {
-                SendCastResult(SPELL_FAILED_LINE_OF_SIGHT);
-                finish(false);
-                return;
-            }
             m_targets.setDestination(x, y, z);
             break;
         }
@@ -4708,6 +4717,8 @@ void Spell::SendChannelStart(uint32 duration)
                     diminishLevel = itr->diminishLevel;
                 }
                 target = ObjectAccessor::GetUnit(*m_caster, itr->targetGUID);
+                if (m_spellInfo->EffectRadiusIndex[EFFECT_INDEX_0] != 0 && m_spellInfo->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MOD_POSSESS)
+                    m_maxRange = GetSpellRadius(sSpellRadiusStore.LookupEntry(m_spellInfo->EffectRadiusIndex[EFFECT_INDEX_0]));
                 break;
             }
         }
@@ -5482,7 +5493,7 @@ SpellCastResult Spell::CheckCast(bool strict)
                     }
                 }
 
-                if (!IsIgnoreLosSpellCast(m_spellInfo) && !m_IsTriggeredSpell && VMAP::VMapFactory::checkSpellForLoS(m_spellInfo->Id) && !m_trueCaster->IsWithinLOSInMap(target, true))
+                if (!IsIgnoreLosSpellCast(m_spellInfo) && !m_IsTriggeredSpell && !m_trueCaster->IsWithinLOSInMap(target, true))
                     return SPELL_FAILED_LINE_OF_SIGHT;
 
                 if (m_trueCaster->IsPlayer())
@@ -6279,6 +6290,10 @@ SpellCastResult Spell::CheckCast(bool strict)
                             return SPELL_FAILED_ALREADY_HAVE_CHARM;
                     }
                 }
+
+                if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_DISMISS_PET))
+                    if (m_caster->FindGuardianWithEntry(m_spellInfo->EffectMiscValue[i]))
+                        return SPELL_FAILED_ALREADY_HAVE_SUMMON;
 
                 break;
             }
@@ -9114,13 +9129,6 @@ SpellCastResult Spell::OnCheckCast(bool strict)
             uint32 itemType = GetUsableHealthStoneItemType(m_caster);
             if (itemType && m_caster->IsPlayer() && ((Player*)m_caster)->GetItemCount(itemType) > 0)
                 return SPELL_FAILED_TOO_MANY_OF_ITEM;
-            break;
-        }
-        case 4131: // Banish Cresting Exile
-        {
-            if (ObjectGuid target = m_targets.getUnitTargetGuid()) // can be cast only on this target
-                if (target.GetEntry() != 2761)
-                    return SPELL_FAILED_BAD_TARGETS;
             break;
         }
         case 7914: // Capture Spirit

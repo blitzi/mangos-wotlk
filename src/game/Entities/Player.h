@@ -41,6 +41,7 @@
 #include "Server/SQLStorages.h"
 #include "Loot/LootMgr.h"
 #include "Cinematics/CinematicMgr.h"
+#include "LFG/LFG.h"
 
 #include <functional>
 #include <vector>
@@ -396,14 +397,6 @@ struct EnchantDuration
 
 typedef std::list<EnchantDuration> EnchantDurationList;
 typedef std::list<Item*> ItemDurationList;
-
-enum LfgRoles
-{
-    LEADER                      = 0x01,
-    TANK                        = 0x02,
-    HEALER                      = 0x04,
-    DAMAGE                      = 0x08
-};
 
 enum RaidGroupError
 {
@@ -887,6 +880,14 @@ enum ReputationSource
 #define MAX_PLAYER_SUMMON_DELAY (2*MINUTE)
 #define MAX_MONEY_AMOUNT        (0x7FFFFFFF-1)
 
+enum BindExtensionState
+{
+    EXTEND_STATE_EXPIRED  =   0,
+    EXTEND_STATE_NORMAL   =   1,
+    EXTEND_STATE_EXTENDED =   2,
+    EXTEND_STATE_KEEP     = 255   // special state: keep current save type
+};
+
 struct InstancePlayerBind
 {
     DungeonPersistentState* state;
@@ -894,7 +895,12 @@ struct InstancePlayerBind
     /* permanent PlayerInstanceBinds are created in Raid/Heroic instances for players
        that aren't already permanently bound when they are inside when a boss is killed
        or when they enter an instance that the group leader is permanently bound to. */
-    InstancePlayerBind() : state(nullptr), perm(false) {}
+    /* extend state listing:
+    EXPIRED  - doesn't affect anything unless manually re-extended by player
+    NORMAL   - standard state
+    EXTENDED - won't be promoted to EXPIRED at next reset period, will instead be promoted to NORMAL */
+    BindExtensionState extendState;
+    InstancePlayerBind() : state(nullptr), perm(false), extendState(EXTEND_STATE_NORMAL) {}
 };
 
 enum ReferAFriendError
@@ -920,6 +926,20 @@ enum PlayerRestState
     REST_STATE_RESTED           = 0x01,
     REST_STATE_NORMAL           = 0x02,
     REST_STATE_RAF_LINKED       = 0x04                      // Exact use unknown
+};
+
+enum SetPlayerDifficultyResult
+{
+    RESULT_SET_DIFFICULTY           = 0, // payload bool isHeroic
+    RESULT_COOLDOWN                 = 1, // payload time
+    RESULT_WORLDSTATE               = 2, // failed state - maybe instance state like gunship moving?
+    RESULT_ENCOUNTER_IN_PROGRESS    = 3,
+    RESULT_PLAYER_IN_COMBAT         = 4,
+    RESULT_PLAYER_BUSY              = 5, // unk what it could be
+    RESULT_START                    = 6, // starts loading screen
+    RESULT_ALREADY_IN_PROGRESS      = 7, // we do it in place, originally its likely delayed to map update
+    RESULT_FAILED_CONDITION         = 8, // likely missing areatrigger transition condition
+    RESULT_COMPLETE                 = 9, // finishes and sticks changes on client
 };
 
 class PlayerTaxi
@@ -1312,7 +1332,7 @@ class Player : public Unit
         void ApplyEquipCooldown(Item* pItem);
         void SetAmmo(uint32 item);
         void RemoveAmmo();
-        float GetAmmoDPS() const { return m_ammoDPS; }
+        std::pair<float, float> GetAmmoDPS() const { return { m_ammoDPSMin, m_ammoDPSMax}; }
         bool CheckAmmoCompatibility(const ItemPrototype* ammo_proto) const;
         void QuickEquipItem(uint16 pos, Item* pItem);
         void VisualizeItem(uint8 slot, Item* pItem);
@@ -1832,7 +1852,7 @@ class Player : public Unit
         uint32 GetArenaTeamIdInvited() const { return m_ArenaTeamIdInvited; }
         static void LeaveAllArenaTeams(ObjectGuid guid);
 
-        Difficulty GetDifficulty(bool isRaid) const { return isRaid ? m_raidDifficulty : m_dungeonDifficulty; }
+        Difficulty GetDifficulty(bool isRaid) const;
         Difficulty GetDungeonDifficulty() const { return m_dungeonDifficulty; }
         Difficulty GetRaidDifficulty() const { return m_raidDifficulty; }
         void SetDungeonDifficulty(Difficulty dungeon_difficulty) { m_dungeonDifficulty = dungeon_difficulty; }
@@ -1926,7 +1946,7 @@ class Player : public Unit
         void SendExplorationExperience(uint32 Area, uint32 Experience) const;
 
         void SendDungeonDifficulty(bool IsInGroup) const;
-        void SendRaidDifficulty(bool IsInGroup) const;
+        void SendRaidDifficulty(bool IsInGroup, uint32 difficulty) const;
         void ResetInstances(InstanceResetMethod method, bool isRaid);
         void SendResetInstanceSuccess(uint32 MapId) const;
         void SendResetInstanceFailed(uint32 reason, uint32 MapId) const;
@@ -1939,6 +1959,7 @@ class Player : public Unit
         void SendMessageToSetInRange(WorldPacket const& data, float dist, bool self) const override;
         // overwrite Object::SendMessageToSetInRange
         void SendMessageToSetInRange(WorldPacket const& data, float dist, bool self, bool own_team_only) const;
+        void SendMessageToAllWhoSeeMe(WorldPacket const& data, bool self) const override;
 
         Corpse* GetCorpse() const;
         void SpawnCorpseBones();
@@ -2389,11 +2410,14 @@ class Player : public Unit
         bool m_InstanceValid;
         // permanent binds and solo binds by difficulty
         BoundInstancesMap m_boundInstances[MAX_DIFFICULTY];
-        InstancePlayerBind* GetBoundInstance(uint32 mapid, Difficulty difficulty);
+        InstancePlayerBind* GetBoundInstance(uint32 mapid, Difficulty difficulty, bool withExpired = false);
         BoundInstancesMap& GetBoundInstances(Difficulty difficulty) { return m_boundInstances[difficulty]; }
         void UnbindInstance(uint32 mapid, Difficulty difficulty, bool unload = false);
         void UnbindInstance(BoundInstancesMap::iterator& itr, Difficulty difficulty, bool unload = false);
-        InstancePlayerBind* BindToInstance(DungeonPersistentState* state, bool permanent, bool load = false);
+        InstancePlayerBind* BindToInstance(DungeonPersistentState* state, bool permanent, BindExtensionState extendState = EXTEND_STATE_NORMAL, bool load = false);
+        void BindToInstance();
+        void SetPendingBind(uint32 mapId, uint32 instanceId, uint32 bindTimer);
+        bool HasPendingBind() const { return m_pendingBindId > 0; }
         void SendRaidInfo();
         void SendSavedInstances();
         static void ConvertInstancesToGroup(Player* player, Group* group = nullptr, ObjectGuid player_guid = ObjectGuid());
@@ -2543,6 +2567,10 @@ class Player : public Unit
 
         Spell* GetSpellModSpell() { return m_modsSpell; }
         void SetSpellModSpell(Spell* spell);
+
+        float GetAverageItemLevel() const;
+
+        LfgData& GetLfgData() { return m_lfgData; }
     protected:
         /*********************************************************/
         /***               BATTLEGROUND SYSTEM                 ***/
@@ -2742,7 +2770,8 @@ class Player : public Unit
         uint32 m_ArmorProficiency;
         bool m_canTitanGrip;
         uint8 m_swingErrorMsg;
-        float m_ammoDPS;
+        float m_ammoDPSMin;
+        float m_ammoDPSMax;
 
         //////////////////// Rest System/////////////////////
         time_t time_inn_enter;
@@ -2896,6 +2925,12 @@ class Player : public Unit
 
         std::unordered_map<uint32, TimePoint> m_enteredInstances;
         uint32 m_createdInstanceClearTimer;
+
+        uint32 m_pendingBindMapId;
+        uint32 m_pendingBindId;
+        uint32 m_pendingBindTimer;
+
+        LfgData m_lfgData;
 };
 
 void AddItemsSetItem(Player* player, Item* item);

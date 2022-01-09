@@ -801,15 +801,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     return;
                 }
-                case 4131:                                  // Banish Cresting Exile
-                {
-                    if (!unitTarget)
-                        return;
-
-                    DoScriptText(-1010004, unitTarget, m_caster);
-                    unitTarget->CastSpell(nullptr, 3617, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
                 case 7671:                                  // Transformation (human<->worgen)
                 {
                     if (unitTarget) // Transform Visual
@@ -3935,7 +3926,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 {
                     // Blink
                     if (unitTarget)
-                        m_caster->CastSpell(unitTarget, 38203, TRIGGERED_OLD_TRIGGERED);
+                        unitTarget->CastSpell(m_caster, 38203, TRIGGERED_OLD_TRIGGERED);
 
                     return;
                 }

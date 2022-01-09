@@ -70,6 +70,7 @@
 #include "Cinematics/CinematicMgr.h"
 #include "Maps/TransportMgr.h"
 #include "Anticheat/Anticheat.hpp"
+#include "LFG/LFGMgr.h"
 
 #ifdef BUILD_AHBOT
  #include "AuctionHouseBot/AuctionHouseBot.h"
@@ -152,6 +153,8 @@ World::~World()
 
     VMAP::VMapFactory::clear();
     MMAP::MMapFactory::clear();
+
+    m_lfgQueueThread.join();
 }
 
 /// Cleanups before world stop
@@ -884,14 +887,12 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK, "vmap.enableIndoorCheck", true);
     bool enableLOS = sConfig.GetBoolDefault("vmap.enableLOS", false);
     bool enableHeight = sConfig.GetBoolDefault("vmap.enableHeight", false);
-    std::string ignoreSpellIds = sConfig.GetStringDefault("vmap.ignoreSpellIds");
 
     if (!enableHeight)
         sLog.outError("VMAP height use disabled! Creatures movements and other things will be in broken state.");
 
     VMAP::VMapFactory::createOrGetVMapManager()->setEnableLineOfSightCalc(enableLOS);
     VMAP::VMapFactory::createOrGetVMapManager()->setEnableHeightCalc(enableHeight);
-    VMAP::VMapFactory::preventSpellsFromBeingTestedForLoS(ignoreSpellIds.c_str());
     sLog.outString("WORLD: VMap support included. LineOfSight:%i, getHeight:%i, indoorCheck:%i",
                    enableLOS, enableHeight, getConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK) ? 1 : 0);
     sLog.outString("WORLD: VMap data directory is: %svmaps", m_dataPath.c_str());
@@ -1136,6 +1137,9 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading SpellsScriptTarget...");
     sSpellMgr.LoadSpellScriptTarget();                      // must be after LoadCreatureTemplates, LoadCreatures and LoadGameobjectInfo
 
+    sLog.outString("Loading Spawn Groups");                 // must be after creature and GO load
+    sObjectMgr.LoadSpawnGroups();
+
     sLog.outString("Generating SpellTargetMgr data...\n");
     SpellTargetMgr::Initialize(); // must be after LoadSpellScriptTarget
 
@@ -1213,6 +1217,12 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading AreaTrigger script names...");
     sScriptDevAIMgr.LoadAreaTriggerScripts();
 
+    sLog.outString("Loading LFG dungeons...");
+    sLFGMgr.LoadLFGDungeons();
+
+    sLog.outString("Loading LFG rewards...");
+    sLFGMgr.LoadRewards();
+
     sLog.outString("Loading event id script names...");
     sScriptDevAIMgr.LoadEventIdScripts();
 
@@ -1277,6 +1287,9 @@ void World::SetInitialWorldSettings()
     sAchievementMgr.LoadCompletedAchievements();
     sLog.outString(">>> Achievements loaded");
     sLog.outString();
+
+    sLog.outString("Loading access requirements...");
+    sObjectMgr.LoadAccessRequirements();                    // must be after achievements
 
     sLog.outString("Loading Instance encounters data...");  // must be after Creature loading
     sObjectMgr.LoadInstanceEncounters();
@@ -1420,6 +1433,7 @@ void World::SetInitialWorldSettings()
     // Update "uptime" table based on configuration entry in minutes.
     m_timers[WUPDATE_CORPSES].SetInterval(20 * MINUTE * IN_MILLISECONDS);
     m_timers[WUPDATE_DELETECHARS].SetInterval(DAY * IN_MILLISECONDS); // check for chars to delete every day
+    m_timers[WUPDATE_RAID_BROWSER].SetInterval(IN_MILLISECONDS);
 
 #ifdef BUILD_AHBOT
     // for AhBot
@@ -1701,9 +1715,6 @@ void World::Update(uint32 diff)
         Player::DeleteOldCharacters();
     }
 
-    // Check if any group can be created by dungeon finder
-    sLFGMgr.Update(diff);
-
     // execute callbacks from sql queries that were queued recently
     UpdateResultQueue();
 
@@ -1722,6 +1733,13 @@ void World::Update(uint32 diff)
         uint32 nextGameEvent = sGameEventMgr.Update();
         m_timers[WUPDATE_EVENTS].SetInterval(nextGameEvent);
         m_timers[WUPDATE_EVENTS].Reset();
+    }
+
+    //- Process Raid browser
+    if (m_timers[WUPDATE_RAID_BROWSER].Passed())
+    {
+        m_timers[WUPDATE_RAID_BROWSER].Reset();
+        GetRaidBrowser().Update(this);
     }
 
 #ifdef BUILD_METRICS
@@ -2091,6 +2109,21 @@ bool World::RemoveBanAccount(BanMode mode, const std::string& source, const std:
         WarnAccount(account, source, message, "UNBAN");
     }
     return true;
+}
+
+void World::StartLFGQueueThread()
+{
+    m_lfgQueueThread = std::thread([&]()
+    {
+        m_lfgQueue.Update();
+    });
+}
+
+void World::BroadcastToGroup(ObjectGuid groupGuid, std::vector<WorldPacket> const& packets)
+{
+    if (Group* group = sObjectMgr.GetGroupById(groupGuid.GetCounter()))
+        for (auto& packet : packets)
+            group->BroadcastPacket(packet, false);
 }
 
 /// Update the game time

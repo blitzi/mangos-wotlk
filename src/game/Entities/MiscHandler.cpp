@@ -33,6 +33,7 @@
 #include "Server/WorldSession.h"
 #include "Entities/UpdateData.h"
 #include "Chat/Chat.h"
+#include "Maps/InstanceData.h"
 #include "AI/ScriptDevAI/ScriptDevAIMgr.h"
 #include "Globals/ObjectAccessor.h"
 #include "Entities/Object.h"
@@ -1319,14 +1320,16 @@ void WorldSession::HandleSetRaidDifficultyOpcode(WorldPacket& recv_data)
         return;
     }
 
-    if (Difficulty(mode) == _player->GetRaidDifficulty())
+    Difficulty difficulty = Difficulty(mode);
+    if (difficulty == _player->GetDifficulty(true))
         return;
 
     // cannot reset while in an instance
     Map* map = _player->GetMap();
     if (map && map->IsDungeon())
     {
-        sLog.outError("WorldSession::HandleSetRaidDifficultyOpcode: player %d tried to reset the instance while inside!", _player->GetGUIDLow());
+        if (!map->GetEntry()->IsDynamicDifficultyMap()) // changing from inside is done in CMSG_CHANGEPLAYER_DIFFICULTY
+            sLog.outError("WorldSession::HandleSetRaidDifficultyOpcode: player %d tried to reset the instance while inside!", _player->GetGUIDLow());
         return;
     }
 
@@ -1334,21 +1337,117 @@ void WorldSession::HandleSetRaidDifficultyOpcode(WorldPacket& recv_data)
     if (_player->GetLevel() < LEVELREQUIREMENT_HEROIC && mode > REGULAR_DIFFICULTY)
         return;
 
-    if (Group* pGroup = _player->GetGroup())
+    if (Group* group = _player->GetGroup())
     {
-        if (pGroup->IsLeader(_player->GetObjectGuid()))
+        if (group->IsLeader(_player->GetObjectGuid()))
         {
             // the difficulty is set even if the instances can't be reset
             //_player->SendDungeonDifficulty(true);
-            pGroup->ResetInstances(INSTANCE_RESET_CHANGE_DIFFICULTY, true, _player);
-            pGroup->SetRaidDifficulty(Difficulty(mode));
+            group->ResetInstances(INSTANCE_RESET_CHANGE_DIFFICULTY, true, _player);
+            group->SetRaidDifficulty(difficulty);
         }
     }
     else
     {
         _player->ResetInstances(INSTANCE_RESET_CHANGE_DIFFICULTY, true);
-        _player->SetRaidDifficulty(Difficulty(mode));
+        _player->SetRaidDifficulty(difficulty);
     }
+}
+
+void WorldSession::HandleChangePlayerDifficulty(WorldPacket& recv_data)
+{
+    DEBUG_LOG("WORLD: Received opcode CMSG_CHANGEPLAYER_DIFFICULTY");
+
+    uint32 mode;
+    recv_data >> mode;
+
+    bool isHeroic = mode == 1;
+
+    Map* map = _player->GetMap();
+    if (!map->IsDungeon() || !map->GetEntry()->IsDynamicDifficultyMap())
+    {
+        // can only be used from inside a dynamic difficulty dungeon
+        return;
+    }
+
+    uint32 currentDifficulty = map->GetDifficulty();
+    if (isHeroic && (currentDifficulty & 2) != 0)
+        return;
+    else if (!isHeroic && (currentDifficulty & 2) == 0)
+        return;
+
+    Difficulty difficulty = Difficulty(isHeroic ? currentDifficulty + 2 : currentDifficulty - 2);
+
+    if (map->GetNewDifficultyCooldown() > map->GetCurrentClockTime())
+    {
+        auto diff = (map->GetNewDifficultyCooldown() - map->GetCurrentClockTime()).count() / 1000;
+        WorldPacket result(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
+        result << uint32(RESULT_COOLDOWN);
+        result << uint32(diff);
+        SendPacket(result);
+        return;
+    }
+
+    if (map->GetInstanceData()->IsEncounterInProgress())
+    {
+        WorldPacket result(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
+        result << uint32(RESULT_ENCOUNTER_IN_PROGRESS);
+        SendPacket(result);
+        return;
+    }
+
+    Group* group = _player->GetGroup();
+    if (!group) // only used while in raid group
+        return;
+
+    if (!group->IsLeader(_player->GetObjectGuid()))
+        return;
+
+    // everyone must be eligible to enter the other difficulty
+    if (AreaTrigger const* at = sObjectMgr.GetMapEntranceTrigger(map->GetId()))
+    {
+        uint32 miscRequirement;
+        for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            Player* player = itr->getSource();
+            if (player->IsInCombat())
+            {
+                WorldPacket result(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
+                result << uint32(RESULT_PLAYER_IN_COMBAT);
+                SendPacket(result);
+                return;
+            }
+
+            auto lockStatus = player->GetAreaTriggerLockStatus(at, difficulty, miscRequirement);
+            if (AREA_LOCKSTATUS_OK != lockStatus)
+            {
+                WorldPacket result(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
+                result << uint32(RESULT_FAILED_CONDITION);
+                result << uint32(miscRequirement);
+                SendPacket(result);
+                return;
+            }
+        }
+    }
+
+    WorldPacket result(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
+    result << uint32(RESULT_START);
+    result << uint32(300); // 5 minute cooldown for another change
+    group->BroadcastPacketInMap(_player, result);
+
+    result = WorldPacket(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
+    result << uint32(RESULT_SET_DIFFICULTY);
+    result << uint8(isHeroic);
+    group->BroadcastPacketInMap(_player, result);
+
+    map->ChangeMapDifficulty(difficulty); // blizzard likely doesnt do this in-place        
+
+    result = WorldPacket(SMSG_CHANGE_PLAYER_DIFFICULTY_RESULT);
+    result << uint32(RESULT_COMPLETE);
+    group->BroadcastPacketInMap(_player, result);
+
+    group->SetRaidDifficulty(difficulty, false);
+    _player->SendRaidDifficulty(false, difficulty);
 }
 
 void WorldSession::HandleCancelMountAuraOpcode(WorldPacket& /*recv_data*/)
@@ -1480,4 +1579,57 @@ void WorldSession::HandleCommentatorModeOpcode(WorldPacket& recv_data)
             sLog.outError("WorldSession::HandleCommentatorModeOpcode: player %d sent an invalid commentator mode action", _player->GetGUIDLow());
             return;
     }
+}
+
+void WorldSession::HandleSetSavedInstanceExtend(WorldPacket& recv_data)
+{
+    uint32 mapId, difficulty;
+    uint8 toggleExtend;
+    recv_data >> mapId >> difficulty >> toggleExtend;
+    DEBUG_LOG("CMSG_SET_SAVED_INSTANCE_EXTEND - MapId: %u, Difficulty: %u, ToggleExtend: %s", mapId, difficulty, toggleExtend ? "On" : "Off");
+
+    if (Player* player = GetPlayer())
+    {
+        InstancePlayerBind* instanceBind = player->GetBoundInstance(mapId, Difficulty(difficulty), toggleExtend == 1); // include expired instances if we are toggling extend on
+        if (!instanceBind || !instanceBind->state || !instanceBind->perm)
+            return;
+
+        BindExtensionState newState;
+        if (!toggleExtend || instanceBind->extendState == EXTEND_STATE_EXPIRED)
+            newState = EXTEND_STATE_NORMAL;
+        else
+            newState = EXTEND_STATE_EXTENDED;
+
+        player->BindToInstance(instanceBind->state, true, newState, false);
+    }
+
+    /*
+    InstancePlayerBind* instanceBind = _player->GetBoundInstance(mapId, Difficulty(difficulty));
+    if (!instanceBind || !instanceBind->save)
+        return;
+
+    InstanceSave* save = instanceBind->save;
+    // http://www.wowwiki.com/Instance_Lock_Extension
+    // SendCalendarRaidLockoutUpdated(save);
+    */
+}
+
+void WorldSession::HandleInstanceLockResponse(WorldPacket& recv_data)
+{
+    uint8 accept;
+    recv_data >> accept;
+
+    if (!_player->HasPendingBind())
+    {
+        sLog.outError("InstanceLockResponse: Player %s %s tried to bind himself/teleport to graveyard without a pending bind!",
+            _player->GetName(), _player->GetGUIDLow());
+        return;
+    }
+
+    if (accept)
+        _player->BindToInstance();
+    else
+        _player->RepopAtGraveyard();
+
+    _player->SetPendingBind(0, 0, 0);
 }

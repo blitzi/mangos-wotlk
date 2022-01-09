@@ -68,14 +68,28 @@ void MotionMaster::Initialize()
     Clear(false, true);
 
     // set new default movement generator
-    if (m_owner->GetTypeId() == TYPEID_UNIT && !m_owner->hasUnitState(UNIT_STAT_POSSESSED))
+    if (m_owner->IsCreature() && !m_owner->hasUnitState(UNIT_STAT_POSSESSED))
     {
+        auto creature = static_cast<Creature*>(m_owner);
         m_currentPathId = m_defaultPathId;
-        MovementGenerator* movement = FactorySelector::selectMovementGenerator((Creature*)m_owner);
+        MovementGenerator* movement = FactorySelector::selectMovementGenerator(creature);
         push(movement == nullptr ? &si_idleMovement : movement);
         top()->Initialize(*m_owner);
+
         if (top()->GetMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-            (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*((Creature*)(m_owner)), m_currentPathId, PATH_NO_PATH, 0, 0);
+        {
+            // check if creature is part of formation and use waypoint path as path origin
+            WaypointPathOrigin pathOrigin = WaypointPathOrigin::PATH_NO_PATH;
+            uint32 pathEntry = 0;
+            auto creatureGroup = creature->GetCreatureGroup();
+            if (creatureGroup && creatureGroup->GetFormationEntry() && creatureGroup->GetGroupEntry().GetFormationSlotId(m_owner->GetDbGuid()) == 0)
+            {
+                pathEntry = creatureGroup->GetFormationEntry()->MovementID;
+                pathOrigin = WaypointPathOrigin::PATH_FROM_WAYPOINT_PATH;
+            }
+
+            (static_cast<WaypointMovementGenerator<Creature>*>(top()))->InitializeWaypointPath(*creature, m_currentPathId, pathOrigin, 0, pathEntry);
+        }
     }
     else
         push(&si_idleMovement);
@@ -284,20 +298,8 @@ void MotionMaster::MoveTargetedHome(bool runHome)
 
     if (m_owner->GetTypeId() == TYPEID_UNIT)
     {
-        Unit* target = m_owner->GetMaster();
-        if (target && (!target->GetTransportInfo() || target->GetTransportInfo()->GetTransport() != m_owner))
-        {
-            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s follow to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
-            Mutate(new FollowMovementGenerator(*target, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE, false, m_owner->IsPlayer() && !m_owner->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED)));
-        }
-        // Manual exception for linked mobs
-        else if (m_owner->IsLinkingEventTrigger() && m_owner->GetMap()->GetCreatureLinkingHolder()->TryFollowMaster((Creature*)m_owner))
-            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s refollowed linked master", m_owner->GetGuidStr().c_str());
-        else
-        {
-            DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s targeted home", m_owner->GetGuidStr().c_str());
-            Mutate(new HomeMovementGenerator<Creature>(runHome));
-        }
+        DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s targeted home", m_owner->GetGuidStr().c_str());
+        Mutate(new HomeMovementGenerator<Creature>(runHome));
     }
     else
         sLog.outError("%s attempt targeted home", m_owner->GetGuidStr().c_str());
@@ -310,7 +312,7 @@ void MotionMaster::MoveConfused()
     Mutate(new ConfusedMovementGenerator(*m_owner));
 }
 
-void MotionMaster::MoveChase(Unit* target, float dist, float angle, bool moveFurther, bool walk, bool combat)
+void MotionMaster::MoveChase(Unit* target, float dist, float angle, bool moveFurther, bool walk, bool combat, bool delayed)
 {
     // ignore movement request if target not exist
     if (!target)
@@ -321,6 +323,8 @@ void MotionMaster::MoveChase(Unit* target, float dist, float angle, bool moveFur
         auto gen = (ChaseMovementGenerator*)top();
         gen->SetOffsetAndAngle(dist, angle, moveFurther);
         gen->SetNewTarget(*target);
+        if (delayed)
+            gen->AddDelay();
         return;
     }
 
@@ -356,6 +360,27 @@ void MotionMaster::MoveFollow(Unit* target, float dist, float angle, bool asMain
     DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s follow to %s", m_owner->GetGuidStr().c_str(), target->GetGuidStr().c_str());
 
     Mutate(new FollowMovementGenerator(*target, dist, angle, asMain, (m_owner->IsPlayer() && !m_owner->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED)), alwaysBoost));
+}
+
+void MotionMaster::MoveInFormation(FormationSlotDataSPtr& sData, bool asMain /*= false*/)
+{
+    if (m_owner->hasUnitState(UNIT_STAT_LOST_CONTROL))
+        return;
+
+    if (asMain)
+        Clear(false, true);
+    else
+        Clear(!empty()); // avoid resetting if we are already empty
+
+    auto master = sData->GetMaster();
+    // ignore movement request if target not exist
+    if (!sData->GetOwner() || !master)
+        return;
+
+    DEBUG_FILTER_LOG(LOG_FILTER_AI_AND_MOVEGENSS, "%s is in formation with %s", m_owner->GetGuidStr().c_str(), master->GetGuidStr().c_str());
+    sLog.outString("%s is in formation with %s", m_owner->GetGuidStr().c_str(), master->GetGuidStr().c_str());
+
+    Mutate(new FormationMovementGenerator(sData, asMain));
 }
 
 void MotionMaster::MoveStay(float x, float y, float z, float o, bool asMain)
@@ -435,7 +460,7 @@ void MotionMaster::MoveFleeing(Unit* source, uint32 time)
         Mutate(new FleeingMovementGenerator(*source));
 }
 
-void MotionMaster::MoveWaypoint(uint32 pathId /*=0*/, uint32 source /*=0==PATH_NO_PATH*/, uint32 initialDelay /*=0*/, uint32 overwriteEntry /*=0*/, ForcedMovement forcedMovement /*=FORCED_MOVEMENT_NONE*/, ObjectGuid guid/* = ObjectGuid()*/)
+void MotionMaster::MoveWaypoint(uint32 pathId /*= 0*/, uint32 source /*= 0*/, uint32 initialDelay /*= 0*/, uint32 overwriteEntry /*= 0*/, ForcedMovement forcedMovement /*= FORCED_MOVEMENT_NONE*/, ObjectGuid guid /*= ObjectGuid()*/)
 {
     if (m_owner->GetTypeId() == TYPEID_UNIT)
     {
