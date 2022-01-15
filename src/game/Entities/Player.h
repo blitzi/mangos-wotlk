@@ -1692,6 +1692,9 @@ class Player : public Unit
         void CharmSpellInitialize() const;
         void CharmCooldownInitialize(WorldPacket& data) const;
         void RemovePetActionBar() const;
+        Unit* GetFirstControlled() const;
+        std::pair<float, float> RequestFollowData(ObjectGuid guid);
+        void RelinquishFollowData(ObjectGuid guid);
 
         bool HasSpell(uint32 spell) const override;
         bool HasActiveSpell(uint32 spell) const;            // show in spellbook
@@ -2395,6 +2398,9 @@ class Player : public Unit
         bool IsPetNeedBeTemporaryUnsummoned(Pet* pet) const;
         uint32 GetBGPetSpell() const { return m_BGPetSpell; }
         void SetBGPetSpell(uint32 petSpell) { m_BGPetSpell = petSpell; }
+        void AddControllable(Unit* controlled);
+        void RemoveControllable(Unit* controlled);
+        GuidSet const& GetControlled() { return m_controlled; }
 
         void SendCinematicStart(uint32 CinematicSequenceId);
         void SendMovieStart(uint32 MovieId) const;
@@ -2932,6 +2938,9 @@ class Player : public Unit
         uint32 m_pendingBindTimer;
 
         LfgData m_lfgData;
+
+        GuidSet m_controlled;
+        std::map<uint32, ObjectGuid> m_followAngles;
 };
 
 void AddItemsSetItem(Player* player, Item* item);

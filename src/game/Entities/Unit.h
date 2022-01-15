@@ -1136,6 +1136,8 @@ struct SelectAttackingTargetParams
 
 struct SpellProcEventEntry;                                 // used only privately
 
+extern float baseMoveSpeed[MAX_MOVE_TYPE];
+
 class Unit : public WorldObject
 {
     public:
@@ -2522,6 +2524,8 @@ class Unit : public WorldObject
 
         // false if only visible to set and not equal
         virtual bool IsOnlyVisibleTo(ObjectGuid guid) const { return false; }
+
+        virtual bool IsNoMountedFollow() const { return false; }
 
     protected:
         bool MeetsSelectAttackingRequirement(Unit* target, SpellEntry const* spellInfo, uint32 selectFlags, SelectAttackingTargetParams params) const;

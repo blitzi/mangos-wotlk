@@ -11416,7 +11416,7 @@ void CharmInfo::InitCharmCreateSpells()
                 newstate = ACT_PASSIVE;
 
             m_charmspells[x].SetActionAndType(spellId, newstate);
-            AddSpellToActionBar(spellId, newstate, x + 1);
+            AddSpellToActionBar(spellId, newstate, x + ACTION_BAR_INDEX_PET_SPELL_START);
         }
     }
 }

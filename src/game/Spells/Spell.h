@@ -743,8 +743,8 @@ class Spell
         {
             uint32 effectMask;
             uint64 timeDelay;
-            bool processed;
-            DestTargetInfo() : effectMask(0), timeDelay(0), processed(false) {}
+            uint32 effectMaskProcessed;
+            DestTargetInfo() : effectMask(0), timeDelay(0), effectMaskProcessed(0) {}
         };
 
         typedef std::list<TargetInfo>     TargetList;
@@ -785,6 +785,7 @@ class Spell
         void OnAfterHit();
         void OnSummon(GameObject* summon);
         void OnSummon(Creature* summon);
+        uint32 GetPhaseMaskOverride(); // SUMMON_PROP_FLAG_IGNORE_SUMMONERS_PHASE - propid 1881
         // effect execution info access - only to be used in OnEffectExecute OnHit and OnAfterHit
         Unit* GetUnitTarget() { return unitTarget; }
         Item* GetItemTarget() { return itemTarget; }
