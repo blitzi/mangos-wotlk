@@ -1255,7 +1255,7 @@ void Player::SetEnvironmentFlags(EnvironmentFlags flags, bool apply)
 
     // Remove auras that need land or water
     if (flags & ENVIRONMENT_FLAG_HIGH_LIQUID)
-        RemoveAurasWithInterruptFlags(apply ?  AURA_INTERRUPT_FLAG_NOT_ABOVEWATER : AURA_INTERRUPT_FLAG_NOT_UNDERWATER);
+        RemoveAurasWithInterruptFlags(apply ?  AURA_INTERRUPT_FLAG_UNDERWATER_CANCELS : AURA_INTERRUPT_FLAG_ABOVEWATER_CANCELS);
 
     // On moving in/out high sea area: affect fatigue timer
     if (flags & ENVIRONMENT_FLAG_HIGH_SEA)
@@ -1582,7 +1582,7 @@ void Player::Update(const uint32 diff)
             if (vOwner && vOwner->IsPvP() && !IsInDuelWith(vOwner))
             {
                 UpdatePvP(true);
-                RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_ENTER_PVP_COMBAT);
+                RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_PVP_ACTIVE_CANCELS);
             }
         }
     }
@@ -2180,7 +2180,7 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
             CombatStop();
 
         if (!IsWithinDist3d(x, y, z, GetMap()->GetVisibilityDistance()))
-            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED);
+            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_ENTER_WORLD);
 
         GenericTransport* currentTransport = transport;
         if (!transport && m_teleportTransport)
@@ -2239,8 +2239,6 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
 
             CombatStop();
 
-            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED);
-
             UpdatePvPContested(false, true);
 
             // remove player from battleground on far teleport (when changing maps)
@@ -2267,7 +2265,7 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
                     InterruptNonMeleeSpells(true);
 
             // remove auras before removing from map...
-            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_CHANGE_MAP | AURA_INTERRUPT_FLAG_MOVE | AURA_INTERRUPT_FLAG_TURNING);
+            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_LEAVE_WORLD | AURA_INTERRUPT_FLAG_MOVING | AURA_INTERRUPT_FLAG_TURNING);
 
             GenericTransport* targetTransport = transport ? transport : GetTransport();
             if (!GetSession()->PlayerLogout())
@@ -2624,7 +2622,7 @@ Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)
         return nullptr;
 
     // set player as interacting
-    DoInteraction(guid);
+    DoInteraction();
 
     // not in interactive state
     if (hasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
@@ -2665,7 +2663,7 @@ GameObject* Player::GetGameObjectIfCanInteractWith(ObjectGuid guid, uint32 gameo
         return nullptr;
 
     // set player as interacting
-    DoInteraction(guid);
+    DoInteraction();
 
     // not in interactive state
     if (hasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
@@ -4744,6 +4742,8 @@ void Player::BuildPlayerRepop()
     if (IsGhouled())
         BreakCharmOutgoing();
 
+    RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_RELEASE_CANCELS);
+
     WorldPacket data(SMSG_PRE_RESURRECT, GetPackGUID().size());
     data << GetPackGUID();
     GetSession()->SendPacket(data);
@@ -6655,7 +6655,7 @@ bool Player::SetPosition(float x, float y, float z, float orientation, bool tele
     if (teleport || old_x != x || old_y != y || old_z != z || old_r != orientation)
     {
         if (teleport || old_x != x || old_y != y || old_z != z)
-            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_MOVE | AURA_INTERRUPT_FLAG_TURNING);
+            RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_MOVING | AURA_INTERRUPT_FLAG_TURNING);
         else
             RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TURNING);
 
@@ -11711,6 +11711,10 @@ void Player::RemoveItem(uint8 bag, uint8 slot, bool update)
                     // remove held enchantments, update expertise
                     if (slot == EQUIPMENT_SLOT_MAINHAND)
                     {
+                        for (uint32 i = PERM_ENCHANTMENT_SLOT; i <= TEMP_ENCHANTMENT_SLOT; ++i)
+                            if (pItem->IsMainHandOnlyEnchant(EnchantmentSlot(i)))
+                                pItem->ClearEnchantment(EnchantmentSlot(i));
+
                         if (pItem->GetItemSuffixFactor())
                         {
                             pItem->ClearEnchantment(PROP_ENCHANTMENT_SLOT_3);
@@ -12818,10 +12822,13 @@ void Player::RemoveAllEnchantments(EnchantmentSlot slot, bool arena)
         {
             if (itr->item && itr->item->GetEnchantmentId(slot))
             {
-                if (arena && sObjectMgr.IsEnchantNonRemoveInArena(itr->item->GetEnchantmentId(slot)))
+                if (arena)
                 {
-                    ++next;
-                    continue;
+                    if (itr->item->CanEnterArenaEnchant(slot))
+                    {
+                        ++next;
+                        continue;
+                    }
                 }
 
                 // remove from stats
@@ -12841,9 +12848,9 @@ void Player::RemoveAllEnchantments(EnchantmentSlot slot, bool arena)
     // in inventory
     for (int i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; i++)
     {
-        Item* pItem = GetItemByPos(INVENTORY_SLOT_BAG_0, i);
-        if (pItem && pItem->GetEnchantmentId(slot) && (!arena || !sObjectMgr.IsEnchantNonRemoveInArena(pItem->GetEnchantmentId(slot))))
-            pItem->ClearEnchantment(slot);
+        Item* item = GetItemByPos(INVENTORY_SLOT_BAG_0, i);
+        if (item && item->GetEnchantmentId(slot) && (!arena || !item->CanEnterArenaEnchant(slot)))
+            item->ClearEnchantment(slot);
     }
 
     // in inventory bags
@@ -12854,9 +12861,9 @@ void Player::RemoveAllEnchantments(EnchantmentSlot slot, bool arena)
         {
             for (uint32 j = 0; j < pBag->GetBagSize(); j++)
             {
-                Item* pItem = pBag->GetItemByPos(j);
-                if (pItem && pItem->GetEnchantmentId(slot) && (!arena || !sObjectMgr.IsEnchantNonRemoveInArena(pItem->GetEnchantmentId(slot))))
-                    pItem->ClearEnchantment(slot);
+                Item* item = pBag->GetItemByPos(j);
+                if (item && item->GetEnchantmentId(slot) && (!arena || !item->CanEnterArenaEnchant(slot)))
+                    item->ClearEnchantment(slot);
             }
         }
     }
@@ -21294,7 +21301,9 @@ void Player::SendInitialPacketsAfterAddToMap()
     GetSession()->ResetTimeSync();
     GetSession()->SendTimeSync();
 
-    CastSpell(this, 836, TRIGGERED_OLD_TRIGGERED);                             // LOGINEFFECT
+    CastSpell(nullptr, 836, TRIGGERED_OLD_TRIGGERED);                          // LOGINEFFECT
+
+    RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_LOGIN_CANCELS);
 
     // set some aura effects that send packet to player client after add player to map
     // SendMessageToSet not send it to player not it map, only for aura that not changed anything at re-apply
@@ -21873,6 +21882,8 @@ void Player::SummonIfPossible(bool agree, ObjectGuid guid)
     m_summoner.Clear();
 
     GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_ACCEPTED_SUMMONINGS, 1);
+
+    RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_SUMMON_CANCELS);
 
     TeleportTo(m_summon_mapid, m_summon_x, m_summon_y, m_summon_z, GetOrientation());
 }
@@ -23307,6 +23318,8 @@ void Player::HandleFall(MovementInfo const& movementInfo)
             DEBUG_LOG("FALLDAMAGE z=%f sz=%f pZ=%f FallTime=%d mZ=%f damage=%d SF=%d", position.z, height, GetPositionZ(), movementInfo.GetFallTime(), height, damage, safe_fall);
         }
     }
+
+    RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_LANDING_CANCELS);
 }
 
 void Player::UpdateAchievementCriteria(AchievementCriteriaTypes type, uint32 miscvalue1/*=0*/, uint32 miscvalue2/*=0*/, Unit* unit/*=nullptr*/, uint32 time/*=0*/)
@@ -24706,18 +24719,17 @@ float Player::ComputeRest(time_t timePassed, bool offline /*= false*/, bool inRe
 }
 
 // player is interacting so we have to remove non authorized aura
-void Player::DoInteraction(ObjectGuid const& interactObjGuid)
+void Player::DoInteraction()
 {
-    if (interactObjGuid.IsUnit())
-    {
-        // remove some aura like stealth aura
-        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TALK);
-    }
-    else if (interactObjGuid.IsGameObject())
-    {
-        // remove some aura like stealth aura
-        RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_USE);
-    }
+    // remove some aura like stealth aura
+    RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_INTERACTING);
+    SendForcedObjectUpdate();
+}
+
+void Player::DoLoot()
+{
+    // remove some aura like stealth aura
+    RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_LOOTING);
     SendForcedObjectUpdate();
 }
 

@@ -4140,9 +4140,6 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
 
     Unit* target = GetTarget();
 
-    // remove SPELL_AURA_EMPATHY
-    target->RemoveSpellsCausingAura(SPELL_AURA_EMPATHY);
-
     uint32 prevModifier = m_modifier.m_amount;
 
     if (ssEntry->modelID_A)
@@ -4329,6 +4326,8 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
             for (unsigned int i : ssEntry->spellId)
                 if (i)
                     ((Player*)target)->addSpell(i, true, false, false, false);
+
+        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_SHAPESHIFTING);
     }
     else
     {
@@ -4429,55 +4428,6 @@ void Aura::HandleAuraTransform(bool apply, bool Real)
         {
             switch (GetId())
             {
-                case 16739:                                 // Orb of Deception
-                {
-                    uint32 orb_model = target->GetNativeDisplayId();
-                    switch (orb_model)
-                    {
-                        // Troll Female
-                        case 1479: m_modifier.m_amount = 10134; break;
-                        // Troll Male
-                        case 1478: m_modifier.m_amount = 10135; break;
-                        // Tauren Male
-                        case 59:   m_modifier.m_amount = 10136; break;
-                        // Human Male
-                        case 49:   m_modifier.m_amount = 10137; break;
-                        // Human Female
-                        case 50:   m_modifier.m_amount = 10138; break;
-                        // Orc Male
-                        case 51:   m_modifier.m_amount = 10139; break;
-                        // Orc Female
-                        case 52:   m_modifier.m_amount = 10140; break;
-                        // Dwarf Male
-                        case 53:   m_modifier.m_amount = 10141; break;
-                        // Dwarf Female
-                        case 54:   m_modifier.m_amount = 10142; break;
-                        // NightElf Male
-                        case 55:   m_modifier.m_amount = 10143; break;
-                        // NightElf Female
-                        case 56:   m_modifier.m_amount = 10144; break;
-                        // Undead Female
-                        case 58:   m_modifier.m_amount = 10145; break;
-                        // Undead Male
-                        case 57:   m_modifier.m_amount = 10146; break;
-                        // Tauren Female
-                        case 60:   m_modifier.m_amount = 10147; break;
-                        // Gnome Male
-                        case 1563: m_modifier.m_amount = 10148; break;
-                        // Gnome Female
-                        case 1564: m_modifier.m_amount = 10149; break;
-                        // BloodElf Female
-                        case 15475: m_modifier.m_amount = 17830; break;
-                        // BloodElf Male
-                        case 15476: m_modifier.m_amount = 17829; break;
-                        // Dranei Female
-                        case 16126: m_modifier.m_amount = 17828; break;
-                        // Dranei Male
-                        case 16125: m_modifier.m_amount = 17827; break;
-                        default: break;
-                    }
-                    break;
-                }
                 case 42365:                                 // Murloc costume
                     m_modifier.m_amount = 21723;
                     break;
@@ -5344,7 +5294,7 @@ void Aura::HandleModStealth(bool apply, bool Real)
     if (apply)
     {
         // drop flag at stealth in bg
-        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_IMMUNE_OR_LOST_SELECTION);
+        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_STEALTH_INVIS_CANCELS);
 
         // only at real aura add
         if (Real)
@@ -5447,7 +5397,7 @@ void Aura::HandleInvisibility(bool apply, bool Real)
     target->GetVisibilityData().SetInvisibilityMask(m_modifier.m_miscvalue, trueApply);
     if (trueApply)
     {
-        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_IMMUNE_OR_LOST_SELECTION);
+        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_STEALTH_INVIS_CANCELS);
 
         if (Real && target->GetTypeId() == TYPEID_PLAYER && GetId() != 32727) // avoid changing this for Arena Preparation spell - it seems this should not cause the glow vision
         {
@@ -5883,7 +5833,7 @@ void Aura::HandleAuraModEffectImmunity(bool apply, bool /*Real*/)
     Unit* target = GetTarget();
 
     // when removing flag aura, handle flag drop
-    if (target->GetTypeId() == TYPEID_PLAYER && (GetSpellProto()->AuraInterruptFlags & AURA_INTERRUPT_FLAG_IMMUNE_OR_LOST_SELECTION))
+    if (target->GetTypeId() == TYPEID_PLAYER && (GetSpellProto()->AuraInterruptFlags & AURA_INTERRUPT_FLAG_INVULNERABILITY_BUFF_CANCELS))
     {
         Player* player = static_cast<Player*>(target);
 
@@ -5901,6 +5851,9 @@ void Aura::HandleAuraModEffectImmunity(bool apply, bool /*Real*/)
     }
 
     target->ApplySpellImmune(this, IMMUNITY_EFFECT, m_modifier.m_miscvalue, apply);
+
+    if (apply && IsPositive())
+        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_INVULNERABILITY_BUFF_CANCELS);
 
     switch (GetSpellProto()->Id)
     {
@@ -5941,7 +5894,7 @@ void Aura::HandleAuraModSchoolImmunity(bool apply, bool Real)
 
     // remove all flag auras (they are positive, but they must be removed when you are immune)
     if (GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY) && GetSpellProto()->HasAttribute(SPELL_ATTR_EX2_DAMAGE_REDUCED_SHIELD))
-        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_IMMUNE_OR_LOST_SELECTION);
+        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_INVULNERABILITY_BUFF_CANCELS);
 
     // TODO: optimalize this cycle - use RemoveAurasWithInterruptFlags call or something else
     if (Real && apply
@@ -8234,7 +8187,6 @@ void Aura::HandleModUnattackable(bool apply, bool Real)
         }
         else
             target->AttackStop(true, false, true);
-        target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_IMMUNE_OR_LOST_SELECTION);
     }
 }
 
@@ -9096,7 +9048,7 @@ void Aura::PeriodicTick()
             if (int32(powerType) != m_modifier.m_miscvalue)
                 break;
 
-            if (spellProto->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED)
+            if (spellProto->AuraInterruptFlags & AURA_INTERRUPT_FLAG_STANDING_CANCELS)
             {
                 // eating anim
                 target->HandleEmoteCommand(EMOTE_ONESHOT_EAT);
@@ -10370,7 +10322,7 @@ void SpellAuraHolder::_AddSpellAuraHolder()
         //*****************************************************
 
         // Sitdown on apply aura req seated
-        if (m_spellProto->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED && !m_target->IsSitState())
+        if (m_spellProto->AuraInterruptFlags & AURA_INTERRUPT_FLAG_STANDING_CANCELS && !m_target->IsSitState())
             m_target->SetStandState(UNIT_STAND_STATE_SIT);
 
         // register aura diminishing on apply

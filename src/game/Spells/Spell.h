@@ -530,23 +530,23 @@ class Spell
         {
             CreaturePosition() :
                 x(0.0f), y(0.0f), z(0.0f),
-                creature(nullptr)
+                creature(nullptr), processed(false)
             {}
 
             float x, y, z;
             Creature* creature;
+            bool processed;
         };
         typedef std::vector<CreaturePosition> CreatureSummonPositions;
 
-        // return true IFF further processing required
-        bool DoSummonPet(SpellEffectIndex eff_idx);
+        bool DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype, bool reportError = true);
+        bool DoSummonPet(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx);
         bool DoSummonTotem(CreatureSummonPositions& list, SpellEffectIndex eff_idx, uint8 slot_dbc = 0);
         bool DoSummonWild(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonCritter(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonPossessed(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
         bool DoSummonVehicle(CreatureSummonPositions& list, SummonPropertiesEntry const* prop, SpellEffectIndex effIdx, uint32 level);
-        bool DoCreateItem(SpellEffectIndex eff_idx, uint32 itemtype, bool reportError = true);
 
         void ProcessDispelList(std::list <std::pair<SpellAuraHolder*, uint32> >& dispelList, std::list<std::pair<SpellAuraHolder*, uint32> >& successList, std::list <uint32>& failList);
         void EvaluateResultLists(std::list<std::pair<SpellAuraHolder*, uint32> >& successList, std::list <uint32>& failList);
@@ -629,8 +629,8 @@ class Spell
             return false;
         }
         bool IsChannelActive() const { return m_caster->GetUInt32Value(UNIT_FIELD_CHANNEL_SPELL) != 0; }
-        bool IsMeleeAttackResetSpell() const { return !m_IsTriggeredSpell && (m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT);  }
-        bool IsRangedAttackResetSpell() const { return !m_IsTriggeredSpell && IsRangedSpell() && (m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT); }
+        bool IsMeleeAttackResetSpell() const { return !m_IsTriggeredSpell && (m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_COMBAT);  }
+        bool IsRangedAttackResetSpell() const { return !m_IsTriggeredSpell && IsRangedSpell() && (m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_COMBAT); }
         bool IsEffectWithImplementedMultiplier(uint32 effectId) const;
 
         bool IsDeletable() const { return !m_referencedFromCurrentSpell && !m_executedCurrently; }

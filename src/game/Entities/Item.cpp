@@ -919,9 +919,27 @@ bool Item::IsBoundByEnchant() const
         if (!enchantEntry)
             continue;
 
-        if (enchantEntry->slot & ENCHANTMENT_CAN_SOULBOUND)
+        if (enchantEntry->flags & ENCHANTMENT_SOULBOUND)
             return true;
     }
+    return false;
+}
+
+bool Item::IsMainHandOnlyEnchant(EnchantmentSlot slot) const
+{
+    SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(GetEnchantmentId(slot));
+    if (enchantEntry && enchantEntry->flags & ENCHANTMENT_MAINHAND_ONLY)
+        return true;
+
+    return false;
+}
+
+bool Item::CanEnterArenaEnchant(EnchantmentSlot slot) const
+{
+    SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(GetEnchantmentId(slot));
+    if (enchantEntry && enchantEntry->flags & ENCHANTMENT_ALLOW_ENTERING_ARENA)
+        return true;
+
     return false;
 }
 

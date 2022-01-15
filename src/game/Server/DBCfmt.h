@@ -39,7 +39,7 @@ const char CinematicCameraEntryfmt[] = "nsiffff";
 const char CinematicSequencesEntryfmt[] = "nxixxxxxxx";
 const char CreatureDisplayInfofmt[] = "nixifxxxxxxxxxxx";
 const char CreatureDisplayInfoExtrafmt[] = "nixxxxxxxxxxxxxxxxxxx";
-const char CreatureModelDatafmt[] = "nixxfxxxxxxxxxxffxxxxxxxxxxx";
+const char CreatureModelDatafmt[] = "nixxfxxxxxxxxxfffxxxxxxxxxxx";
 const char CreatureFamilyfmt[] = "nfifiiiiixssssssssssssssssxx";
 const char CreatureSpellDatafmt[] = "niiiixxxx";
 const char CreatureTypefmt[] = "nxxxxxxxxxxxxxxxxxx";
@@ -57,6 +57,7 @@ char const EmotesTextSoundEntryfmt[] = "niiii";
 
 const char FactionEntryfmt[] = "niiiiiiiiiiiiiiiiiiffixssssssssssssssssxxxxxxxxxxxxxxxxxx";
 const char FactionTemplateEntryfmt[] = "niiiiiiiiiiiii";
+const char GameObjectArtKitfmt[] = "nxxxxxxx";
 const char GameObjectDisplayInfofmt[] = "nsxxxxxxxxxxffffffx";
 const char GMSurveyAnswersfmt[] = "niissssssssssssssssx";
 const char GMSurveyCurrentSurveyfmt[] = "ni";

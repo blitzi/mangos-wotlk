@@ -356,7 +356,7 @@ void UnitAI::OnSpellCastStateChange(Spell const* spell, bool state, WorldObject*
 
     // Creature should always stop before it will cast a non-instant spell
     if (state)
-        if ((spell->GetCastTime() && spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT) || (IsChanneledSpell(spellInfo) && spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_MOVE))
+        if ((spell->GetCastTime() && spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT) || (IsChanneledSpell(spellInfo) && spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_MOVING))
             m_unit->InterruptMoving();
 
     bool forceTarget = false;
@@ -555,9 +555,7 @@ void UnitAI::DetectOrAttack(Unit* who)
         AttackStart(who);
     }
     else if (m_unit->GetMap()->IsDungeon())
-    {
         m_unit->EngageInCombatWith(who);
-    }
 }
 
 bool UnitAI::CanTriggerStealthAlert(Unit* who, float /*attackRadius*/) const
