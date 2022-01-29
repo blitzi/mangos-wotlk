@@ -1435,12 +1435,11 @@ void Player::OnMirrorTimerExpirationPulse(MirrorTimer::Type timer)
             EnvironmentalDamage(DAMAGE_DROWNING, ((GetMaxHealth() / 5) + urand(0, (GetLevel() - 1))));
             break;
         case MirrorTimer::ENVIRONMENTAL:
-            // TODO: Check these formulas
             if (IsInMagma())
-                EnvironmentalDamage(DAMAGE_LAVA, urand(600, 700));
+                EnvironmentalDamage(DAMAGE_LAVA, urand(sWorld.getConfig(CONFIG_UINT32_ENVIRONMENTAL_DAMAGE_MIN), sWorld.getConfig(CONFIG_UINT32_ENVIRONMENTAL_DAMAGE_MAX)));
             // FIXME: Need to skip slime damage in Undercity, maybe someone can find better way to handle environmental damage
             //if (IsInSlime() && m_zoneUpdateId != 1497)
-            //    EnvironmentalDamage(DAMAGE_SLIME, urand(600, 700));
+            //    EnvironmentalDamage(DAMAGE_SLIME, urand(sWorld.getConfig(CONFIG_UINT32_ENVIRONMENTAL_DAMAGE_MIN), sWorld.getConfig(CONFIG_UINT32_ENVIRONMENTAL_DAMAGE_MAX)));
             break;
         default:
             return;
@@ -8819,13 +8818,13 @@ void Player::SendInitWorldStates(uint32 zoneid, uint32 areaid) const
     data << uint16(0);                                      // count of uint64 blocks, placeholder
 
     // Current arena season
-    FillInitialWorldState(data, count, 0xC77, sWorld.getConfig(CONFIG_UINT32_ARENA_SEASON_ID));
+    FillInitialWorldState(data, count, WORLD_STATE_ARENA_SEASON, sWorld.getConfig(CONFIG_UINT32_ARENA_SEASON_ID));
     // Previous arena season
-    FillInitialWorldState(data, count, 0xF3D, sWorld.getConfig(CONFIG_UINT32_ARENA_SEASON_PREVIOUS_ID));
+    FillInitialWorldState(data, count, WORLD_STATE_PREVIOUS_ARENA_SEASON, sWorld.getConfig(CONFIG_UINT32_ARENA_SEASON_PREVIOUS_ID));
     // 0 - Battle for Wintergrasp in progress, 1 - otherwise
-    FillInitialWorldState(data, count, 0xED9, 1);
+    FillInitialWorldState(data, count, WORLD_STATE_WINTERGRASP_IN_PROGRESS, 1);
     // Time when next Battle for Wintergrasp starts
-    FillInitialWorldState(data, count, 0x1102, uint32(time(nullptr) + 9000));
+    FillInitialWorldState(data, count, WORLD_STATE_WINTERGRASP_NEXT_BATTLE_TIME, uint32(time(nullptr) + 9000));
 
     switch (zoneid)
     {
@@ -17352,12 +17351,11 @@ void Player::LoadPet()
     {
         Pet* pet = new Pet;
         if (!pet->LoadPetFromDB(this, pet->GetPetSpawnPosition(this), 0, 0, true, 0, true))
-        {
             delete pet;
-            return;
-        }
-        if (IsMounted())
-            pet->SetModeFlags(PET_MODE_DISABLE_ACTIONS);
+
+        if (Pet* pet = GetPet())
+            if (IsMounted())
+                pet->SetModeFlags(PET_MODE_DISABLE_ACTIONS);
     }
 }
 
@@ -19515,7 +19513,7 @@ void Player::CharmCooldownInitialize(WorldPacket& data) const
     // write cooldown data
     uint32 cdCount = 0;
     const size_t cdCountPos = data.wpos();
-    data << uint16(0);
+    data << uint8(0);
     auto currTime = GetMap()->GetCurrentClockTime();
 
     for (auto& cdItr : m_cooldownMap)
@@ -19544,7 +19542,7 @@ void Player::CharmCooldownInitialize(WorldPacket& data) const
         data << uint32(catCDDuration);                      // category cooldown
         ++cdCount;
     }
-    data.put<uint16>(cdCountPos, cdCount);
+    data.put<uint8>(cdCountPos, cdCount);
 }
 
 void Player::RemovePetActionBar() const
@@ -19580,7 +19578,9 @@ std::pair<float, float> Player::RequestFollowData(ObjectGuid guid)
     {
         case 0: return { M_PI_F / 2, 1.5f }; // left
         case 1: return { 3 * M_PI_F / 2, 1.5f }; // right
-        default: return { M_PI_F, 1.5f }; // behind
+        case 2: return { 7 * M_PI_F / 6, 1.5f }; // behind right
+        case 3: return { 5 * M_PI_F / 6, 1.5f }; // behind left
+        default: return { M_PI_F, 3.0f }; // behind
         // TODO: Army of the dead angles
     }
 }
@@ -21984,6 +21984,12 @@ bool Player::HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item cons
     if (spellInfo->EquippedItemClass < 0)
         return true;
 
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX3_MAIN_HAND) && !hasMainhandWeaponForAttack())
+        return false;
+
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX3_REQ_OFFHAND) && !hasOffhandWeaponForAttack())
+        return false;
+
     // scan other equipped items for same requirements (mostly 2 daggers/etc)
     // for optimize check 2 used cases only
     switch (spellInfo->EquippedItemClass)
@@ -22590,7 +22596,7 @@ void Player::SetOriginalGroup(Group* group, int8 subgroup)
 
 void Player::UpdateTerainEnvironmentFlags(Map* m, float x, float y, float z)
 {
-    uint32 collisionHeight = GetCollisionHeight();
+    float collisionHeight = GetCollisionHeight();
     GridMapLiquidData liquid_status;
     GridMapLiquidStatus res = m->GetTerrain()->getLiquidStatus(x, y, z, MAP_ALL_LIQUIDS, &liquid_status, collisionHeight);
     if (!res)
@@ -22916,7 +22922,7 @@ void Player::ResyncRunes() const
     for (uint32 i = 0; i < MAX_RUNES; ++i)
     {
         data << uint8(GetCurrentRune(i));                   // rune type
-        data << uint8(255 - ((GetRuneCooldown(i) / REGEN_TIME_FULL) * 51));     // passed cooldown time (0-255)
+        data << uint8(255) - uint8(GetRuneCooldown(i) * uint32(255) / uint32(RUNE_COOLDOWN));     // passed cooldown time (0-255)
     }
     GetSession()->SendPacket(data);
 }

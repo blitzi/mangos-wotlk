@@ -257,6 +257,15 @@ bool Pet::LoadPetFromDB(Player* owner, Position const& spawnPos, uint32 petentry
         return false;
     }
 
+    // DK Permanent ghoul spell
+    if (summon_spell_id == 52150 && current && !forced) // must cast through spell in order to trigger correct ghoul CD
+    {
+        Position pos = Pet::GetPetSpawnPosition(owner);
+        owner->CastSpell(pos.x, pos.y, pos.z, summon_spell_id, TRIGGERED_IGNORE_GCD);
+        delete result;
+        return false;
+    }
+
     setPetType(pet_type);
     SetFaction(owner->GetFaction());
     SetUInt32Value(UNIT_CREATED_BY_SPELL, summon_spell_id);
@@ -432,8 +441,7 @@ void Pet::SavePetToDB(PetSaveMode mode, Player* owner)
     if (!isControlled())
         return;
 
-    // dont save shadowfiend
-    if (owner->getClass() == CLASS_PRIEST)
+    if (getPetType() == GUARDIAN_PET && !IsSaveAutoCast())
         return;
 
     // current/stable/not_in_slot
@@ -545,7 +553,7 @@ void Pet::SavePetToDB(PetSaveMode mode, Player* owner)
     }
 }
 
-Position Pet::GetPetSpawnPosition(Player* owner)
+Position Pet::GetPetSpawnPosition(Unit* owner)
 {
     Position pos;
     owner->GetFirstCollisionPosition(pos, 2.f, owner->GetOrientation() + M_PI_F / 2);
@@ -601,11 +609,11 @@ void Pet::SetOwnerGuid(ObjectGuid owner)
 {
     switch (uint32(m_petType))
     {
-        case SUMMON_PET:
-        case HUNTER_PET:
         case GUARDIAN_PET:
             if (!m_controllableGuardian)
                 break;
+        case SUMMON_PET:
+        case HUNTER_PET:
             SetSummonerGuid(owner);
             break;
     }
@@ -645,6 +653,10 @@ void Pet::SetDeathState(DeathState s)                       // overwrite virtual
         CastPetAuras(true);
     }
     CastOwnerTalentAuras();
+
+    if (getPetType() == GUARDIAN_PET)
+        if (Unit* owner = GetOwner())
+            owner->RemoveGuardian(this);
 }
 
 void Pet::Update(const uint32 diff)
@@ -691,7 +703,7 @@ void Pet::Update(const uint32 diff)
                     m_duration -= (int32)diff;
                 else
                 {
-                    Unsummon(getPetType() != SUMMON_PET ? PET_SAVE_AS_DELETED : PET_SAVE_NOT_IN_SLOT, owner);
+                    Unsummon(getPetType() != SUMMON_PET && !IsSaveAutoCast() ? PET_SAVE_AS_DELETED : PET_SAVE_NOT_IN_SLOT, owner);
                     return;
                 }
             }
@@ -873,8 +885,12 @@ void Pet::Unsummon(PetSaveMode mode, Unit* owner /*= nullptr*/)
             case GUARDIAN_PET:
                 owner->RemoveGuardian(this);
                 if (m_controllableGuardian)
+                {
                     if (owner->GetPetGuid() == GetObjectGuid())
                         owner->SetPet(nullptr);
+                    else
+                        m_saveAutocast = false; // only save the main one
+                }
                 break;
             default:
                 if (owner->GetPetGuid() == GetObjectGuid())
@@ -1393,6 +1409,10 @@ void Pet::_LoadSpellCooldowns()
 
 void Pet::_SaveSpellCooldowns()
 {
+    // controllable guardians only save spells and main entry
+    if (m_controllableGuardian)
+        return;
+
     static SqlStatementID delSpellCD ;
     static SqlStatementID insSpellCD ;
 
@@ -1416,9 +1436,9 @@ void Pet::_SaveSpellCooldowns()
     }
 }
 
-void Pet::_LoadSpells()
+bool Pet::_LoadSpells()
 {
-    QueryResult* result = CharacterDatabase.PQuery("SELECT spell,active FROM pet_spell WHERE guid = '%u'", m_charmInfo->GetPetNumber());
+    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT spell,active FROM pet_spell WHERE guid = '%u'", m_charmInfo->GetPetNumber()));
 
     if (result)
     {
@@ -1430,8 +1450,10 @@ void Pet::_LoadSpells()
         }
         while (result->NextRow());
 
-        delete result;
+        return true;
     }
+
+    return false;
 }
 
 void Pet::_SaveSpells()
@@ -1477,6 +1499,21 @@ void Pet::_SaveSpells()
 
         itr->second.state = PETSPELL_UNCHANGED;
     }
+}
+
+bool Pet::_LoadGuardianPetNumber()
+{
+    std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT id FROM character_pet WHERE entry='%u' AND owner = '%u'", GetEntry(), GetOwnerGuid().GetCounter()));
+
+    if (result)
+    {
+        Field* fields = result->Fetch();
+		m_charmInfo->SetPetNumber(fields[0].GetUInt32(), false);
+
+        return true;
+    }
+
+    return false;
 }
 
 void Pet::_LoadAuras(uint32 timediff)
@@ -1580,6 +1617,10 @@ void Pet::_LoadAuras(uint32 timediff)
 
 void Pet::_SaveAuras()
 {
+    // controllable guardians only save spells and main entry
+    if (m_controllableGuardian)
+        return;
+
     static SqlStatementID delAuras ;
     static SqlStatementID insAuras ;
 
@@ -2455,4 +2496,24 @@ void Pet::ForcedDespawn(uint32 timeMSToDespawn, bool onlyAlive)
     RemoveCorpse(true);                                     // force corpse removal in the same grid
 
     Unsummon(PET_SAVE_NOT_IN_SLOT);
+}
+
+void Pet::InitializeSpellsForControllableGuardian(bool load)
+{
+    m_charmInfo->InitPetActionBar();
+
+    CreatureSpellList const& spellList = GetSpellList();
+
+    for (auto& spellData : spellList.Spells)
+        addSpell(spellData.second.SpellId, ACT_DECIDE, PETSPELL_NEW);
+
+    if (load && _LoadGuardianPetNumber() && _LoadSpells())
+    {
+        // update autocast in bar
+        for (uint32 i = ACTION_BAR_INDEX_PET_SPELL_START; i < ACTION_BAR_INDEX_PET_SPELL_END; ++i)
+        {
+            UnitActionBarEntry const* bar = m_charmInfo->GetActionBarEntry(i);
+            m_charmInfo->SetActionBar(i, bar->GetAction(), (ActiveStates)m_spells[bar->GetAction()].active);
+        }
+    }
 }

@@ -888,7 +888,7 @@ void PersistentAreaAura::Update(uint32 diff)
     // or if the target moves too far from the dynamic object
     if (Unit* caster = GetCaster())
     {
-        if (DynamicObject* dynObj = caster->GetDynObject(GetId()))
+        if (DynamicObject* dynObj = caster->GetDynObject(GetId(), GetEffIndex(), GetTarget()))
         {
             if (GetTarget()->GetDistance(dynObj, true, DIST_CALC_COMBAT_REACH) > dynObj->GetRadius())
             {
@@ -2557,16 +2557,6 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
 
                         if (Unit* caster = GetCaster())
                             caster->CastCustomSpell(target, 28836, &damage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                        return;
-                    }
-                    case 31606:                             // Stormcrow Amulet
-                    {
-                        CreatureInfo const* cInfo = ObjectMgr::GetCreatureTemplate(17970);
-
-                        // we must assume db or script set display id to native at ending flight (if not, target is stuck with this model)
-                        if (cInfo)
-                            target->SetDisplayId(Creature::ChooseDisplayId(cInfo));
-
                         return;
                     }
                     case 31736:                                     // Ironvine Seeds
@@ -11657,7 +11647,7 @@ bool SpellAuraHolder::IsCharm() const
     return false;
 }
 
-void SpellAuraHolder::UnregisterAndCleanupTrackedAuras()
+void SpellAuraHolder::UnregisterAndCleanupTrackedAuras(uint32 auraFlags)
 {
     TrackedAuraType trackedType = GetTrackedAuraType();
     if (trackedType == TRACK_AURA_TYPE_NOT_TRACKED)
@@ -11671,7 +11661,7 @@ void SpellAuraHolder::UnregisterAndCleanupTrackedAuras()
     else if (trackedType == TRACK_AURA_TYPE_CONTROL_VEHICLE)
     {
         Unit* caster = GetCaster();
-        if (caster && IsSpellHaveAura(GetSpellProto(), SPELL_AURA_CONTROL_VEHICLE, GetAuraFlags()))
+        if (caster && IsSpellHaveAura(GetSpellProto(), SPELL_AURA_CONTROL_VEHICLE, auraFlags))
         {
             caster->GetTrackedAuraTargets(trackedType).erase(GetSpellProto());
 

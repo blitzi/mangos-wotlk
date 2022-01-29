@@ -6521,7 +6521,7 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
         CreatureCreatePos pos(m_caster->GetMap(), itr.x, itr.y, itr.z, -m_caster->GetOrientation(), m_caster->GetPhaseMask());
 
         uint32 pet_number = sObjectMgr.GeneratePetNumber();
-        if (!spawnCreature->Create(m_caster->GetMap()->GenerateLocalLowGuid(HIGHGUID_PET), pos, cInfo, pet_number))
+        if (!spawnCreature->Create(m_caster->GetMap()->GenerateLocalLowGuid(HIGHGUID_PET), pos, cInfo, pet_entry))
         {
             sLog.outError("Spell::DoSummonGuardian: can't create creature entry %u for spell %u.", pet_entry, m_spellInfo->Id);
             delete spawnCreature;
@@ -6568,6 +6568,10 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
         if (m_caster->IsPvPSanctuary())
             spawnCreature->SetPvPSanctuary(true);
 
+        // must be before controllable guardian block
+        if (CharmInfo* charmInfo = spawnCreature->GetCharmInfo())
+            charmInfo->SetPetNumber(pet_number, false);
+
         if (prop->Group == SUMMON_PROP_GROUP_PETS || prop->Title == UNITNAME_SUMMON_TITLE_PET)
         {
             // controllable guardians
@@ -6576,8 +6580,9 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
                 spawnCreature->SetSpellList(cInfo->SpellList);
             else // legacy compatibility
                 spawnCreature->SetSpellList(cInfo->Entry * 100 + 0);
-            if (CharmInfo* charmInfo = spawnCreature->GetCharmInfo())
-                charmInfo->InitCharmCreateSpells();
+
+            spawnCreature->InitializeSpellsForControllableGuardian(prop->Flags & SUMMON_PROP_FLAG_SAVE_PET_AUTOCAST);
+            
             m_caster->SetPet(spawnCreature); // last guardian will be left in field
             spawnCreature->SetOwnerGuid(m_caster->GetObjectGuid());
 
@@ -6586,9 +6591,6 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
 
         if (prop->Flags & SUMMON_PROP_FLAG_DO_NOT_FOLLOW_MOUNTED_SUMMONER)
             spawnCreature->SetNoMountedFollow();
-
-        if (CharmInfo* charmInfo = spawnCreature->GetCharmInfo())
-            charmInfo->SetPetNumber(pet_number, initCharm);
 
         spawnCreature->SetLoading(false);
         m_caster->AddGuardian(spawnCreature);
@@ -6603,7 +6605,7 @@ bool Spell::DoSummonGuardian(CreatureSummonPositions& list, SummonPropertiesEntr
     }
 
     if (initCharm && m_caster->IsPlayer())
-        static_cast<Player*>(m_caster)->CharmSpellInitialize();
+        static_cast<Player*>(m_caster)->PetSpellInitialize();
 
     return true;
 }
@@ -8401,14 +8403,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                 case 24320:                                 // Poisonous Blood
                 {
                     unitTarget->CastSpell(unitTarget, 24321, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_caster->GetObjectGuid());
-                    return;
-                }
-                case 24324:                                 // Blood Siphon
-                {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    unitTarget->CastSpell(m_caster, unitTarget->HasAura(24321) ? 24323 : 24322, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
                 case 24590:                                 // Brittle Armor - need remove one 24575 Brittle Armor aura

@@ -151,7 +151,7 @@ class SpellAuraHolder
 
         TrackedAuraType GetTrackedAuraType() const { return m_trackedAuraType; }
         void SetTrackedAuraType(TrackedAuraType val) { m_trackedAuraType = val; }
-        void UnregisterAndCleanupTrackedAuras();
+        void UnregisterAndCleanupTrackedAuras(uint32 auraFlags);
 
         int32 GetAuraMaxDuration() const { return m_maxDuration; }
         void SetAuraMaxDuration(int32 duration);
@@ -536,6 +536,9 @@ class Aura
 
         // Scripting system
         AuraScript* GetAuraScript() const { return GetHolder()->GetAuraScript(); }
+        // Variable storage
+        void SetScriptValue(uint64 value) { m_scriptValue = value; }
+        uint64 GetScriptValue() { return m_scriptValue; }
         // hooks
         void OnAuraInit();
         int32 OnAuraValueCalculate(Unit* caster, int32 currentValue);
@@ -554,8 +557,7 @@ class Aura
         void OnHeartbeat();
         // Hook Requirements
         void ForcePeriodicity(uint32 periodicTime);
-        void SetScriptValue(uint64 value) { m_scriptValue = value; }
-        uint64 GetScriptValue() { return m_scriptValue; }
+
     protected:
         Aura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster = nullptr, Item* castItem = nullptr);
 

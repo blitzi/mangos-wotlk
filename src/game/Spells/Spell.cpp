@@ -4140,7 +4140,7 @@ void Spell::finish(bool ok)
     if (!m_TriggerSpells.empty())
         CastTriggerSpells();
 
-    if (m_caster)
+    if (!m_IsTriggeredSpell && !m_trueCaster->IsGameObject())
         m_caster->RemoveAurasOnCast(AURA_INTERRUPT_FLAG_ACTION_LATE, m_spellInfo);
 
     // Stop Attack for some spells
@@ -4256,7 +4256,7 @@ void Spell::SendCastResult(Player const* caster, SpellEntry const* spellInfo, ui
             data << uint32(spellInfo->EquippedItemSubClassMask);// seems correct...
             break;
         case SPELL_FAILED_REAGENTS:
-            data << uint32(0);                              // item id
+            data << param1;                                 // item id
             break;
         case SPELL_FAILED_NEED_MORE_ITEMS:
             data << param1;
@@ -4364,6 +4364,7 @@ void Spell::SendSpellGo()
     {
         castFlags |= CAST_FLAG_NO_GCD;                      // same as in SMSG_SPELL_START
         castFlags |= CAST_FLAG_PREDICTED_RUNES;             // rune cooldowns list
+        castFlags |= CAST_FLAG_PREDICTED_POWER;
     }
 
     if (m_powerCost && m_spellInfo->powerType != POWER_HEALTH)
@@ -4958,7 +4959,7 @@ SpellCastResult Spell::CheckOrTakeRunePower(bool take)
                 continue;
 
             if (take)
-                plr->SetRuneCooldown(i, RUNE_COOLDOWN);     // 5*2=10 sec
+                plr->SetRuneCooldown(i, plr->GetRuneBaseCooldown(i));     // 5*2=10 sec
 
             --runeCost[rune];
         }
@@ -6743,7 +6744,7 @@ SpellCastResult Spell::CheckCast(bool strict)
                     {
                         SpellCastResult result = partialApplication(i);
                         if (result != SPELL_CAST_OK)
-                            return result;
+                            return SPELL_FAILED_TARGET_NO_WEAPONS;
                     }
                 }
                 break;
@@ -7481,7 +7482,7 @@ SpellCastResult Spell::CheckItems()
     // if not item target then required item must be equipped (for triggered case not report error)
     else
     {
-        if (m_caster->GetTypeId() == TYPEID_PLAYER && !((Player*)m_caster)->HasItemFitToSpellReqirements(m_spellInfo))
+        if (m_caster->IsPlayer() && !static_cast<Player*>(m_caster)->HasItemFitToSpellReqirements(m_spellInfo))
             return m_IsTriggeredSpell ? SPELL_FAILED_DONT_REPORT : SPELL_FAILED_EQUIPPED_ITEM_CLASS;
     }
 
@@ -7519,7 +7520,10 @@ SpellCastResult Spell::CheckItems()
                 }
 
                 if (!p_caster->HasItemCount(itemid, itemcount))
+                {
+                    m_param1 = itemid;
                     return SPELL_FAILED_REAGENTS;
+                }
             }
         }
 

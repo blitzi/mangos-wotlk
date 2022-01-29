@@ -48,7 +48,19 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (20038,'spell_explosion_razorgore'),
 (21651,'spell_opening_capping'),
 (23226,'spell_ritual_candle_aura'),
+(24228,'spell_arlokk_vanish'),
+(24314,'spell_threatening_gaze'),
+(24342,'spell_despawn_chained_spirits'),
+(24306,'spell_delusions_of_jindo'),
+(24308,'spell_summon_shade_of_jindo'),
+(23878,'spell_random_aggro'),
+(24173,'spell_thekal_resurrect'),
+(24649,'spell_thousand_blades_renataki'),
+(24699,'spell_renataki_vanish'),
+(24700,'spell_renataki_vanish_teleport'),
+(24324,'spell_hakkar_blood_siphon'),
 (24693,'spell_hakkar_power_down'),
+(24728,'spell_summon_nightmare_illusion_hazzarah'),
 (25684,'spell_summon_mana_fiends_moam'),
 (25813,'spell_conjure_dream_rift'),
 (25885,'spell_viscidus_summon_globs'),
@@ -180,6 +192,7 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (33794,'spell_vazruden_liquid_fire_script'),
 (30926,'spell_vazruden_liquid_fire_script'),
 (36921,'spell_vazruden_liquid_fire_script'),
+(31606,'spell_stormcrow_amulet'),
 (30700,'spell_face_highest_threat'),
 (34877,'spell_prevent_spell_if_same_aura_on_caster'),
 (35679,'spell_prevent_spell_if_same_aura_on_caster'),
@@ -700,6 +713,7 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 
 -- Death Knight
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
+(46584,'spell_dk_raise_dead'),
 (55090,'spell_scourge_strike'),
 (55265,'spell_scourge_strike'),
 (55270,'spell_scourge_strike'),
@@ -795,11 +809,15 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (34902,'spell_hunter_pet_scaling_1'),
 (34903,'spell_hunter_pet_scaling_2'),
 (34904,'spell_hunter_pet_scaling_3'),
+(61017,'spell_hunter_pet_scaling_4'),
+
+(62915,'spell_hunter_snake_trap_scaling_1'),
 
 (34947,'spell_warlock_pet_scaling_1'),
 (34956,'spell_warlock_pet_scaling_2'),
 (34957,'spell_warlock_pet_scaling_3'),
 (34958,'spell_warlock_pet_scaling_4'),
+(61013,'spell_warlock_pet_scaling_5'),
 
 (35657,'spell_mage_pet_scaling_1'),
 (35658,'spell_mage_pet_scaling_2'),
@@ -821,14 +839,27 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (35671,'spell_druid_pet_scaling_3'),
 (35672,'spell_druid_pet_scaling_4'),
 
-(35674,'spell_enhancement_pet_scaling_1'),
-(35675,'spell_enhancement_pet_scaling_2'),
-(35676,'spell_enhancement_pet_scaling_3'),
+(35674,'spell_feral_spirit_pet_scaling_1'),
+(35675,'spell_feral_spirit_pet_scaling_2'),
+(35676,'spell_feral_spirit_pet_scaling_3'),
+(61783,'spell_feral_spirit_pet_scaling_4'),
+
+(65225,'spell_earth_elemental_pet_scaling_1'),
+(65226,'spell_earth_elemental_pet_scaling_2'),
+(65227,'spell_earth_elemental_pet_scaling_3'),
+(65228,'spell_earth_elemental_pet_scaling_4'),
 
 (36186,'spell_infernal_pet_scaling_1'),
 (36188,'spell_infernal_pet_scaling_2'),
 (36189,'spell_infernal_pet_scaling_3'),
-(36190,'spell_infernal_pet_scaling_4');
+(36190,'spell_infernal_pet_scaling_4'),
+
+(54566,'spell_death_knight_pet_scaling_1'),
+(51996,'spell_death_knight_pet_scaling_2'),
+(61697,'spell_death_knight_pet_scaling_3'),
+
+(51905,'spell_death_knight_rune_weapon_scaling_1'),
+(51906,'spell_death_knight_rune_weapon_scaling_2');
 
 -- Warrior
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
