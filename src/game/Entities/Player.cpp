@@ -24852,8 +24852,8 @@ void Player::AddGCD(SpellEntry const& spellEntry, uint32 /*forcedDuration = 0*/,
 void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* itemProto /*= nullptr*/, bool permanent /*= false*/, uint32 forcedDuration /*= 0*/)
 {
     uint32 spellCategory = spellEntry.Category;
-    uint32 recTime = spellEntry.RecoveryTime; // int because of spellmod calculations
-    uint32 categoryRecTime = spellEntry.CategoryRecoveryTime; // int because of spellmod calculations
+    int32 recTime = spellEntry.RecoveryTime; // int because of spellmod calculations
+    int32 categoryRecTime = spellEntry.CategoryRecoveryTime; // int because of spellmod calculations
     uint32 itemId = 0;
 
     if (itemProto)
@@ -24864,9 +24864,9 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
             {
                 if (Spell.SpellCategory)
                     spellCategory = Spell.SpellCategory;
-                if (Spell.SpellCooldown != -1)
+                if (Spell.SpellCooldown >= 0)
                     recTime = Spell.SpellCooldown;
-                if (Spell.SpellCategoryCooldown != -1)
+                if (Spell.SpellCategoryCooldown >= 0)
                     categoryRecTime = Spell.SpellCategoryCooldown;
                 itemId = itemProto->ItemId;
                 break;

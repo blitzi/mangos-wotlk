@@ -133,7 +133,7 @@ class CooldownData
 {
         friend class CooldownContainer;
     public:
-        CooldownData(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory, uint32 categoryDuration, uint32 itemId = 0, bool isPermanent = false) :
+        CooldownData(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory, int32 categoryDuration, int32 itemId = 0, bool isPermanent = false) :
             m_spellId(spellId),
             m_category(spellCategory),
             m_expireTime(duration ? std::chrono::milliseconds(duration) + clockNow : TimePoint()),
@@ -236,7 +236,7 @@ class CooldownContainer
             }
         }
 
-        bool AddCooldown(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory = 0, uint32 categoryDuration = 0, uint32 itemId = 0, bool onHold = false)
+        bool AddCooldown(TimePoint clockNow, uint32 spellId, long long duration, int32 spellCategory = 0, int32 categoryDuration = 0, uint32 itemId = 0, bool onHold = false)
         {
             RemoveBySpellId(spellId);
             auto resultItr = m_spellIdMap.emplace(spellId, std::move(std::unique_ptr<CooldownData>(new CooldownData(clockNow, spellId, duration, spellCategory, categoryDuration, itemId, onHold))));
