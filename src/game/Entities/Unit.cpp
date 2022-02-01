@@ -1045,6 +1045,25 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
             tapperGroup = tapper->GetGroup();
     }
 
+    // On death scripts
+    // Spirit of Redemtion Talent
+    bool damageFromSpiritOfRedemtionTalent = spellProto && spellProto->Id == 27965;
+    // if talent known but not triggered (check priest class for speedup check)
+    Aura* spiritOfRedemtionTalentReady = nullptr;
+    if (!damageFromSpiritOfRedemtionTalent &&           // not called from SPELL_AURA_SPIRIT_OF_REDEMPTION
+        victim->GetTypeId() == TYPEID_PLAYER && victim->getClass() == CLASS_PRIEST)
+    {
+        AuraList const& vDummyAuras = victim->GetAurasByType(SPELL_AURA_DUMMY);
+        for (AuraList::const_iterator itr = vDummyAuras.begin(); itr != vDummyAuras.end(); ++itr)
+        {
+            if ((*itr)->GetSpellProto()->SpellIconID == 1654)
+            {
+                spiritOfRedemtionTalentReady = *itr;
+                break;
+            }
+        }
+    }
+
     /*
     *                      Generic Actions (ProcEvents, Combat-Log, Kill Rewards, Stop Combat)
     */
@@ -1082,8 +1101,29 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
             tapper->RewardSinglePlayerAtKill(victim);
     }
 
- 
-    victim->SetHealth(0);
+    /*
+    *  Actions for the killer
+    */
+    if (spiritOfRedemtionTalentReady)
+    {
+        DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "DealDamage: Spirit of Redemtion ready");
+
+        // save value before aura remove
+        uint32 ressSpellId = victim->GetUInt32Value(PLAYER_SELF_RES_SPELL);
+        if (!ressSpellId)
+            ressSpellId = ((Player*)victim)->GetResurrectionSpellId();
+
+        // Remove all expected to remove at death auras (most important negative case like DoT or periodic triggers)
+        victim->RemoveAllAurasOnDeath();
+
+        // restore for use at real death
+        victim->SetUInt32Value(PLAYER_SELF_RES_SPELL, ressSpellId);
+
+        // FORM_SPIRITOFREDEMPTION and related auras
+        victim->CastSpell(victim, 27827, TRIGGERED_OLD_TRIGGERED, nullptr, spiritOfRedemtionTalentReady);
+    }
+    else
+        victim->SetHealth(0);
 
     if (killer)
     {
@@ -1108,8 +1148,10 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
             victim->GetFormationSlot()->GetFormationData()->Remove(playerVictim);
         }
 
-
-        playerVictim->SetPvPDeath(responsiblePlayer != nullptr);
+        // remember victim PvP death for corpse type and corpse reclaim delay
+        // at original death (not at SpiritOfRedemtionTalent timeout)
+        if (!damageFromSpiritOfRedemtionTalent)
+            playerVictim->SetPvPDeath(responsiblePlayer != nullptr);
 
         // achievement stuff
         if (responsiblePlayer)
@@ -1135,10 +1177,11 @@ void Unit::Kill(Unit* killer, Unit* victim, DamageEffectType damagetype, SpellEn
             playerVictim->GetSession()->SendPacket(data);
         }
 
-
-		DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "SET JUST_DIED");
-		victim->SetDeathState(JUST_DIED);
-        
+        if (!spiritOfRedemtionTalentReady)              // Before informing Battleground
+        {
+            DEBUG_FILTER_LOG(LOG_FILTER_DAMAGE, "SET JUST_DIED");
+            victim->SetDeathState(JUST_DIED);
+        }
 
         // playerVictim was in duel, duel must be interrupted
         // last damage from non duel opponent or non opponent controlled creature
