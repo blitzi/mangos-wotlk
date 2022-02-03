@@ -482,6 +482,7 @@ Spell::Spell(WorldObject * caster, SpellEntry const* info, uint32 triggeredFlags
     m_autoRepeat = IsAutoRepeatRangedSpell(m_spellInfo);
 
     m_runesState = 0;
+    m_runesStateAfterCast = 0;
     m_powerCost = 0;                                        // setup to correct value in Spell::prepare, don't must be used before.
     m_casttime = 0;                                         // setup to correct value in Spell::prepare, don't must be used before.
     m_timer = 0;                                            // will set to cast time in prepare
@@ -4267,7 +4268,7 @@ void Spell::SendCastResult(Player const* caster, SpellEntry const* spellInfo, ui
             data << uint32(0);                              // required skill value
             break;
         case SPELL_FAILED_TOO_MANY_OF_ITEM:
-            data << uint32(0);                              // ItemLimitCategory.dbc id
+            data << param1;                                 // ItemLimitCategory.dbc id
             break;
         case SPELL_FAILED_FISHING_TOO_LOW:
             data << uint32(0);                              // required fishing skill
@@ -4402,8 +4403,8 @@ void Spell::SendSpellGo()
 
     if (castFlags & CAST_FLAG_PREDICTED_RUNES)              // predicted runes
     {
-        uint8 runeMaskInitial = m_runesState;
-        uint8 runeMaskAfterCast = (m_caster->getClass() == CLASS_DEATH_KNIGHT ? static_cast<Player*>(m_caster)->GetRunesState() : 0);
+        uint8 runeMaskInitial = GetOldRuneState();
+        uint8 runeMaskAfterCast = GetNewRuneState();
         data << uint8(runeMaskInitial);                                  // runes state before
         data << uint8(runeMaskAfterCast);                                  // runes state after
         for (uint8 i = 0; i < MAX_RUNES; ++i)
@@ -4988,7 +4989,7 @@ SpellCastResult Spell::CheckOrTakeRunePower(bool take)
                 --runeCost[rune];
 
                 if (take)
-                    plr->ConvertRune(i, plr->GetBaseRune(i));
+                    plr->RestoreBaseRune(i);
             }
         }
 
@@ -5002,6 +5003,8 @@ SpellCastResult Spell::CheckOrTakeRunePower(bool take)
         float rp = float(src->runePowerGain);
         rp *= sWorld.getConfig(CONFIG_FLOAT_RATE_POWER_RUNICPOWER_INCOME);
         plr->ModifyPower(POWER_RUNIC_POWER, (int32)rp);
+
+        m_runesStateAfterCast = plr->GetRunesState();
     }
 
     return SPELL_CAST_OK;
@@ -5982,7 +5985,12 @@ SpellCastResult Spell::CheckCast(bool strict)
                     uint32 no_space = 0;
                     InventoryResult msg = static_cast<Player*>(target)->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, m_spellInfo->EffectItemType[i], count, &no_space);
                     if (msg != EQUIP_ERR_OK)
+                    {
+                        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(m_spellInfo->EffectItemType[i]);
+                        if (proto && proto->ItemLimitCategory)
+                            m_param1 = proto->ItemLimitCategory;
                         return SPELL_FAILED_TOO_MANY_OF_ITEM;
+                    }
                 }
 
                 break;
@@ -7148,6 +7156,9 @@ SpellCastResult Spell::CheckRange(bool strict)
         if ((spellRange->Flags & SPELL_RANGE_FLAG_MELEE) == 0 && !strict)
             maxRange += std::min(3.f, maxRange * 0.1f); // 10% but no more than MAX_SPELL_RANGE_TOLERANCE
 
+    if (!target && m_clientCast && HasSpellTarget(m_spellInfo, TARGET_UNIT_CASTER_PET))
+        target = m_caster->GetPet();
+
     if (target && target != m_trueCaster)
     {
         // distance from target in checks
@@ -7482,8 +7493,9 @@ SpellCastResult Spell::CheckItems()
     // if not item target then required item must be equipped (for triggered case not report error)
     else
     {
-        if (m_caster->IsPlayer() && !static_cast<Player*>(m_caster)->HasItemFitToSpellReqirements(m_spellInfo))
-            return m_IsTriggeredSpell ? SPELL_FAILED_DONT_REPORT : SPELL_FAILED_EQUIPPED_ITEM_CLASS;
+        uint32 error = SPELL_FAILED_EQUIPPED_ITEM_CLASS;
+        if (m_caster->IsPlayer() && !static_cast<Player*>(m_caster)->HasItemFitToSpellReqirements(m_spellInfo, nullptr, &error))
+            return m_IsTriggeredSpell ? SPELL_FAILED_DONT_REPORT : SpellCastResult(error);
     }
 
     // check reagents (ignore triggered spells with reagents processed by original spell) and special reagent ignore case.
@@ -9148,7 +9160,12 @@ SpellCastResult Spell::OnCheckCast(bool strict)
             // check if we already have a healthstone
             uint32 itemType = GetUsableHealthStoneItemType(m_caster);
             if (itemType && m_caster->IsPlayer() && ((Player*)m_caster)->GetItemCount(itemType) > 0)
+            {
+                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemType);
+                if (proto && proto->ItemLimitCategory)
+                    m_param1 = proto->ItemLimitCategory;
                 return SPELL_FAILED_TOO_MANY_OF_ITEM;
+            }
             break;
         }
         case 7914: // Capture Spirit

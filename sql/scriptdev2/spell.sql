@@ -27,6 +27,10 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (4132,'spell_banish_exile'),
 (6467,'spell_unarmed_woodcutter'),
 (7054,'spell_forsaken_skill'),
+(8603,'spell_tribal_death'),
+(8655,'spell_tribal_death'),
+(8894,'spell_tribal_death'),
+(9144,'spell_tribal_death'),
 (12639,'spell_summon_hakkar'),
 (12948,'spell_hakkar_summoned'),
 (13278,'spell_gdr_channel'),
@@ -714,6 +718,20 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 -- Death Knight
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (46584,'spell_dk_raise_dead'),
+(47541,'spell_dk_death_coil'),
+(49892,'spell_dk_death_coil'),
+(49893,'spell_dk_death_coil'),
+(49894,'spell_dk_death_coil'),
+(49895,'spell_dk_death_coil'),
+(49194,'spell_dk_unholy_blight'),
+(49018,'spell_sudden_doom'),
+(49529,'spell_sudden_doom'),
+(49530,'spell_sudden_doom'),
+(49208,'spell_death_rune_dk'),
+(49467,'spell_death_rune_dk'),
+(50033,'spell_death_rune_dk'),
+(50034,'spell_death_rune_dk'),
+(54639,'spell_death_rune_dk'),
 (55090,'spell_scourge_strike'),
 (55265,'spell_scourge_strike'),
 (55270,'spell_scourge_strike'),
@@ -882,7 +900,9 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (12574,'spell_arcane_concentration'),
 (12575,'spell_arcane_concentration'),
 (12576,'spell_arcane_concentration'),
-(12577,'spell_arcane_concentration');
+(12577,'spell_arcane_concentration'),
+(12654,'spell_mage_ignite'),
+(59638,'spell_mirror_image_frostbolt');
 
 -- Druid
 INSERT INTO spell_scripts(Id, ScriptName) VALUES

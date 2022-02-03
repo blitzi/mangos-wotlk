@@ -5867,9 +5867,15 @@ bool Player::UpdateSkillPro(uint16 SkillId, int32 Chance, uint16 diff)
 void Player::UpdateWeaponSkill(WeaponAttackType attType)
 {
     // no skill gain in pvp
-    Unit* pVictim = GetVictim();
-    if (pVictim && pVictim->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
-        return;
+    Unit* victim = GetVictim();
+    if (victim)
+    {
+        if (victim->IsPlayerControlled())
+            return;
+
+        if (victim->IsNoWeaponSkillGain())
+            return;
+    }
 
     if (IsNoWeaponShapeShift())
         return;
@@ -6271,6 +6277,9 @@ void Player::UpdateSkillTrainedSpells(uint16 id, uint16 currVal)
             // Check if auto-training method is set, skip if not
             if (!pAbility->learnOnGetSkill)
             {
+                if (pAbility->skillId == SKILL_FISHING && !pAbility->forward_spellid)
+                    continue;
+
                 // Check if its actually an original profession/tradeskill spell and we miss it somehow - repair
                 if (SpellLearnSkillNode const* training = sSpellMgr.GetSpellLearnSkill(pAbility->spellId))
                 {
@@ -18658,6 +18667,10 @@ void Player::_SaveQuestStatus()
             break;
             case QUEST_CHANGED :
             {
+                Quest const* quest = sObjectMgr.GetQuestTemplate(mQuestStatu.first);
+                if (quest->IsAutoComplete())
+                    continue;
+
                 SqlStatement stmt = CharacterDatabase.CreateStatement(updateQuestStatus, "UPDATE character_queststatus SET status = ?,rewarded = ?,explored = ?,timer = ?,"
                                     "mobcount1 = ?,mobcount2 = ?,mobcount3 = ?,mobcount4 = ?,itemcount1 = ?,itemcount2 = ?,itemcount3 = ?,itemcount4 = ?,itemcount5 = ?,itemcount6 = ? WHERE guid = ? AND quest = ?");
 
@@ -21979,16 +21992,24 @@ void Player::AutoUnequipOffhandIfNeed(uint8 bag)
     }
 }
 
-bool Player::HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item const* ignoreItem) const
+bool Player::HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item const* ignoreItem, uint32* error) const
 {
     if (spellInfo->EquippedItemClass < 0)
         return true;
 
     if (spellInfo->HasAttribute(SPELL_ATTR_EX3_MAIN_HAND) && !hasMainhandWeaponForAttack())
+    {
+        if (error)
+            *error = SPELL_FAILED_EQUIPPED_ITEM_CLASS_MAINHAND;
         return false;
+    }
 
     if (spellInfo->HasAttribute(SPELL_ATTR_EX3_REQ_OFFHAND) && !hasOffhandWeaponForAttack())
+    {
+        if (error)
+            *error = SPELL_FAILED_EQUIPPED_ITEM_CLASS_OFFHAND;
         return false;
+    }
 
     // scan other equipped items for same requirements (mostly 2 daggers/etc)
     // for optimize check 2 used cases only
@@ -22915,6 +22936,60 @@ bool Player::ActivateRunes(RuneType type, uint32 count)
     return modify;
 }
 
+void Player::RestoreBaseRune(uint8 index)
+{
+    std::vector<Aura const*> removeList;
+    std::unordered_set<Aura const*>& auras = m_runes->runes[index].ConvertAuras;
+
+    auto criteria = [&removeList](Aura const* storedAura) -> bool
+    {
+        // AuraEffect already gone
+        if (!storedAura)
+            return true;
+
+        if (storedAura->GetSpellProto()->HasAttribute(SPELL_ATTR_PASSIVE))
+        {
+            // Don't drop passive talents providing rune conversion
+            if (storedAura->GetModifier()->m_auraname == SPELL_AURA_CONVERT_RUNE)
+                removeList.push_back(storedAura);
+            return true;
+        }
+
+        // If rune was converted by a non-passive aura that is still active we should keep it converted
+        return false;
+    };
+
+    for (auto itr = auras.begin(); itr != auras.end();)
+    {
+        if (criteria(*itr))
+            itr = auras.erase(itr);
+        else
+            ++itr;
+    }
+
+    if (!auras.empty())
+        return;
+
+    ConvertRune(index, GetBaseRune(index));
+
+    if (removeList.empty())
+        return;
+
+    // Filter auras set to be removed if they are converting any other rune index
+    for (Aura const* storedAura : removeList)
+    {
+        uint8 itr = 0;
+        for (; itr < MAX_RUNES; ++itr)
+        {
+            if (m_runes->runes[itr].ConvertAuras.find(storedAura) != m_runes->runes[itr].ConvertAuras.end())
+                break;
+        }
+
+        if (itr == MAX_RUNES)
+            RemoveSpellAuraHolder(const_cast<SpellAuraHolder*>(storedAura->GetHolder()));
+    }
+}
+
 void Player::ResyncRunes() const
 {
     WorldPacket data(SMSG_RESYNC_RUNES, 4 + MAX_RUNES * 2);
@@ -22963,6 +23038,33 @@ void Player::InitRunes()
 
     for (uint32 i = 0; i < NUM_RUNE_TYPES; ++i)
         SetFloatValue(PLAYER_RUNE_REGEN_1 + i, 0.1f);
+}
+
+void Player::SetRuneConvertAura(uint8 index, Aura const* aura)
+{
+    m_runes->runes[index].ConvertAuras.insert(aura);
+}
+
+void Player::RemoveRuneConvertAura(uint8 index, Aura const* aura)
+{
+    m_runes->runes[index].ConvertAuras.erase(aura);
+}
+
+void Player::AddRuneByAuraEffect(uint8 index, RuneType newType, Aura const* aura)
+{
+    SetRuneConvertAura(index, aura);
+    ConvertRune(index, newType);
+}
+
+void Player::RemoveRunesByAura(Aura const* aura)
+{
+    for (uint8 itr = 0; itr < MAX_RUNES; ++itr)
+    {
+        RemoveRuneConvertAura(itr, aura);
+
+        if (m_runes->runes[itr].ConvertAuras.empty())
+            ConvertRune(itr, GetBaseRune(itr));
+    }
 }
 
 bool Player::IsBaseRuneSlotsOnCooldown(RuneType runeType) const
@@ -25300,4 +25402,18 @@ float Player::GetAverageItemLevel() const
     }
 
     return ((float)sum) / count;
+}
+
+uint32 Player::LookupHighestLearnedRank(uint32 spellId)
+{
+    uint32 ownedRank = 0;
+    uint32 higherRank = spellId;
+    do
+    {
+        if (HasSpell(higherRank))
+            ownedRank = higherRank;
+        else
+            break;
+    } while ((higherRank = sSpellMgr.GetNextSpellInChain(ownedRank)));
+    return ownedRank;
 }

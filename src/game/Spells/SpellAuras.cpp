@@ -7616,14 +7616,15 @@ void Aura::HandleModDamagePercentDone(bool apply, bool Real)
             target->HandleStatModifier(UNIT_MOD_DAMAGE_MAINHAND, TOTAL_PCT, float(m_modifier.m_amount), apply);
             target->HandleStatModifier(UNIT_MOD_DAMAGE_OFFHAND, TOTAL_PCT, float(m_modifier.m_amount), apply);
             target->HandleStatModifier(UNIT_MOD_DAMAGE_RANGED, TOTAL_PCT, float(m_modifier.m_amount), apply);
+
+            // For show in client
+            if (target->GetTypeId() == TYPEID_PLAYER)
+                target->ApplyModSignedFloatValue(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT, m_modifier.m_amount / 100.0f, apply);
         }
         else
         {
             // done in Player::_ApplyWeaponDependentAuraMods
         }
-        // For show in client
-        if (target->GetTypeId() == TYPEID_PLAYER)
-            target->ApplyModSignedFloatValue(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT, m_modifier.m_amount / 100.0f, apply);
     }
 
     // Skip non magic case for speedup
@@ -7930,10 +7931,7 @@ void Aura::HandleShapeshiftBoosts(bool apply)
                 {
                     if (i->GetSpellProto()->SpellIconID == 240 && i->GetModifier()->m_miscvalue == 3)
                     {
-                        int32 HotWMod = i->GetModifier()->m_amount;
-                        if (GetModifier()->m_miscvalue == FORM_CAT)
-                            HotWMod /= 2;
-
+                        int32 HotWMod = i->GetModifier()->m_amount / 2;
                         target->CastCustomSpell(nullptr, HotWSpellId, &HotWMod, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
                         break;
                     }
@@ -9912,22 +9910,13 @@ void Aura::HandleAuraConvertRune(bool apply, bool Real)
         {
             if (plr->GetCurrentRune(i) == runeFrom && !plr->GetRuneCooldown(i))
             {
-                plr->ConvertRune(i, runeTo);
+                plr->AddRuneByAuraEffect(i, runeTo, this);
                 break;
             }
         }
     }
     else
-    {
-        for (uint32 i = 0; i < MAX_RUNES; ++i)
-        {
-            if (plr->GetCurrentRune(i) == runeTo && plr->GetBaseRune(i) == runeFrom)
-            {
-                plr->ConvertRune(i, runeFrom);
-                break;
-            }
-        }
-    }
+        plr->RemoveRunesByAura(this);
 }
 
 void Aura::HandlePhase(bool apply, bool Real)

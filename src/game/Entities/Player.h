@@ -369,6 +369,7 @@ struct RuneInfo
     uint8  BaseRune;
     uint8  CurrentRune;
     uint16 Cooldown;                                        // msec
+    std::unordered_set<Aura const*> ConvertAuras;
 };
 
 struct Runes
@@ -1284,7 +1285,7 @@ class Player : public Unit
         uint8 GetBankBagSlotCount() const { return GetByteValue(PLAYER_BYTES_2, 2); }
         void SetBankBagSlotCount(uint8 count) { SetByteValue(PLAYER_BYTES_2, 2, count); }
         bool HasItemCount(uint32 item, uint32 count, bool inBankAlso = false) const;
-        bool HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item const* ignoreItem = nullptr) const;
+        bool HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item const* ignoreItem = nullptr, uint32* error = nullptr) const;
         bool CanNoReagentCast(SpellEntry const* spellInfo) const;
         bool HasItemOrGemWithIdEquipped(uint32 item, uint32 count, uint8 except_slot = NULL_SLOT) const;
         bool HasItemOrGemWithLimitCategoryEquipped(uint32 limitCategory, uint32 count, uint8 except_slot = NULL_SLOT) const;
@@ -2478,6 +2479,11 @@ class Player : public Unit
         void ResyncRunes() const;
         void AddRunePower(uint8 index) const;
         void InitRunes();
+        void SetRuneConvertAura(uint8 index, Aura const* aura);
+        void RemoveRuneConvertAura(uint8 index, Aura const* aura);
+        void AddRuneByAuraEffect(uint8 index, RuneType newType, Aura const* aura);
+        void RemoveRunesByAura(Aura const* aura);
+        void RestoreBaseRune(uint8 index);
 
         AchievementMgr const& GetAchievementMgr() const { return m_achievementMgr; }
         AchievementMgr& GetAchievementMgr() { return m_achievementMgr; }
@@ -2578,6 +2584,8 @@ class Player : public Unit
         float GetAverageItemLevel() const;
 
         LfgData& GetLfgData() { return m_lfgData; }
+
+        uint32 LookupHighestLearnedRank(uint32 spellId);
     protected:
         /*********************************************************/
         /***               BATTLEGROUND SYSTEM                 ***/
