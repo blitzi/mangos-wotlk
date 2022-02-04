@@ -619,6 +619,8 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (59858,'spell_summon_malformed_ooze_aura'),
 (59859,'spell_summon_iron_trogg_aura'),
 (59860,'spell_summon_iron_dwarf_aura'),
+(59906,'spell_swift_hand_of_justice'),
+(59915,'spell_discerning_eye_of_the_beast'),
 (60211,'spell_cauterize'),
 (61071,'spell_vortex_aura'),
 (61072,'spell_vortex_aura'),
@@ -731,7 +733,13 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (49467,'spell_death_rune_dk'),
 (50033,'spell_death_rune_dk'),
 (50034,'spell_death_rune_dk'),
+(54637,'spell_death_rune_dk'),
+(54638,'spell_death_rune_dk'),
 (54639,'spell_death_rune_dk'),
+(56834,'spell_death_rune_dk'),
+(56835,'spell_death_rune_dk'),
+(50452,'spell_bloodworm'),
+(50453,'spell_health_leech_passive'),
 (55090,'spell_scourge_strike'),
 (55265,'spell_scourge_strike'),
 (55270,'spell_scourge_strike'),
@@ -742,6 +750,7 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (34026,'spell_kill_command'),
 (34477,'spell_misdirection'),
 (34501,'spell_expose_weakness'),
+(53480,'spell_roar_of_sacrifice'),
 (781,'Disengage');
 
 -- Priest
@@ -777,6 +786,9 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (20271,'spell_judgement'),
 (57774,'spell_judgement'),
 (53408,'spell_judgement'),
+(53385,'spell_divine_storm'),
+(54171,'spell_divine_storm_heal'),
+(70769,'spell_divine_storm_cooldown'),
 (31789,'spell_righteous_defense'),
 (40470,'spell_paladin_tier_6_trinket');
 
@@ -890,6 +902,11 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (25236,'spell_warrior_execute'),
 (47470,'spell_warrior_execute'),
 (47471,'spell_warrior_execute'),
+(20243,'spell_warrior_devastate'),
+(30016,'spell_warrior_devastate'),
+(30022,'spell_warrior_devastate'),
+(47497,'spell_warrior_devastate'),
+(47498,'spell_warrior_devastate'),
 (20647,'spell_warrior_execute_damage'),
 (34428,'spell_warrior_victory_rush'),
 (58567,'spell_sunder_armor');

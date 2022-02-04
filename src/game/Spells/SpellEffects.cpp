@@ -7860,28 +7860,6 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
             }
             break;
         }
-        case SPELLFAMILY_WARRIOR:
-        {
-            // Devastate
-            if (m_spellInfo->SpellVisual[0] == 12295 && m_spellInfo->SpellIconID == 1508)
-            {
-                // Sunder Armor
-                Aura* sunder = unitTarget->GetAura(SPELL_AURA_MOD_RESISTANCE_PCT, SPELLFAMILY_WARRIOR, uint64(0x0000000000004000), 0x00000000, m_caster->GetObjectGuid());
-
-                // Devastate bonus and sunder armor refresh
-                if (sunder)
-                {
-                    sunder->GetHolder()->RefreshHolder();
-                    spell_bonus += sunder->GetStackAmount() * CalculateSpellEffectValue(EFFECT_INDEX_2, unitTarget);
-                }
-
-                // Devastate causing Sunder Armor Effect
-                // and no need to cast over max stack amount
-                if (!sunder || sunder->GetStackAmount() < sunder->GetSpellProto()->StackAmount)
-                    m_caster->CastSpell(unitTarget, 58567, TRIGGERED_IGNORE_HIT_CALCULATION | TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COSTS);
-            }
-            break;
-        }
         case SPELLFAMILY_ROGUE:
         {
             // Mutilate (for each hand)
@@ -7993,11 +7971,6 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
 
                     totalDamagePercentMod *= 1.0f + bonus;
                 }
-
-                // Heart Strike secondary target
-                if (m_spellInfo->SpellIconID == 3145)
-                    if (m_targets.getUnitTarget() != unitTarget)
-                        weaponDamagePercentMod /= 2.0f;
             }
             // Glyph of Blood Strike
             if (m_spellInfo->SpellFamilyFlags & uint64(0x0000000000400000) &&
@@ -8032,14 +8005,14 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
         {
             case SPELL_EFFECT_WEAPON_DAMAGE:
             case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
-                fixed_bonus += CalculateSpellEffectValue(SpellEffectIndex(j), unitTarget);
+                fixed_bonus += damagePerEffect[j];
                 break;
             case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
-                fixed_bonus += CalculateSpellEffectValue(SpellEffectIndex(j), unitTarget);
+                fixed_bonus += damagePerEffect[j];
                 normalized = true;
                 break;
             case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
-                weaponDamagePercentMod *= float(CalculateSpellEffectValue(SpellEffectIndex(j), unitTarget)) / 100.0f;
+                weaponDamagePercentMod *= float(damagePerEffect[j]) / 100.0f;
 
                 // applied only to prev.effects fixed damage
                 fixed_bonus = int32(fixed_bonus * weaponDamagePercentMod);
