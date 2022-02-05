@@ -9897,7 +9897,7 @@ bool Unit::IsVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
     }
 
     // when restriction not set, visible to all
-    if (IsOnlyVisibleTo(u->GetObjectGuid()))
+    if (!IsOnlyVisibleTo(u->GetObjectGuid()))
         return false;
 
     // always seen by owner

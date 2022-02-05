@@ -1574,7 +1574,7 @@ void Creature::ClearCreatureGroup()
 bool Creature::IsOnlyVisibleTo(ObjectGuid guid) const
 {
     if (m_onlyVisibleTo.IsEmpty())
-        return false;
+        return true;
 
     return guid == m_onlyVisibleTo;
 }
