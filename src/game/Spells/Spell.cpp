@@ -9606,7 +9606,7 @@ uint32 Spell::GetPhaseMaskOverride()
     if (SpellScript* script = GetSpellScript())
         return script->GetPhaseMaskOverride(this);
 
-    return 1;
+	return m_trueCaster->GetPhaseMask();
 }
 
 void Spell::SetTotalTargetValueModifier(float modifier)
