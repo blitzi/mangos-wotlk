@@ -7814,21 +7814,22 @@ void Spell::EffectWeaponDmg(SpellEffectIndex eff_idx)
     // multiple weapon dmg effect workaround
     // execute only the last weapon damage
     // and handle all effects at once
-    for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
-    {
-        switch (m_spellInfo->Effect[j])
-        {
-            case SPELL_EFFECT_WEAPON_DAMAGE:
-            case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
-            case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
-            case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
-                if (j < int(eff_idx))                       // we must calculate only at last weapon effect
-                    return;
-                break;
-        }
-    }
 
-    // some spell specific modifiers
+	for (uint32 j = (uint32)eff_idx + 1; j < MAX_EFFECT_INDEX; ++j)
+	{
+		switch (m_spellInfo->Effect[j])
+		{
+		case SPELL_EFFECT_WEAPON_DAMAGE:
+		case SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL:
+		case SPELL_EFFECT_NORMALIZED_WEAPON_DMG:
+		case SPELL_EFFECT_WEAPON_PERCENT_DAMAGE:
+			return;     // we must calculate only at last weapon effect
+		default:
+			break;
+		}
+	}
+
+	// some spell specific modifiers
     bool spellBonusNeedWeaponDamagePercentMod = false;      // if set applied weapon damage percent mode to spell bonus
 
     float weaponDamagePercentMod = 1.0f;                    // applied to weapon damage and to fixed effect damage bonus

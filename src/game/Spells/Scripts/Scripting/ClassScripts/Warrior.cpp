@@ -93,7 +93,8 @@ struct WarriorDevastate : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
     {
-        if (effIdx != EFFECT_INDEX_1)
+		// execute only the last weapon damage
+        if (effIdx != EFFECT_INDEX_2)
             return;
 
         Unit* target = spell->GetUnitTarget();
@@ -107,7 +108,8 @@ struct WarriorDevastate : public SpellScript
         if (sunder)
         {
             sunder->GetHolder()->RefreshHolder();
-            spell->SetDamage(spell->GetDamage() + sunder->GetStackAmount() * spell->CalculateSpellEffectValue(EFFECT_INDEX_2, target));
+			//sets effect_index_1 implicit
+            spell->SetDamage(sunder->GetStackAmount() * spell->CalculateSpellEffectValue(effIdx, target));
         }
 
         if (Aura* glyphAura = caster->GetAura(63332, EFFECT_INDEX_0))
