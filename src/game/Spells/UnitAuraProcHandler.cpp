@@ -2374,7 +2374,7 @@ SpellAuraProcResult Unit::HandleDummyAuraProc(ProcExecutionData& data)
                 case 31877:
                 case 31878:
                     // triggered only at casted Judgement spells, not at additional Judgement effects
-                    if (!spellInfo || spellInfo->Category != 1210)
+                    if (!spellInfo || spellInfo->Id != 54158)
                         return SPELL_AURA_PROC_FAILED;
 
                     target = this;
@@ -4438,7 +4438,7 @@ SpellAuraProcResult Unit::HandleAddFlatModifierAuraProc(ProcExecutionData& data)
         if (!spellInfo)
             return SPELL_AURA_PROC_FAILED;
 
-        if (GetSpellSpecific(spellInfo->Id) != SPELL_JUDGEMENT)
+        if (spellInfo->Id != 54158)
             return SPELL_AURA_PROC_FAILED;
 
         int bp = triggeredByAura->GetModifier()->m_amount;
