@@ -203,6 +203,81 @@ struct HealthLeechPassive : public AuraScript
     }
 };
 
+struct AntiMagicZone : public SpellScript
+{
+    void OnSummon(Spell* /*spell*/, Creature* summon) const override
+    {
+        summon->SetFlag(UNIT_FIELD_FLAGS_2, UNIT_FLAG2_HIDE_BODY);
+        summon->CastSpell(nullptr, 40031, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct CorpseExplosionDK : public SpellScript
+{
+    bool OnCheckTarget(const Spell* spell, Unit* target, SpellEffectIndex eff) const override
+    {
+        if (eff == EFFECT_INDEX_0) // can be cast on a ghoul
+        {
+            if (target->IsPlayerControlled() && target->GetOwnerGuid() == spell->GetCaster()->GetObjectGuid() &&
+                target->GetEntry() == 26125)
+                return true;
+        }
+        
+        if (target->GetDeathState() == CORPSE &&
+            (target->GetCreatureTypeMask() & CREATURE_TYPEMASK_MECHANICAL_OR_ELEMENTAL) == 0)
+            return true;
+
+        return false;
+    }
+
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (spell->GetScriptValue() == 1)
+            return;
+
+        spell->SetScriptValue(1); // mark as used
+        Unit* target = spell->GetUnitTarget();
+        if (effIdx == EFFECT_INDEX_0) // ghoul
+        {
+            target->InterruptNonMeleeSpells(false);
+            target->CastSpell(nullptr, 47496, TRIGGERED_NORMAL_COMBAT_CAST);
+        }
+        else
+        {
+            int32 damage = spell->CalculateSpellEffectValue(EFFECT_INDEX_0, target);
+            spell->GetCaster()->CastCustomSpell(spell->GetUnitTarget(), spell->CalculateSpellEffectValue(EFFECT_INDEX_1, spell->GetUnitTarget()),
+                &damage, nullptr, nullptr, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL);
+            spell->GetCaster()->CastSpell(spell->GetUnitTarget(), 51270, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
+struct ExplodeGhoulCorpseExplosion : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx == EFFECT_INDEX_0)
+        {
+            int32 percentage = spell->CalculateSpellEffectValue(EFFECT_INDEX_2, spell->GetUnitTarget());
+            spell->SetDamage(spell->GetCaster()->GetMaxHealth() * percentage / 100);
+		}
+        else
+        {
+            spell->SetDamage(spell->GetCaster()->GetMaxHealth());
+        }
+    }
+
+    void OnSuccessfulFinish(Spell* spell) const override
+    {
+        // Suicide
+        if (spell->GetCaster()->IsAlive())
+            spell->GetCaster()->CastSpell(nullptr, 7, TRIGGERED_OLD_TRIGGERED);
+        // Set corpse look
+        if (spell->GetCaster()->IsCreature())
+            static_cast<Creature*>(spell->GetCaster())->ForcedDespawn(500);
+    }          
+};
+
 void LoadDeathKnightScripts()
 {
     RegisterSpellScript<ScourgeStrike>("spell_scourge_strike");
@@ -213,4 +288,7 @@ void LoadDeathKnightScripts()
     RegisterAuraScript<DeathRuneDK>("spell_death_rune_dk");
     RegisterSpellScript<Bloodworm>("spell_bloodworm");
     RegisterAuraScript<HealthLeechPassive>("spell_health_leech_passive");
+    RegisterSpellScript<AntiMagicZone>("spell_anti_magic_zone");
+    RegisterSpellScript<CorpseExplosionDK>("spell_dk_corpse_explosion");
+    RegisterSpellScript<ExplodeGhoulCorpseExplosion>("spell_explode_ghoul_corpse_explosion");
 }
