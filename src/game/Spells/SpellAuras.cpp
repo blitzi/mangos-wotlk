@@ -10077,11 +10077,12 @@ void Aura::HandleTriggerLinkedAura(bool apply, bool Real)
     }
 
     Unit* target = GetTarget();
+    Unit* caster = GetCaster();
 
     if (apply)
     {
-        // ToDo: handle various cases where base points need to be applied!
-        target->CastSpell(target, spellInfo, TRIGGERED_OLD_TRIGGERED, nullptr, this);
+        int32 points = GetAmount();
+        caster->CastCustomSpell(target, spellInfo, &points, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
     }
     else
         target->RemoveAurasByCasterSpell(linkedSpell, GetCasterGuid());
@@ -11837,10 +11838,10 @@ SpellAuraProcResult Aura::OnProc(ProcExecutionData& data)
     return SPELL_AURA_PROC_OK;
 }
 
-void Aura::OnAbsorb(int32& currentAbsorb, uint32& reflectedSpellId, int32& reflectDamage, bool& preventedDeath)
+void Aura::OnAbsorb(int32& currentAbsorb, int32& remainingDamage, uint32& reflectedSpellId, int32& reflectDamage, bool& preventedDeath)
 {
     if (AuraScript* script = GetAuraScript())
-        script->OnAbsorb(this, currentAbsorb, reflectedSpellId, reflectDamage, preventedDeath);
+        script->OnAbsorb(this, currentAbsorb, remainingDamage, reflectedSpellId, reflectDamage, preventedDeath);
 }
 
 void Aura::OnManaAbsorb(int32& currentAbsorb)

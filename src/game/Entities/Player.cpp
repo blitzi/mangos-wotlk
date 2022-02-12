@@ -3839,19 +3839,26 @@ void Player::removeSpell(uint32 spell_id, bool disabled, bool learn_low_rank, bo
     if (itr == m_spells.end())
         return;
 
-#ifndef ENABLE_PLAYERBOTS
+    PlayerSpell& playerSpell = itr->second;
+    if (playerSpell.state == PLAYERSPELL_REMOVED)
+        return;
+
+    PlayerSpellState savedState = playerSpell.state;
+    playerSpell.state = PLAYERSPELL_REMOVED; // recursion protection
+
     // Always try to remove all dependent spells if present (needed to reset some talents properly)
     SpellLearnSpellMapBounds spell_bounds = sSpellMgr.GetSpellLearnSpellMapBounds(spell_id);
     for (SpellLearnSpellMap::const_iterator child_itr = spell_bounds.first; child_itr != spell_bounds.second; ++child_itr)
         removeSpell(child_itr->second.spell, !IsPassiveSpell(child_itr->second.spell), !IsPassiveSpell(child_itr->second.spell));
-#endif
+
 
     // search again just in case
     itr = m_spells.find(spell_id);
     if (itr == m_spells.end())
         return;
 
-    PlayerSpell& playerSpell = itr->second;
+    playerSpell.state = savedState;
+
     if (playerSpell.state == PLAYERSPELL_REMOVED || (disabled && playerSpell.disabled))
         return;
 
@@ -19632,23 +19639,26 @@ void Player::AddSpellMod(SpellModifier* mod, bool apply)
 {
     Opcodes opcode = (mod->type == SPELLMOD_FLAT) ? SMSG_SET_FLAT_SPELL_MODIFIER : SMSG_SET_PCT_SPELL_MODIFIER;
 
-    for (int eff = 0; eff < 64; ++eff)
+    for (uint32 i = 0; i < 3; ++i)
     {
-        uint64 _mask = uint64(1) << eff;
-        if (mod->mask.IsFitToFamilyMask(_mask))
+        for (uint32 eff = 0; eff < 32; ++eff)
         {
-            int32 val = 0;
-            for (SpellModifier* modifier : m_spellMods[mod->op])
+            uint32 mask = uint32(1) << eff;
+            if (mod->mask.IsFitToFamilyMask(i, mask))
             {
-                if (modifier->type == mod->type && (modifier->mask.IsFitToFamilyMask(_mask)))
-                    val += modifier->value;
+                int32 val = 0;
+                for (SpellModifier* modifier : m_spellMods[mod->op])
+                {
+                    if (modifier->type == mod->type && (modifier->mask.IsFitToFamilyMask(i, mask)))
+                        val += modifier->value;
+                }
+                val += apply ? mod->value : -(mod->value);
+                WorldPacket data(opcode, (1 + 1 + 4));
+                data << uint8(eff + 32 * i);
+                data << uint8(mod->op);
+                data << int32(val);
+                SendDirectMessage(data);
             }
-            val += apply ? mod->value : -(mod->value);
-            WorldPacket data(opcode, (1 + 1 + 4));
-            data << uint8(eff);
-            data << uint8(mod->op);
-            data << int32(val);
-            SendDirectMessage(data);
         }
     }
 

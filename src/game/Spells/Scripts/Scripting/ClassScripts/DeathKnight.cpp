@@ -115,25 +115,13 @@ struct UnholyBlightDK : public AuraScript
 {
     SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
     {
-        procData.triggeredSpellId = 50536; // unholy blight DOT
         uint32 damagePercent = aura->GetModifier()->m_amount;
         if (Aura* glyphAura = aura->GetTarget()->GetAura(63332, EFFECT_INDEX_0))
             damagePercent += (damagePercent * glyphAura->GetModifier()->m_amount / 100);
-        procData.basepoints[0] = procData.damage * damagePercent / 100;
-        return SPELL_AURA_PROC_OK;
-    }
-};
-
-struct SuddenDoom : public AuraScript
-{
-    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
-    {
-        Player* player = dynamic_cast<Player*>(aura->GetTarget());
-        if (!player)
-            return SPELL_AURA_PROC_OK;
-
-        // dk death coil rank 1 id - need max
-        procData.triggeredSpellId = player->LookupHighestLearnedRank(47541);
+        int32 damage = int32(procData.damage * damagePercent / 100);
+        // unholy blight DOT
+        if (procData.attacker)
+            procData.attacker->CastCustomSpell(procData.target, 50536, &damage, nullptr, nullptr, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_HIDE_CAST_IN_COMBAT_LOG);
         return SPELL_AURA_PROC_OK;
     }
 };
@@ -186,9 +174,10 @@ struct DeathRuneDK : public AuraScript
 
 struct Bloodworm : public SpellScript
 {
-    void OnSummon(Spell* /*spell*/, Creature* summon) const override
+    void OnSummon(Spell* spell, Creature* summon) const override
     {
         summon->CastSpell(nullptr, 50453, TRIGGERED_OLD_TRIGGERED);
+        summon->CastSpell(nullptr, 52001, TRIGGERED_OLD_TRIGGERED);
         summon->AI()->SetReactState(REACT_DEFENSIVE);
     }
 };
@@ -278,17 +267,137 @@ struct ExplodeGhoulCorpseExplosion : public SpellScript
     }          
 };
 
+struct DeathKnightDisease : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply || aura->GetEffIndex() != EFFECT_INDEX_0)
+            return;
+
+        Unit* caster = aura->GetCaster();
+        if (!caster)
+            return;
+
+        if (caster->GetOverrideScript(7282)) // Crypt Fever and Ebon Plaguebringer
+        {
+            Aura* chosen = nullptr; // need highest id
+            for (Aura* aura : caster->GetAurasByType(SPELL_AURA_OVERRIDE_CLASS_SCRIPTS))
+                if (aura->GetModifier()->m_miscvalue == 7282)
+                    if (!chosen || chosen->GetId() < aura->GetId())
+                        chosen = aura;
+
+            if (chosen)
+            {
+                uint32 spellId = 0;
+                switch (chosen->GetId())
+                {
+                    // Ebon Plague
+                    case 51161: spellId = 51735; break;
+                    case 51160: spellId = 51734; break;
+                    case 51099: spellId = 51726; break;
+                        // Crypt Fever
+                    case 49632: spellId = 50510; break;
+                    case 49631: spellId = 50509; break;
+                    case 49032: spellId = 50508; break;
+                    default: break;
+                }
+
+                if (spellId)
+                    caster->CastSpell(aura->GetTarget(), spellId, TRIGGERED_OLD_TRIGGERED);
+            }
+        }
+    }
+};
+
+struct CryptFeverServerside : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        if (data.effIdx == EFFECT_INDEX_1)
+        {
+            if (data.caster)
+            {
+                Aura* aura = data.target->GetAura(51735, EFFECT_INDEX_1);
+                if (!aura)
+                    aura = data.target->GetAura(51734, EFFECT_INDEX_1);
+                if (!aura)
+                    aura = data.target->GetAura(51726, EFFECT_INDEX_1);
+                if (aura)
+                    value = aura->GetAmount();
+            }                
+        }
+        return value;
+    }
+};
+
+struct ArmyOfTheDead : public AuraScript
+{
+    int32 OnAuraValueCalculate(AuraCalcData& data, int32 value) const override
+    {
+        if (data.effIdx == EFFECT_INDEX_1)
+            value = data.target->GetParryChance() + data.target->GetDodgeChance();
+        return value;
+    }
+};
+
+struct ArmyOfTheDeadGhoul : public SpellScript
+{
+    void OnSummon(Spell* /*spell*/, Creature* summon) const override
+    {
+        summon->CastSpell(nullptr, 7398, TRIGGERED_NONE);
+        summon->CastSpell(nullptr, 51996, TRIGGERED_OLD_TRIGGERED);
+        summon->CastSpell(nullptr, 67561, TRIGGERED_OLD_TRIGGERED); // unk scaling aura
+        summon->CastSpell(nullptr, 61697, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+struct SuddenDoom : public AuraScript
+{
+    bool OnCheckProc(Aura* aura, ProcExecutionData& /*data*/) const override
+    {
+        if (aura->GetTarget()->IsPlayer())
+            return true;
+
+        return false;
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
+    {
+        // Death Coil
+        uint32 highestDeathCoil = static_cast<Player*>(aura->GetTarget())->LookupHighestLearnedRank(47541);
+        if (highestDeathCoil && procData.attacker)
+            procData.attacker->CastSpell(procData.victim, highestDeathCoil, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_CURRENT_CASTED_SPELL | TRIGGERED_IGNORE_COSTS);
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct WillOfTheNecropolis : public AuraScript
+{
+    void OnAbsorb(Aura* aura, int32& currentAbsorb, int32& remainingDamage, uint32& /*reflectedSpellId*/, int32& /*reflectDamage*/, bool& /*preventedDeath*/) const override
+    {
+        remainingDamage += currentAbsorb;
+        currentAbsorb = 0;
+        if (aura->GetTarget()->GetHealth() - remainingDamage < aura->GetTarget()->GetMaxHealth() * 35 / 100)
+            currentAbsorb = aura->GetAmount() * remainingDamage / 100;
+    }
+};
+
 void LoadDeathKnightScripts()
 {
     RegisterSpellScript<ScourgeStrike>("spell_scourge_strike");
     RegisterSpellScript<RaiseDead>("spell_dk_raise_dead");
     RegisterSpellScript<DeathCoilDK>("spell_dk_death_coil");
     RegisterAuraScript<UnholyBlightDK>("spell_dk_unholy_blight");
-    RegisterAuraScript<SuddenDoom>("spell_sudden_doom");
     RegisterAuraScript<DeathRuneDK>("spell_death_rune_dk");
     RegisterSpellScript<Bloodworm>("spell_bloodworm");
     RegisterAuraScript<HealthLeechPassive>("spell_health_leech_passive");
     RegisterSpellScript<AntiMagicZone>("spell_anti_magic_zone");
     RegisterSpellScript<CorpseExplosionDK>("spell_dk_corpse_explosion");
     RegisterSpellScript<ExplodeGhoulCorpseExplosion>("spell_explode_ghoul_corpse_explosion");
+    RegisterAuraScript<DeathKnightDisease>("spell_death_knight_disease");
+    RegisterAuraScript<CryptFeverServerside>("spell_crypt_fever_serverside");
+    RegisterAuraScript<ArmyOfTheDead>("spell_army_of_the_dead");
+    RegisterSpellScript<ArmyOfTheDeadGhoul>("spell_army_of_the_dead_ghoul");
+    RegisterAuraScript<SuddenDoom>("spell_sudden_doom");
+    RegisterAuraScript<WillOfTheNecropolis>("spell_will_of_the_necropolis");
 }

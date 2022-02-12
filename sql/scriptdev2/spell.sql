@@ -724,6 +724,8 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 
 -- Death Knight
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
+(42650,'spell_army_of_the_dead'),
+(42651,'spell_army_of_the_dead_ghoul'),
 (46584,'spell_dk_raise_dead'),
 (47541,'spell_dk_death_coil'),
 (49892,'spell_dk_death_coil'),
@@ -749,8 +751,14 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (54639,'spell_death_rune_dk'),
 (56834,'spell_death_rune_dk'),
 (56835,'spell_death_rune_dk'),
+(52284,'spell_will_of_the_necropolis'),
+(52285,'spell_will_of_the_necropolis'),
+(52286,'spell_will_of_the_necropolis'),
 (50452,'spell_bloodworm'),
 (50453,'spell_health_leech_passive'),
+(55078,'spell_death_knight_disease'),
+(55095,'spell_death_knight_disease'),
+(65142,'spell_crypt_fever_serverside'),
 (51052,'spell_anti_magic_zone'),
 (55090,'spell_scourge_strike'),
 (55265,'spell_scourge_strike'),
@@ -901,7 +909,11 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (61697,'spell_death_knight_pet_scaling_3'),
 
 (51905,'spell_death_knight_rune_weapon_scaling_1'),
-(51906,'spell_death_knight_rune_weapon_scaling_2');
+(51906,'spell_death_knight_rune_weapon_scaling_2'),
+
+(67561,'spell_death_knight_army_of_the_dead_1'),
+
+(52001,'spell_death_knight_blood_parasite_pet_scaling');
 
 -- Warrior
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
