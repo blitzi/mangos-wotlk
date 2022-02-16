@@ -7082,7 +7082,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
     // Subdamage count:
     uint32 lines = m_weaponDamageInfo.weapon[calcDamageInfo->attackType].lines;
 
-    WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4 + 4) + 1 + (lines * (4 + 4 + 4)) + (4 + 4 + 4));
+    WorldPacket data(SMSG_ATTACKERSTATEUPDATE, (4 + 8 + 8 + 4 + 4) + 1 + (lines * (4 + 4 + 4)) + (1 + 4 + 4));
 
     data << uint32(calcDamageInfo->HitInfo);
     data << calcDamageInfo->attacker->GetPackGUID();
@@ -7116,7 +7116,7 @@ void Unit::SendAttackStateUpdate(CalcDamageInfo* calcDamageInfo) const
             data << int32(calcDamageInfo->subDamage[i].resist);
     }
 
-    data << uint32(calcDamageInfo->TargetState);
+    data << uint8(calcDamageInfo->TargetState);
     data << uint32(0);                                      // unknown, usually seen with -1, 0 and 1000
     data << uint32(0);                                      // spell id, seen with heroic strike and disarm as examples.
     // HITINFO_NOACTION normally set if spell
@@ -10082,7 +10082,7 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
             break;
         case MOVE_RUN:
         {
-            if (IsMounted() && !IsTaxiFlying()) // Use on mount auras
+            if (IsMounted()) // Use on mount auras
             {
                 main_speed_mod  = GetMaxPositiveAuraModifier(SPELL_AURA_MOD_INCREASE_MOUNTED_SPEED);
                 stack_bonus     = GetTotalAuraMultiplier(SPELL_AURA_MOD_MOUNTED_SPEED_ALWAYS);
@@ -10107,7 +10107,7 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced, float ratio)
             return;
         case MOVE_FLIGHT:
         {
-            if (IsMounted() && !IsTaxiFlying()) // Use on mount auras
+            if (IsMounted()) // Use on mount auras
             {
                 main_speed_mod  = GetMaxPositiveAuraModifier(SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED);
                 stack_bonus     = GetTotalAuraMultiplier(SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED_STACKING);
@@ -11219,9 +11219,9 @@ uint32 Unit::GetCreatePowers(Powers power) const
     {
         case POWER_HEALTH:      return 0;                   // is it really should be here?
         case POWER_MANA:        return GetCreateMana();
-        case POWER_RAGE:        return POWER_RAGE_DEFAULT;
+        case POWER_RAGE:        return IsPlayer() ? POWER_RAGE_DEFAULT : 0;
         case POWER_FOCUS:       return (GetTypeId() == TYPEID_PLAYER || !((Creature const*)this)->IsPet() || ((Pet const*)this)->getPetType() != HUNTER_PET ? 0 : POWER_FOCUS_DEFAULT);
-        case POWER_ENERGY:      return POWER_ENERGY_DEFAULT;
+        case POWER_ENERGY:      return POWER_ENERGY_DEFAULT; // wotlk fills energy
         case POWER_HAPPINESS:   return (GetTypeId() == TYPEID_PLAYER || !((Creature const*)this)->IsPet() || ((Pet const*)this)->getPetType() != HUNTER_PET ? 0 : POWER_HAPPINESS_DEFAULT);
         case POWER_RUNE:        return (GetTypeId() == TYPEID_PLAYER && ((Player const*)this)->getClass() == CLASS_DEATH_KNIGHT ? POWER_RUNE_DEFAULT : 0);
         case POWER_RUNIC_POWER: return (GetTypeId() == TYPEID_PLAYER && ((Player const*)this)->getClass() == CLASS_DEATH_KNIGHT ? POWER_RUNIC_POWER_DEFAULT : 0);
@@ -13951,7 +13951,7 @@ float Unit::GetCollisionHeight() const
 {
     float scaleMod = GetObjectScale(); // 99% sure about this
 
-    if (IsMounted())
+    if (GetMountID())
     {
         if (CreatureDisplayInfoEntry const* mountDisplayInfo = sCreatureDisplayInfoStore.LookupEntry(GetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID)))
         {
@@ -13981,7 +13981,7 @@ float Unit::GetCollisionWidth() const
 {
     float scaleMod = GetObjectScale(); // 99% sure about this
 
-    if (IsMounted())
+    if (GetMountID())
     {
         if (CreatureDisplayInfoEntry const* mountDisplayInfo = sCreatureDisplayInfoStore.LookupEntry(GetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID)))
         {

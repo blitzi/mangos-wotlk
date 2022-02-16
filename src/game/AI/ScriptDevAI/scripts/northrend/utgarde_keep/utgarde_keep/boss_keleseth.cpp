@@ -325,5 +325,5 @@ void AddSC_boss_keleseth()
     pNewScript->GetAI = &GetNewAIInstance<mob_vrykul_skeletonAI>;
     pNewScript->RegisterSelf();
 
-    RegisterAuraScript<spell_frost_tomb_aura>("spell_frost_tomb_aura");
+    RegisterSpellScript<spell_frost_tomb_aura>("spell_frost_tomb_aura");
 }

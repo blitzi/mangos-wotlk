@@ -13535,6 +13535,9 @@ void Player::PrepareGossipMenu(WorldObject* pSource, uint32 menuId, bool forceQu
         }
     }
 
+    if (pSource->IsCreature() && canSeeQuests && !static_cast<Unit*>(pSource)->isQuestGiver())
+        canSeeQuests = false;
+
     if (canSeeQuests)
         PrepareQuestMenu(pSource->GetObjectGuid());
 
@@ -13844,7 +13847,7 @@ uint32 Player::GetGossipTextId(uint32 menuId, WorldObject* pSource)
 uint32 Player::GetDefaultGossipMenuForSource(WorldObject* pSource) const
 {
     if (pSource->GetTypeId() == TYPEID_UNIT)
-        return ((Creature*)pSource)->GetCreatureInfo()->GossipMenuId;
+        return ((Creature*)pSource)->GetDefaultGossipMenuId();
     if (pSource->GetTypeId() == TYPEID_GAMEOBJECT)
         return ((GameObject*)pSource)->GetGOInfo()->GetGossipMenuId();
 
@@ -13939,7 +13942,8 @@ void Player::SendPreparedQuest(ObjectGuid guid) const
     else
         type = QUESTGIVER_GAMEOBJECT;
 
-    if (QuestgiverGreeting const* data = sObjectMgr.GetQuestgiverGreetingData(guid.GetEntry(), type))
+    QuestgiverGreeting const* data = sObjectMgr.GetQuestgiverGreetingData(guid.GetEntry(), type);
+    if (data && (questMenu.MenuItemCount() > 1 || sWorld.getConfig(CONFIG_BOOL_ALWAYS_SHOW_QUEST_GREETING)))
     {
         QEmote qe;
         qe._Delay = data->emoteDelay;
@@ -19722,6 +19726,8 @@ void Player::RemoveSpellMods(std::set<SpellModifierPair>& usedAuraCharges)
             }
         }
     }
+
+    usedAuraCharges.clear();
 }
 
 void Player::ResetSpellModsDueToCanceledSpell(std::set<SpellModifierPair>& usedAuraCharges)
@@ -19956,7 +19962,7 @@ bool Player::ActivateTaxiPathTo(std::vector<uint32> const& nodes, Creature* npc 
     if (npc)
     {
         // not let cheating with start flight mounted
-        if (IsMounted())
+        if (GetMountID())
         {
             GetSession()->SendActivateTaxiReply(ERR_TAXIPLAYERALREADYMOUNTED);
             return false;
@@ -23500,6 +23506,13 @@ SpellEntry const* Player::GetKnownTalentRankById(int32 talentId) const
 {
     if (PlayerTalent const* talent = GetKnownTalentById(talentId))
         return sSpellTemplate.LookupEntry<SpellEntry>(talent->talentEntry->RankID[talent->currentRank]);
+    return nullptr;
+}
+
+Aura* Player::GetKnownTalentRankAuraById(int32 talentId, SpellEffectIndex effIdx)
+{
+    if (SpellEntry const* spellInfo = GetKnownTalentRankById(talentId))
+        return GetAura(spellInfo->Id, effIdx);
     return nullptr;
 }
 

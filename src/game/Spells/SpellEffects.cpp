@@ -3395,13 +3395,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     return;
                 }
-                case 52759:                                 // Ancestral Awakening
-                {
-                    if (unitTarget)
-                        m_caster->CastCustomSpell(unitTarget, 52752, &damage, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
-
-                    return;
-                }
                 case 53341:                                 // Rune of Cinderglacier
                 case 53343:                                 // Rune of Razorice
                 {
@@ -4430,29 +4423,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                 // Regenerate 6% of Total Mana Every 3 secs
                 int32 EffectBasePoints0 = unitTarget->GetMaxPower(POWER_MANA)  * damage / 100;
                 m_caster->CastCustomSpell(unitTarget, 39609, &EffectBasePoints0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, nullptr, m_originalCasterGUID);
-                return;
-            }
-            // Lava Lash
-            if (m_spellInfo->IsFitToFamilyMask(uint64(0x0000000000000000), 0x00000004))
-            {
-                if (m_caster->GetTypeId() != TYPEID_PLAYER)
-                    return;
-                Item* item = ((Player*)m_caster)->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-                if (item)
-                {
-                    // Damage is increased if your off-hand weapon is enchanted with Flametongue.
-                    Unit::AuraList const& auraDummy = m_caster->GetAurasByType(SPELL_AURA_DUMMY);
-                    for (auto itr : auraDummy)
-                    {
-                        if (itr->GetSpellProto()->SpellFamilyName == SPELLFAMILY_SHAMAN &&
-                                (itr->GetSpellProto()->SpellFamilyFlags & uint64(0x0000000000200000)) &&
-                            itr->GetCastItemGuid() == item->GetObjectGuid())
-                        {
-                            m_damage += m_damage * damage / 100;
-                            return;
-                        }
-                    }
-                }
                 return;
             }
             // Fire Nova
@@ -5725,7 +5695,6 @@ void Spell::EffectEnergize(SpellEffectIndex eff_idx)
             level_diff = m_caster->GetLevel() - 60;
             level_multiplier = 4;
             break;
-        case 31930:                                         // Judgements of the Wise
         case 48542:                                         // Revitalize (mana restore case)
         case 63375:                                         // Improved Stormstrike
         case 68082:                                         // Glyph of Seal of Command
@@ -6301,6 +6270,12 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
         // Else set faction to summoner's faction for pet-like summoned
         else if ((summon_prop->Flags & SUMMON_PROP_FLAG_USE_SUMMONER_FACTION) || !creature->IsTemporarySummon())
             creature->SetFaction(petInvoker->GetFaction());
+
+        if (summon_prop->Flags & SUMMON_PROP_FLAG_JOIN_SUMMONERS_SPAWN_GROUP && petInvoker->IsControlledByPlayer())
+        {
+            creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);
+            creature->SetFaction(petInvoker->GetFaction());
+        }
 
         if (!itr->processed)
         {

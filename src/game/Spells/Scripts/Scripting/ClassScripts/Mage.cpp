@@ -73,8 +73,59 @@ struct MageIgnite : public AuraScript
     }
 };
 
+struct FingersOfFrostProc : public AuraScript
+{
+    bool OnCheckProc(Aura* aura, ProcExecutionData& /*data*/) const override
+    {
+        return roll_chance_i(aura->GetAmount());
+    }
+};
+
+struct FingersOfFrostIgnore : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        spell->AddPrecastSpell(74396);
+    }
+};
+
+struct FingersOfFrostDummy : public AuraScript
+{
+    void OnHolderInit(SpellAuraHolder* holder, WorldObject* /*caster*/) const override
+    {
+        holder->PresetAuraStacks(holder->GetSpellProto()->StackAmount);
+    }
+
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!apply && aura->GetRemoveMode() != AURA_REMOVE_BY_GAINED_STACK)
+            aura->GetTarget()->RemoveAurasDueToSpell(44544);
+    }
+
+    SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& /*procData*/) const override
+    {
+        aura->GetTarget()->RemoveAuraStack(aura->GetId());
+        return SPELL_AURA_PROC_OK;
+    }
+};
+
+struct DeepFreezeImmunityState : public AuraScript
+{
+    bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
+    {
+        if (data.victim->IsCreature())
+            if (static_cast<Creature*>(data.victim)->GetCreatureInfo()->MechanicImmuneMask & (1 << (MECHANIC_STUN - 1)))
+                return true;
+        return false;
+    }
+};
+
 void LoadMageScripts()
 {
-    RegisterAuraScript<ArcaneConcentration>("spell_arcane_concentration");
-    RegisterAuraScript<MageIgnite>("spell_mage_ignite");
+    RegisterSpellScript<ArcaneConcentration>("spell_arcane_concentration");
+    RegisterSpellScript<MageIgnite>("spell_mage_ignite");
+    RegisterSpellScript<FingersOfFrostProc>("spell_fingers_of_frost_proc");
+    RegisterSpellScript<FingersOfFrostIgnore>("spell_fingers_of_frost_ignore");
+    RegisterSpellScript<FingersOfFrostDummy>("spell_fingers_of_frost_dummy");
+    RegisterSpellScript<DeepFreezeImmunityState>("spell_deep_freeze_immunity_state");
 }

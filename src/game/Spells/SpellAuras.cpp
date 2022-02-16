@@ -2344,13 +2344,6 @@ void Aura::TriggerSpell()
                 // original caster must be target (beacon)
                 target->CastSpell(target, trigger_spell_id, TRIGGERED_OLD_TRIGGERED, nullptr, this, target->GetObjectGuid());
                 return;
-            case 56654:                                     // Rapid Recuperation (triggered energize have baspioints == 0)
-            case 58882:
-            {
-                int32 mana = target->GetMaxPower(POWER_MANA) * m_modifier.m_amount / 100;
-                triggerTarget->CastCustomSpell(triggerTarget, trigger_spell_id, &mana, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this);
-                return;
-            }
             // Mind Sear (target 76/16) if let m_target cast, will damage caster
             case 48045:
             case 53023:
@@ -2469,18 +2462,6 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         m_modifier.periodictime = 1 * IN_MILLISECONDS;
                         m_periodicTimer = m_modifier.periodictime;
                         break;
-                    case 10255:                             // Stoned
-                    {
-                        if (Unit* caster = GetCaster())
-                        {
-                            if (caster->GetTypeId() != TYPEID_UNIT)
-                                return;
-
-                            caster->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC | UNIT_FLAG_NOT_SELECTABLE);
-                            caster->addUnitState(UNIT_STAT_ROOT);
-                        }
-                        return;
-                    }
                     case 13139:                             // net-o-matic
                         // root to self part of (root_target->charge->root_self sequence
                         if (Unit* caster = GetCaster())
@@ -3065,18 +3046,6 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
 
         switch (GetId())
         {
-            case 10255:                                     // Stoned
-            {
-                if (Unit* caster = GetCaster())
-                {
-                    if (caster->GetTypeId() != TYPEID_UNIT)
-                        return;
-
-                    // see dummy effect of spell 10254 for removal of flags etc
-                    caster->CastSpell(caster, 10254, TRIGGERED_OLD_TRIGGERED);
-                }
-                return;
-            }
             case 11129:                                     // Combustion
                 target->RemoveAurasDueToSpell(28682); // on Combustion removal remove crit % stacks
                 return;
@@ -3877,27 +3846,6 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                 }
             }
             break;
-        case SPELLFAMILY_SHAMAN:
-        {
-            switch (GetId())
-            {
-                case 6495:                                  // Sentry Totem
-                {
-                    if (target->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    Totem* totem = target->GetTotem(TOTEM_SLOT_AIR);
-
-                    if (totem && apply)
-                        ((Player*)target)->GetCamera().SetView(totem);
-                    else
-                        ((Player*)target)->GetCamera().ResetView();
-
-                    return;
-                }
-            }
-            break;
-        }
         case SPELLFAMILY_DEATHKNIGHT:
             switch (GetId())
             {
@@ -6309,24 +6257,6 @@ void Aura::HandleAuraPeriodicDummy(bool apply, bool Real)
             }
             break;
         }
-        case SPELLFAMILY_HUNTER:
-        {
-            Unit* caster = GetCaster();
-
-            switch (spell->Id)
-            {
-                case 53301: // Explosive Shot
-                case 60051:
-                case 60052:
-                case 60053:
-
-                    break;
-            }
-            // Explosive Shot
-            if (apply && !loading && caster)
-                m_modifier.m_amount += int32(caster->GetTotalAttackPowerValue(RANGED_ATTACK) * 14 / 100);
-            break;
-        }
     }
 
     m_isPeriodic = apply;
@@ -6916,7 +6846,7 @@ void Aura::HandleModTotalPercentStat(bool apply, bool /*Real*/)
     if (m_modifier.m_miscvalue == STAT_STAMINA && maxHPValue > 0 && GetSpellProto()->HasAttribute(SPELL_ATTR_ABILITY))
     {
         // newHP = (curHP / maxHP) * newMaxHP = (newMaxHP * curHP) / maxHP -> which is better because no int -> double -> int conversion is needed
-        uint32 newHPValue = (target->GetMaxHealth() * curHPValue) / maxHPValue;
+        uint32 newHPValue = std::max(1u, (target->GetMaxHealth() * curHPValue) / maxHPValue);
         target->SetHealth(newHPValue);
     }
 }
@@ -7157,10 +7087,7 @@ void Aura::HandleAuraModIncreaseMaxHealth(bool apply, bool /*Real*/)
     // refresh percentage
     if (oldhealth > 0)
     {
-        uint32 newhealth = uint32(ceil((double)target->GetMaxHealth() * healthPercentage));
-        if (newhealth == 0)
-            newhealth = 1;
-
+        uint32 newhealth = std::max(1u, uint32(ceil((double)target->GetMaxHealth() * healthPercentage)));
         target->SetHealth(newhealth);
     }
 }
@@ -9566,12 +9493,6 @@ void Aura::PeriodicDummyTick()
         }
         case SPELLFAMILY_HUNTER:
         {
-            // Explosive Shot
-            if (spell->SpellFamilyFlags & uint64(0x8000000000000000))
-            {
-                target->CastCustomSpell(target, 53352, &m_modifier.m_amount, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr, this, GetCasterGuid());
-                return;
-            }
             switch (spell->Id)
             {
                 // Harpooner's Mark
@@ -10217,7 +10138,6 @@ SpellAuraHolder::SpellAuraHolder(SpellEntry const* spellproto, Unit* target, Wor
         case 65294:                                         // Empowered
         case 70672:                                         // Gaseous Bloat
         case 71564:                                         // Deadly Precision
-        case 74396:                                         // Fingers of Frost
             m_stackAmount = m_spellProto->StackAmount;
             break;
     }
@@ -10666,7 +10586,7 @@ void SpellAuraHolder::BuildUpdatePacket(WorldPacket& data) const
     data << uint8(auraFlags);
     data << uint8(GetAuraLevel());
 
-    uint32 stackCount = m_procCharges ? m_procCharges * m_stackAmount : m_stackAmount;
+    uint32 stackCount = m_spellProto->StackAmount ?  m_stackAmount : m_procCharges;
     data << uint8(stackCount <= 255 ? stackCount : 255);
 
     if (!(auraFlags & AFLAG_NOT_CASTER))
@@ -10836,14 +10756,6 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
                         cast_at_remove = true;
                         boostSpells.push_back(70753);                   // Pushing the Limit
                     }
-                    else
-                        return;
-                    break;
-                }
-                case 74396:                                 // Fingers of Frost (remove main aura)
-                {
-                    if (!apply)
-                        boostSpells.push_back(44544);
                     else
                         return;
                     break;

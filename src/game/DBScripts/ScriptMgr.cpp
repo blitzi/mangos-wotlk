@@ -256,8 +256,6 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
                         continue;
                     }
                 }
-
-                // if (!GetMangosStringLocale(tmp.dataint)) will be checked after dbscript_string loading
                 break;
             }
             case SCRIPT_COMMAND_EMOTE:                      // 1
@@ -861,6 +859,17 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
 
                 break;
             }
+            case SCRIPT_COMMAND_SET_GOSSIP_MENU:            // 52
+            {
+                // sScriptMgr.LoadGossipScripts() must be called first in order for this to work
+                //if (!sObjectMgr.IsExistingGossipMenuId(tmp.setGossipMenu.gossipMenuId))
+                //{
+                //    sLog.outErrorDb("Table `%s` using nonexistent gossip menu (id: %u) in SCRIPT_COMMAND_SET_GOSSIP_MENU for script id %u",
+                //        tablename, tmp.setGossipMenu.gossipMenuId, tmp.id);
+                //    continue;
+                //}
+                break;
+            }
             default:
             {
                 sLog.outErrorDb("Table `%s` unknown command %u, skipping.", tablename, tmp.command);
@@ -1039,10 +1048,6 @@ void ScriptMgr::LoadRelayScripts()
 
 void ScriptMgr::LoadDbScriptStrings()
 {
-    // load both dbscript_strings and creature_ai_texts here because either may be referenced by dbscript_random_templates
-    sObjectMgr.LoadMangosStrings(WorldDatabase, "dbscript_string", MIN_DB_SCRIPT_STRING_ID, MAX_DB_SCRIPT_STRING_ID, true);
-    sObjectMgr.LoadMangosStrings(WorldDatabase, "creature_ai_texts", MIN_CREATURE_AI_TEXT_STRING_ID, MAX_CREATURE_AI_TEXT_STRING_ID, true);
-
     CheckScriptTexts(sQuestEndScripts);
     CheckScriptTexts(sQuestStartScripts);
     CheckScriptTexts(sSpellScripts);
@@ -1112,7 +1117,7 @@ void ScriptMgr::CheckScriptTexts(ScriptMapMapName const& scripts)
             {
                 for (int i : itrM->second.textId)
                 {
-                    if (i && !sObjectMgr.GetBroadcastText(i) && !sObjectMgr.GetMangosString(i, -1))
+                    if (i && !sObjectMgr.GetBroadcastText(i))
                         sLog.outErrorDb("Table `broadcast_text` is missing string id %u, used in database script table %s id %u.", i, scripts.first, itrMM->first);
                 }
 
@@ -1121,7 +1126,7 @@ void ScriptMgr::CheckScriptTexts(ScriptMapMapName const& scripts)
                     auto& vector = m_scriptTemplates[STRING_TEMPLATE][itrM->second.talk.stringTemplateId];
                     for (auto& data : vector)
                     {
-                        if (!sObjectMgr.GetBroadcastText(data.first) && !sObjectMgr.GetMangosString(data.first, -1))
+                        if (!sObjectMgr.GetBroadcastText(data.first))
                             sLog.outErrorDb("Table `broadcast_text` is missing string id %d, used in database script template table dbscript_random_templates id %u.", data.first, itrM->second.talk.stringTemplateId);
                     }
                 }
@@ -2899,6 +2904,14 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                     break;
             }
 
+            break;
+        }
+        case SCRIPT_COMMAND_SET_GOSSIP_MENU:                // 52
+        {
+            if (LogIfNotCreature(pTarget))
+                break;
+
+            static_cast<Creature*>(pTarget)->SetDefaultGossipMenuId(m_script->setGossipMenu.gossipMenuId);
             break;
         }
         default:

@@ -1757,6 +1757,7 @@ class Player : public Unit
 
         PlayerTalent const* GetKnownTalentById(int32 talentId) const;
         SpellEntry const* GetKnownTalentRankById(int32 talentId) const;
+        Aura* GetKnownTalentRankAuraById(int32 talentId, SpellEffectIndex effIdx);
 
         void AddSpellMod(SpellModifier* mod, bool apply);
         void SendAllSpellMods(SpellModType modType);

@@ -82,7 +82,7 @@ class PrioritizeHealthUnitWraper
     public:
         explicit PrioritizeHealthUnitWraper(Unit* unit) : i_unit(unit)
         {
-            i_percent = unit->GetHealth() * 100 / unit->GetMaxHealth();
+            i_percent = unit->GetHealthPercent();
         }
         Unit* getUnit() const { return i_unit; }
         uint32 getPercent() const { return i_percent; }
@@ -515,6 +515,8 @@ Spell::Spell(WorldObject * caster, SpellEntry const* info, uint32 triggeredFlags
     m_spellFlags = SPELL_FLAG_NORMAL;
 
     m_affectedTargetCount = m_spellInfo->MaxAffectedTargets;
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        m_chainTargetCount[i] = m_spellInfo->EffectChainTarget[SpellEffectIndex(i)];
 
     m_jumpRadius = SpellTargetMgr::GetJumpRadius(m_spellInfo->Id);
     memcpy(m_filteringScheme, SpellTargetMgr::GetSpellTargetingData(m_spellInfo->Id).filteringScheme, sizeof(m_filteringScheme));
@@ -566,9 +568,20 @@ WorldObject* Spell::FindCorpseUsing()
 
 void Spell::FillTargetMap()
 {
-    // TODO: ADD the correct target FILLS!!!!!!
     TempTargetingData targetingData;
     uint8 effToIndex[MAX_EFFECT_INDEX] = {0, 1, 2};         // Helper array, to link to another tmpUnitList, if the targets for both effects match
+
+    if (m_trueCaster->IsUnit())
+    {
+        auto const& mod = m_caster->GetAurasByType(SPELL_AURA_MOD_MAX_AFFECTED_TARGETS);
+        for (Aura* aura : mod)
+        {
+            if (!aura->isAffectedOnSpell(m_spellInfo))
+                continue;
+            m_affectedTargetCount += aura->GetModifier()->m_amount;
+        }
+    }
+
     for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
     {
         // not call for empty effect.
@@ -581,7 +594,7 @@ void Spell::FillTargetMap()
         auto& targetMask = data.targetMask[i];
         auto& ignoredTargets = data.ignoredTargets[i];
         auto& filterScheme = m_filteringScheme[i];
-        targetingData.chainTargetCount[i] = m_spellInfo->EffectChainTarget[SpellEffectIndex(i)];
+        targetingData.chainTargetCount[i] = m_chainTargetCount[i];
 
         if (effectTargetType == TARGET_TYPE_SPECIAL_UNIT) // area auras need custom handling
         {
@@ -813,6 +826,8 @@ void Spell::PrepareMasksForProcSystem(uint8 effectMask, uint32& procAttacker, ui
     {
         case SPELL_DAMAGE_CLASS_MELEE:
             procAttacker = PROC_FLAG_DEAL_MELEE_ABILITY;
+            if (m_attackType == BASE_ATTACK)
+                procAttacker |= PROC_FLAG_MAIN_HAND_WEAPON_SWING;
             if (m_attackType == OFF_ATTACK)
                 procAttacker |= PROC_FLAG_OFF_HAND_WEAPON_SWING;
             procVictim = PROC_FLAG_TAKE_MELEE_ABILITY;
@@ -833,7 +848,7 @@ void Spell::PrepareMasksForProcSystem(uint8 effectMask, uint32& procAttacker, ui
         default:
             if (IsPositiveEffectMask(m_spellInfo, effectMask, caster, target))           // Check for positive spell
             {
-                if (m_spellInfo->DmgClass == SPELL_DAMAGE_CLASS_NONE) // if dmg class none
+                if (m_spellInfo->HasAttribute(SPELL_ATTR_ABILITY))
                 {
                     procAttacker = PROC_FLAG_DEAL_HELPFUL_ABILITY;
                     procVictim = PROC_FLAG_TAKE_HELPFUL_ABILITY;
@@ -851,7 +866,7 @@ void Spell::PrepareMasksForProcSystem(uint8 effectMask, uint32& procAttacker, ui
             }
             else                                           // Negative spell
             {
-                if (m_spellInfo->DmgClass == SPELL_DAMAGE_CLASS_NONE) // if dmg class none
+                if (m_spellInfo->HasAttribute(SPELL_ATTR_ABILITY))
                 {
                     procAttacker = PROC_FLAG_DEAL_HARMFUL_ABILITY;
                     procVictim = PROC_FLAG_TAKE_HARMFUL_ABILITY;
@@ -867,7 +882,7 @@ void Spell::PrepareMasksForProcSystem(uint8 effectMask, uint32& procAttacker, ui
 
     // Hunter traps spells (for Entrapment trigger)
     // Gives your Immolation Trap, Frost Trap, Explosive Trap, and Snake Trap ....
-    if (m_spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER && m_spellInfo->SpellFamilyFlags & uint64(0x000020000000001C))
+    if (m_spellInfo->SpellFamilyName == SPELLFAMILY_HUNTER && m_spellInfo->IsFitToFamilyMask(uint64(0x000020000000001C), uint32(0x00040000)))
         procAttacker |= PROC_FLAG_ON_TRAP_ACTIVATION;
 
     if (IsNextMeleeSwingSpell(m_spellInfo))
@@ -1818,17 +1833,6 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, bool targ
 
     GetSpellRangeAndRadius(effIndex, radius, targetB, targetingData.chainTargetCount[effIndex]);
 
-    if (m_trueCaster->IsUnit())
-    {
-        Unit::AuraList const& mod = m_caster->GetAurasByType(SPELL_AURA_MOD_MAX_AFFECTED_TARGETS);
-        for (auto m : mod)
-        {
-            if (!m->isAffectedOnSpell(m_spellInfo))
-                continue;
-            unMaxTargets += m->GetModifier()->m_amount;
-        }
-    }
-
     float cone = GetCone();
 
     UnitList& tempUnitList = data.tmpUnitList[targetB];
@@ -1887,6 +1891,7 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, bool targ
         case TARGET_LOCATION_CASTER_LEFT:
         case TARGET_LOCATION_CASTER_RIGHT:
         {
+            WorldObject* caster = m_trueCaster;
             float angle = m_trueCaster->GetOrientation();
             switch (targetMode)
             {
@@ -1896,13 +1901,13 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, bool targ
                 case TARGET_LOCATION_CASTER_FRONT_RIGHT: angle += M_PI_F * 1.75f; break;
                 case TARGET_LOCATION_CASTER_FRONT:                                break;
                 case TARGET_LOCATION_CASTER_BACK:        angle += M_PI_F;         break;
-                case TARGET_LOCATION_UNIT_MINION_POSITION:
+                case TARGET_LOCATION_UNIT_MINION_POSITION: caster = GetCastingObject(); // projected from original caster if necessary
                 case TARGET_LOCATION_CASTER_LEFT:        angle += M_PI_F / 2;     break;
                 case TARGET_LOCATION_CASTER_RIGHT:       angle -= M_PI_F / 2;     break;
             }
 
             Position pos;
-            m_trueCaster->GetFirstCollisionPosition(pos, radius, angle);
+            caster->GetFirstCollisionPosition(pos, radius, angle);
             m_targets.setDestination(pos.x, pos.y, pos.z);
             break;
         }
@@ -3410,9 +3415,6 @@ SpellCastResult Spell::cast(bool skipCheck)
                     m_caster->RemoveSpellsCausingAura(SPELL_AURA_HASTE_SPELLS);
                 }
             }
-            // Fingers of Frost
-            else if (m_spellInfo->Id == 44544)
-                AddPrecastSpell(74396);                     // Fingers of Frost
             break;
         }
         case SPELLFAMILY_WARRIOR:
@@ -3487,9 +3489,6 @@ SpellCastResult Spell::cast(bool skipCheck)
             // Deterrence
             if (m_spellInfo->Id == 19263)
                 AddPrecastSpell(67801);
-            // Lock and Load
-            else if (m_spellInfo->Id == 56453)
-                AddPrecastSpell(67544);                     // Lock and Load Marker
             break;
         }
         case SPELLFAMILY_PALADIN:
@@ -5759,7 +5758,7 @@ SpellCastResult Spell::CheckCast(bool strict)
 
 
     // not let players cast spells at mount (and let do it to creatures)
-    if (m_trueCaster->IsPlayer() && m_caster->IsMounted() && !m_IsTriggeredSpell &&
+    if (m_trueCaster->IsPlayer() && m_caster->GetMountID() && !m_IsTriggeredSpell &&
             !IsPassiveSpell(m_spellInfo) && !m_spellInfo->HasAttribute(SPELL_ATTR_CASTABLE_WHILE_MOUNTED))
     {
         if (m_caster->IsTaxiFlying())
@@ -7360,7 +7359,7 @@ SpellCastResult Spell::CheckPower(bool strict)
 
 bool Spell::IgnoreItemRequirements() const
 {
-    if (m_channelOnly)
+    if (m_channelOnly || m_ignoreCosts)
         return true;
 
     /// Check if it's an enchant scroll. These have no required reagents even though their spell does.
@@ -9385,10 +9384,6 @@ bool Spell::OnCheckTarget(Unit* target, SpellEffectIndex eff) const
         case 32124:                                         // Cant hit players
         case 33512:                                         // Kazzak's Assault - likely should not hit players
             if (target->GetTypeId() == TYPEID_PLAYER)
-                return false;
-            break;
-        case 33812:                                         // Gruul the Dragonkiller - Hurtful Strike Primer
-            if (target->GetTypeId() != TYPEID_PLAYER || !m_caster->CanReachWithMeleeAttack(target))
                 return false;
             break;
         case 36819:                                         // Always should hit main tank, no clue why rigged as AOE
