@@ -560,6 +560,7 @@ bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, 
         unitFlags |= UNIT_FLAG_SWIMMING;
 
     SetUInt32Value(UNIT_FIELD_FLAGS, unitFlags);
+    SetUInt32Value(UNIT_FIELD_FLAGS_2, GetCreatureInfo()->UnitFlags2);
 
     // preserve all current dynamic flags if exist
     uint32 dynFlags = GetUInt32Value(UNIT_DYNAMIC_FLAGS);
@@ -2123,6 +2124,8 @@ void Creature::CallAssistance()
     // FIXME: should player pets call for assistance?
     if (!m_AlreadyCallAssistance && GetVictim() && !HasCharmer())
     {
+        MANGOS_ASSERT(AI());
+
         SetNoCallAssistance(true);
 
         if (!CanCallForAssistance())
@@ -2311,6 +2314,12 @@ void Creature::SetInCombatWithZone(bool checkAttackability)
     if (!CanHaveThreatList())
     {
         sLog.outError("Creature entry %u call SetInCombatWithZone but creature cannot have threat list.", GetEntry());
+        return;
+    }
+
+    if (!AI())
+    {
+        sLog.outError("Creature entry %u call SetInCombatWithZone but creature does not have AI. Possible call during create.", GetEntry());
         return;
     }
 

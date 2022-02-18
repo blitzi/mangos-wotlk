@@ -425,6 +425,8 @@ Aura::Aura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* curr
             }
         }
 
+        damage = CalculateAuraEffectValue(caster, target, spellproto, eff, damage);
+
         damage = OnAuraValueCalculate(caster, damage);
     }
 
@@ -1113,8 +1115,10 @@ void Aura::PickTargetsForSpellTrigger(Unit*& triggerCaster, Unit*& triggerTarget
             triggerCaster = GetTarget();
             triggerTarget = GetTarget();
             break;
-        case TARGET_LOCATION_DYNOBJ_POSITION:
-            triggerTargetObject = GetTarget()->GetDynObject(GetId());
+        case TARGET_LOCATION_CHANNEL_TARGET_DEST:
+            triggerCaster = GetCaster();
+            if (triggerCaster)
+                triggerTargetObject = GetCaster()->GetChannelObject();
         case TARGET_LOCATION_CASTER_SRC: // TODO: this needs to be done whenever target isnt important, doing it per case for safety
             //[[fallthrough]]
         case TARGET_LOCATION_CASTER_DEST:
@@ -8148,74 +8152,7 @@ void Aura::HandleSchoolAbsorb(bool apply, bool Real)
 
     Unit* target = GetTarget();
     SpellEntry const* spellProto = GetSpellProto();
-    if (apply)
-    {
-        // prevent double apply bonuses
-        if (target->GetTypeId() != TYPEID_PLAYER || !((Player*)target)->GetSession()->PlayerLoading())
-        {
-            float DoneActualBenefit = 0.0f;
-            switch (spellProto->SpellFamilyName)
-            {
-                case SPELLFAMILY_GENERIC:
-                    // Stoicism
-                    if (spellProto->Id == 70845)
-                        DoneActualBenefit = caster->GetMaxHealth() * 0.20f;
-                    break;
-                case SPELLFAMILY_PRIEST:
-                    // Power Word: Shield
-                    if (spellProto->SpellFamilyFlags & uint64(0x0000000000000001))
-                    {
-                        //+80.68% from +spell bonus
-                        DoneActualBenefit = caster->SpellBaseHealingBonusDone(GetSpellSchoolMask(spellProto)) * 0.8068f;
-                        // Borrowed Time
-                        Unit::AuraList const& borrowedTime = caster->GetAurasByType(SPELL_AURA_DUMMY);
-                        for (auto itr : borrowedTime)
-                        {
-                            SpellEntry const* i_spell = itr->GetSpellProto();
-                            if (i_spell->SpellFamilyName == SPELLFAMILY_PRIEST && i_spell->SpellIconID == 2899 && i_spell->EffectMiscValue[itr->GetEffIndex()] == 24)
-                            {
-                                DoneActualBenefit += DoneActualBenefit * itr->GetModifier()->m_amount / 100;
-                                break;
-                            }
-                        }
-                    }
-
-                    break;
-                case SPELLFAMILY_MAGE:
-                    // Frost Ward, Fire Ward
-                    if (spellProto->IsFitToFamilyMask(uint64(0x0000000000000108)))
-                        //+10% from +spell bonus
-                        DoneActualBenefit = caster->SpellBaseDamageBonusDone(GetSpellSchoolMask(spellProto)) * 0.1f;
-                    // Ice Barrier
-                    else if (spellProto->IsFitToFamilyMask(uint64(0x0000000100000000)))
-                        //+80.67% from +spell bonus
-                        DoneActualBenefit = caster->SpellBaseDamageBonusDone(GetSpellSchoolMask(spellProto)) * 0.8067f;
-                    break;
-                case SPELLFAMILY_WARLOCK:
-                    // Shadow Ward
-                    if (spellProto->IsFitToFamilyMask(uint64(0x0000000000000000), 0x00000040))
-                        //+30% from +spell bonus
-                        DoneActualBenefit = caster->SpellBaseDamageBonusDone(GetSpellSchoolMask(spellProto)) * 0.30f;
-                    break;
-                case SPELLFAMILY_PALADIN:
-                    // Sacred Shield
-                    // (check not strictly needed, only Sacred Shield has SPELL_AURA_SCHOOL_ABSORB in SPELLFAMILY_PALADIN at this time)
-                    if (spellProto->IsFitToFamilyMask(uint64(0x0008000000000000)))
-                    {
-                        // +75% from spell power
-                        DoneActualBenefit = caster->SpellBaseHealingBonusDone(GetSpellSchoolMask(spellProto)) * 0.75f;
-                    }
-                    break;
-                default:
-                    break;
-            }
-
-            DoneActualBenefit *= caster->CalculateLevelPenalty(GetSpellProto());
-
-            m_modifier.m_amount += (int32)DoneActualBenefit;
-        }
-    }
-    else
+    if (!apply)
     {
         switch (spellProto->Id)
         {
@@ -10840,34 +10777,8 @@ void SpellAuraHolder::HandleSpellSpecificBoosts(bool apply)
         }
         case SPELLFAMILY_PRIEST:
         {
-            // Shadow Word: Pain (need visual check fro skip improvement talent) or Vampiric Touch
-            if ((m_spellProto->SpellIconID == 234 && m_spellProto->SpellVisual[0]) || m_spellProto->SpellIconID == 2213)
-            {
-                if (!apply && m_removeMode == AURA_REMOVE_BY_DISPEL)
-                {
-                    Unit* caster = GetCaster();
-                    if (!caster)
-                        return;
-
-                    Unit::AuraList const& dummyAuras = caster->GetAurasByType(SPELL_AURA_DUMMY);
-                    for (auto dummyAura : dummyAuras)
-                    {
-                        // Shadow Affinity
-                        if (dummyAura->GetSpellProto()->SpellFamilyName == SPELLFAMILY_PRIEST
-                                && dummyAura->GetSpellProto()->SpellIconID == 178)
-                        {
-                            // custom cast code
-                            int32 basepoints0 = dummyAura->GetModifier()->m_amount * caster->GetCreateMana() / 100;
-                            caster->CastCustomSpell(caster, 64103, &basepoints0, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED, nullptr);
-                            return;
-                        }
-                    }
-                }
-                else
-                    return;
-            }
             // Power Word: Shield
-            else if (apply && m_spellProto->SpellFamilyFlags & uint64(0x0000000000000001) && m_spellProto->Mechanic == MECHANIC_SHIELD)
+            if (apply && m_spellProto->SpellFamilyFlags & uint64(0x0000000000000001) && m_spellProto->Mechanic == MECHANIC_SHIELD)
             {
                 Unit* caster = GetCaster();
                 if (!caster)
@@ -11718,10 +11629,10 @@ int32 Aura::OnAuraValueCalculate(Unit* caster, int32 currentValue)
     return currentValue;
 }
 
-void Aura::OnDamageCalculate(int32& advertisedBenefit, float& totalMod)
+void Aura::OnDamageCalculate(Unit* victim, int32& advertisedBenefit, float& totalMod)
 {
     if (AuraScript* script = GetAuraScript())
-        return script->OnDamageCalculate(this, advertisedBenefit, totalMod);
+        return script->OnDamageCalculate(this, victim, advertisedBenefit, totalMod);
 }
 
 void Aura::OnApply(bool apply)

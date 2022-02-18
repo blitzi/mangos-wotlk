@@ -3528,27 +3528,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     m_caster->RemoveSpellsCausingAura(SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED);
                     return;
                 }
-                case 58838:                                 // Inherit Master's Threat List
-                {
-                    if (m_caster->GetTypeId() != TYPEID_UNIT && !((Creature*)m_caster)->IsTemporarySummon())
-                        return;
-
-                    Player* owner = m_caster->GetMap()->GetPlayer(m_caster->GetSpawnerGuid());
-                    if (!owner || !owner->IsAlive())
-                        return;
-
-                    ThreatList const& threatList = owner->getThreatManager().getThreatList();
-
-                    for (auto itr : threatList)
-                    {
-                        if (Unit* target = m_caster->GetMap()->GetUnit(itr->getUnitGuid()))
-                        {
-                            if (!target->isFrozen() && !target->IsCrowdControlled())
-                                m_caster->getThreatManager().addThreatDirectly(target, unitTarget->getThreatManager().getThreat(target));
-                        }
-                    }
-                    return;
-                }
                 case 59640:                                 // Underbelly Elixir
                 {
                     if (m_caster->GetTypeId() != TYPEID_PLAYER)
@@ -6333,7 +6312,7 @@ bool Spell::DoSummonWild(CreatureSummonPositions& list, SummonPropertiesEntry co
 
     for (auto& itr : list)
         if (Creature* summon = WorldObject::SummonCreature(TempSpawnSettings(m_trueCaster, creature_entry, itr.x, itr.y, itr.z, m_trueCaster->GetOrientation(), summonType, m_duration, false,
-            IsSpellSetRun(m_spellInfo), 0, 0, 0, false, false, m_spellInfo->Id), m_trueCaster->GetMap(), phaseMask))
+            IsSpellSetRun(m_spellInfo), 0, 0, 0, false, false, m_spellInfo->Id, -1, level), m_trueCaster->GetMap(), phaseMask))
         {
             itr.creature = summon;
 
@@ -12284,9 +12263,31 @@ void Spell::EffectBreakPlayerTargeting(SpellEffectIndex /* eff_idx */)
     if (!unitTarget)
         return;
 
-    WorldPacket data(SMSG_CLEAR_TARGET, 8);
-    data << unitTarget->GetObjectGuid();
-    unitTarget->SendMessageToSet(data, false);
+    WorldPacket dataBreak(SMSG_BREAK_TARGET, 8);
+    dataBreak << unitTarget->GetPackGUID();
+
+    WorldPacket dataClear(SMSG_CLEAR_TARGET, 8);
+    dataClear << unitTarget->GetObjectGuid();
+
+    for (auto& seesMe : unitTarget->GetClientGuidsIAmAt())
+    {
+        if (Player* player = unitTarget->GetMap()->GetPlayer(seesMe))
+        {
+            if (!player->CanAttack(unitTarget))
+                continue;
+
+            player->GetSession()->SendPacket(dataBreak);
+            player->GetSession()->SendPacket(dataClear);
+        }
+    }
+
+    Unit::AttackerSet attackerSet;
+    for (Unit::AttackerSet::const_iterator itr = unitTarget->getAttackers().begin(); itr != unitTarget->getAttackers().end(); ++itr)
+        if ((*itr)->GetTypeId() == TYPEID_UNIT && !(*itr)->CanHaveThreatList())
+            attackerSet.insert(*itr);
+
+    for (Unit* attacker : attackerSet)
+        attacker->AttackStop();
 }
 
 void Spell::EffectDurabilityDamage(SpellEffectIndex eff_idx)
