@@ -26,6 +26,7 @@ EndScriptData */
 #include "AI/ScriptDevAI/base/CombatAI.h"
 #include "Spells/Scripts/SpellScript.h"
 #include "Spells/SpellAuras.h"
+#include <Entities/TemporarySpawn.h>
 
 enum
 {
@@ -147,8 +148,11 @@ struct mob_vrykul_skeletonAI : public ScriptedAI
 
         Creature* pKeleseth = m_pInstance->GetSingleCreatureFromStorage(NPC_KELESETH);
 
-        if (!pKeleseth || !pKeleseth->IsAlive())
-            return;
+		if (!pKeleseth || !pKeleseth->IsAlive())
+		{
+			m_creature->ForcedDespawn();
+			return;
+		}
 
         if (m_uiAttackTimer)
         {
@@ -212,7 +216,7 @@ enum KelesethActions
 
 struct boss_kelesethAI : public CombatAI
 {
-    boss_kelesethAI(Creature* creature) : CombatAI(creature, KELESETH_ACTION_MAX), m_instance(static_cast<instance_utgarde_keep*>(creature->GetInstanceData()))
+	boss_kelesethAI(Creature* creature) : CombatAI(creature, KELESETH_ACTION_MAX), m_instance(static_cast<instance_utgarde_keep*>(creature->GetInstanceData()))
     {
         m_isRegularMode = creature->GetMap()->IsRegularDifficulty();
 
