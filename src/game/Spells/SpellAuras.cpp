@@ -2931,40 +2931,6 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         return;
                     }
                 }
-
-                // Overpower
-                if (GetSpellProto()->SpellFamilyFlags & uint64(0x0000000000000004))
-                {
-                    // Must be casting target
-                    if (!target->IsNonMeleeSpellCasted(false))
-                        return;
-
-                    Unit* caster = GetCaster();
-                    if (!caster)
-                        return;
-
-                    Unit::AuraList const& modifierAuras = caster->GetAurasByType(SPELL_AURA_ADD_FLAT_MODIFIER);
-                    for (auto modifierAura : modifierAuras)
-                    {
-                        // Unrelenting Assault
-                        if (modifierAura->GetSpellProto()->SpellFamilyName == SPELLFAMILY_WARRIOR && modifierAura->GetSpellProto()->SpellIconID == 2775)
-                        {
-                            switch (modifierAura->GetSpellProto()->Id)
-                            {
-                                case 46859:                 // Unrelenting Assault, rank 1
-                                    target->CastSpell(target, 64849, TRIGGERED_OLD_TRIGGERED, nullptr, modifierAura);
-                                    break;
-                                case 46860:                 // Unrelenting Assault, rank 2
-                                    target->CastSpell(target, 64850, TRIGGERED_OLD_TRIGGERED, nullptr, modifierAura);
-                                    break;
-                                default:
-                                    break;
-                            }
-                            break;
-                        }
-                    }
-                    return;
-                }
                 break;
             }
             case SPELLFAMILY_MAGE:
@@ -4226,11 +4192,10 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
                 case FORM_BERSERKERSTANCE:
                 {
                     ShapeshiftForm previousForm = target->GetShapeshiftForm();
-                    uint32 ragePercent = 0;
+                    uint32 remainingRage = 0;
                     if (previousForm == FORM_DEFENSIVESTANCE)
                         if (Aura* aura = target->GetOverrideScript(831))
-                            ragePercent = aura->GetModifier()->m_amount;
-                    uint32 Rage_val = 0;
+                            remainingRage += aura->GetModifier()->m_amount * 10;
                     // Stance mastery + Tactical mastery (both passive, and last have aura only in defense stance, but need apply at any stance switch)
                     if (target->GetTypeId() == TYPEID_PLAYER)
                     {
@@ -4242,17 +4207,12 @@ void Aura::HandleAuraModShapeshift(bool apply, bool Real)
 
                             SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(itr.first);
                             if (spellInfo && spellInfo->SpellFamilyName == SPELLFAMILY_WARRIOR && spellInfo->SpellIconID == 139)
-                                Rage_val += target->CalculateSpellEffectValue(target, spellInfo, EFFECT_INDEX_0) * 10;
+                                remainingRage += target->CalculateSpellEffectValue(target, spellInfo, EFFECT_INDEX_0) * 10;
                         }
                     }
 
-                    if (ragePercent) // not zero
-                    {
-                        if (ragePercent != 100) // optimization
-                            target->SetPower(POWER_RAGE, (target->GetPower(POWER_RAGE) * ragePercent) / 100);
-                    }
-                    else if (target->GetPower(POWER_RAGE) > Rage_val)
-                        target->SetPower(POWER_RAGE, Rage_val);
+                    if (target->GetPower(POWER_RAGE) > remainingRage)
+                        target->SetPower(POWER_RAGE, remainingRage);
                     break;
                 }
                 default:

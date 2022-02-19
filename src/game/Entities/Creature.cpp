@@ -153,7 +153,6 @@ Creature::Creature(CreatureSubtype subtype) : Unit(),
     m_checkForHelp(true),
     m_immunitySet(UINT32_MAX)
 {
-    m_regenTimer = 200;
     m_valuesCount = UNIT_END;
 
     SetWalk(true, true);
@@ -795,16 +794,17 @@ void Creature::Update(const uint32 diff)
     }
 }
 
-void Creature::RegenerateAll(uint32 update_diff)
+void Creature::RegenerateAll(uint32 diff)
 {
+    m_regenTimer += diff;
     if (m_regenTimer > 0)
     {
-        if (update_diff >= m_regenTimer)
+        if (diff >= m_regenTimer)
             m_regenTimer = 0;
         else
-            m_regenTimer -= update_diff;
+            m_regenTimer -= diff;
     }
-    if (m_regenTimer != 0)
+    if (m_regenTimer < REGEN_TIME_FULL)
         return;
 
     if (!IsInCombat() || GetCombatManager().IsEvadeRegen())
@@ -812,7 +812,7 @@ void Creature::RegenerateAll(uint32 update_diff)
 
     RegeneratePower(2.f);
 
-    m_regenTimer = REGEN_TIME_FULL;
+    m_regenTimer -= REGEN_TIME_FULL;
 }
 
 void Creature::RegeneratePower(float timerMultiplier)
