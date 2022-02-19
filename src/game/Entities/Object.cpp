@@ -2794,11 +2794,7 @@ bool WorldObject::IsSpellReady(SpellEntry const& spellEntry, ItemPrototype const
 {
     uint32 spellCategory = spellEntry.Category;
 
-    TimePoint now;
-    if (IsInWorld())
-        now = GetMap()->GetCurrentClockTime();
-    else
-        now = World::GetCurrentClockTime();
+    TimePoint now = GetMap()->GetCurrentClockTime();
 
     // overwrite category by provided category in item prototype during item cast if need
     if (itemProto)
