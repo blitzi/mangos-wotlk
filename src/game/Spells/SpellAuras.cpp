@@ -385,7 +385,7 @@ Aura::Aura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* curr
     m_spellmod(nullptr), m_periodicTimer(0), m_periodicTick(0), m_removeMode(AURA_REMOVE_BY_DEFAULT),
     m_effIndex(eff), m_positive(false), m_isPeriodic(false), m_isAreaAura(false),
     m_isPersistent(false), m_magnetUsed(false), m_spellAuraHolder(holder),
-    m_scriptValue(0)
+    m_scriptValue(0), m_storage(nullptr)
 {
     MANGOS_ASSERT(target);
     MANGOS_ASSERT(spellproto && spellproto == sSpellTemplate.LookupEntry<SpellEntry>(spellproto->Id) && "`info` must be pointer to sSpellTemplate element");
@@ -452,6 +452,7 @@ Aura::Aura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* curr
 
 Aura::~Aura()
 {
+    delete m_storage;
 }
 
 AreaAura::AreaAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target,
@@ -3725,13 +3726,6 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         }
                     }
                 }
-                return;
-            }
-
-            // Predatory Strikes
-            if (target->GetTypeId() == TYPEID_PLAYER && GetSpellProto()->SpellIconID == 1563)
-            {
-                ((Player*)target)->UpdateAttackPowerAndDamage();
                 return;
             }
 
@@ -7535,7 +7529,8 @@ void Aura::HandleModDamagePercentDone(bool apply, bool Real)
     // Send info to client
     if (target->GetTypeId() == TYPEID_PLAYER)
         for (int i = SPELL_SCHOOL_HOLY; i < MAX_SPELL_SCHOOL; ++i)
-            target->ApplyModSignedFloatValue(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT + i, m_modifier.m_amount / 100.0f, apply);
+            if (m_modifier.m_miscvalue & (1 << i))
+                target->ApplyModSignedFloatValue(PLAYER_FIELD_MOD_DAMAGE_DONE_PCT + i, m_modifier.m_amount / 100.0f, apply);
 
     if (!apply && m_removeMode == AURA_REMOVE_BY_EXPIRE)
         if (GetId() == 30423)
@@ -9288,21 +9283,6 @@ void Aura::PeriodicDummyTick()
                     break;
             }
 
-            // Prey on the Weak
-            if (spell->SpellIconID == 2983)
-            {
-                Unit* victim = target->GetVictim();
-                if (victim && (target->GetHealth() * 100 / target->GetMaxHealth() > victim->GetHealth() * 100 / victim->GetMaxHealth()))
-                {
-                    if (!target->HasAura(58670))
-                    {
-                        int32 basepoints = GetBasePoints();
-                        target->CastCustomSpell(target, 58670, &basepoints, nullptr, nullptr, TRIGGERED_OLD_TRIGGERED);
-                    }
-                }
-                else
-                    target->RemoveAurasDueToSpell(58670);
-            }
             break;
         }
         case SPELLFAMILY_MAGE:
@@ -9347,42 +9327,6 @@ void Aura::PeriodicDummyTick()
                 // Force of Nature
                 case 33831:
                     return;
-                default:
-                    break;
-            }
-            break;
-        }
-        case SPELLFAMILY_ROGUE:
-        {
-            switch (spell->Id)
-            {
-                // Killing Spree
-                case 51690:
-                {
-                    if (target->hasUnitState(UNIT_STAT_STUNNED) || target->isFeared())
-                        return;
-
-                    UnitList targets;
-                    {
-                        // eff_radius ==0
-                        float radius = GetSpellMaxRange(sSpellRangeStore.LookupEntry(spell->rangeIndex));
-
-                        MaNGOS::AnyUnfriendlyVisibleUnitInObjectRangeCheck u_check(target, target, radius);
-                        MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyVisibleUnitInObjectRangeCheck> checker(targets, u_check);
-                        Cell::VisitAllObjects(target, checker, radius);
-                    }
-
-                    if (targets.empty())
-                        return;
-
-                    UnitList::const_iterator itr = targets.begin();
-                    std::advance(itr, urand() % targets.size());
-                    Unit* victim = *itr;
-
-                    target->CastSpell(victim, 57840, TRIGGERED_OLD_TRIGGERED);
-                    target->CastSpell(victim, 57841, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
                 default:
                     break;
             }

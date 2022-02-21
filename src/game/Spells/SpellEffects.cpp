@@ -495,22 +495,6 @@ void Spell::EffectSchoolDMG(SpellEffectIndex eff_idx)
                             break;
                     }
                 }
-                // Shadow Bite
-                else if (m_spellInfo->SpellFamilyFlags & uint64(0x0040000000000000))
-                {
-                    Unit* owner = m_caster->GetOwner();
-                    if (!owner)
-                        break;
-
-                    uint32 counter = 0;
-                    Unit::AuraList const& dotAuras = unitTarget->GetAurasByType(SPELL_AURA_PERIODIC_DAMAGE);
-                    for (auto dotAura : dotAuras)
-                        if (dotAura->GetCasterGuid() == owner->GetObjectGuid())
-                            ++counter;
-
-                    if (counter)
-                        damage += (counter * owner->CalculateSpellEffectValue(unitTarget, m_spellInfo, EFFECT_INDEX_2) * damage) / 100.0f;
-                }
                 // Conflagrate - consumes Immolate or Shadowflame
                 else if (m_spellInfo->TargetAuraState == AURA_STATE_CONFLAGRATE)
                 {
@@ -5199,7 +5183,7 @@ void Spell::EffectPowerDrain(SpellEffectIndex eff_idx)
     m_spellLog.AddLog(uint32(SPELL_EFFECT_POWER_DRAIN), unitTarget->GetPackGUID(), new_damage, uint32(powerType), gainMultiplier);
 
     if (int32 gain = int32(new_damage * gainMultiplier))
-        m_caster->EnergizeBySpell(m_caster, m_spellInfo, gain, powerType);
+        m_caster->EnergizeBySpell(m_caster, m_spellInfo, gain, powerType, false);
 }
 
 void Spell::EffectSendEvent(SpellEffectIndex effectIndex)
@@ -6023,7 +6007,7 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
                 unk = damage;
                 break;
             default:
-                if (m_spellInfo->Id == 18662)
+                if (m_spellInfo->Id == 18662 || m_spellInfo->Id == 1122)
                     creatureLevel = damage;
                 else
                     amount = damage > 0 ? damage : 1; // old code
@@ -6324,7 +6308,6 @@ bool Spell::DoSummonWild(CreatureSummonPositions& list, SummonPropertiesEntry co
             {
                 case 1122: // Warlock Infernal - requires custom code - generalized in WOTLK
                 {
-                    summon->SelectLevel(level); // needs to have casters level
                     // Enslave demon effect, without mana cost and cooldown
                     summon->CastSpell(nullptr, 22707, TRIGGERED_OLD_TRIGGERED);  // short root spell on infernal from sniffs
                     m_caster->CastSpell(summon, 20882, TRIGGERED_OLD_TRIGGERED);
@@ -10045,15 +10028,6 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
 
                     // Summon Drakuru
                     m_caster->CastSpell(m_caster, 50446, TRIGGERED_OLD_TRIGGERED);
-                    return;
-                }
-                case 50725:                                 // Vigilance - remove cooldown on Taunt
-                {
-                    Unit* caster = GetAffectiveCaster();
-                    if (!caster || caster->GetTypeId() != TYPEID_PLAYER)
-                        return;
-
-                    caster->RemoveSpellCategoryCooldown(82, true);
                     return;
                 }
                 case 50894:                                 // Zul'Drak Rat

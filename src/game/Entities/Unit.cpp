@@ -2024,7 +2024,7 @@ void Unit::CalculateMeleeDamage(Unit* pVictim, CalcDamageInfo* calcDamageInfo, W
             calcDamageInfo->blocked_amount = calcDamageInfo->target->GetShieldBlockValue();
 
             // Target has a chance to double the blocked amount if it has SPELL_AURA_MOD_BLOCK_CRIT_CHANCE
-            if (roll_chance_i(pVictim->GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_CRIT_CHANCE)))
+            if (calcDamageInfo->target->IsBlockCritical())
                 calcDamageInfo->blocked_amount *= 2;
 
             if (calcDamageInfo->blocked_amount >= calcDamageInfo->totalDamage)
@@ -2965,7 +2965,10 @@ void Unit::CalculateAbsorbResistBlock(Unit* caster, SpellNonMeleeDamage* spellDa
 {
     if (RollAbilityPartialBlockOutcome(caster, attType, spellProto))
     {
-        spellDamageInfo->blocked = std::min(GetShieldBlockValue(), spellDamageInfo->damage);
+        uint32 blockValue = GetShieldBlockValue();
+        if (IsBlockCritical())
+            blockValue *= 2;
+        spellDamageInfo->blocked = std::min(blockValue, spellDamageInfo->damage);
         spellDamageInfo->damage -= spellDamageInfo->blocked;
     }
 
@@ -3398,6 +3401,15 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
     }
 
     return SPELL_MISS_NONE;
+}
+
+bool Unit::IsBlockCritical() const
+{
+    int32 chance = GetTotalAuraModifier(SPELL_AURA_MOD_BLOCK_CRIT_CHANCE);
+    if (!chance) // dont roll if no chance
+        return false;
+
+    return roll_chance_i(chance);
 }
 
 uint32 Unit::GetDefenseSkillValue(Unit const* target) const
@@ -8053,9 +8065,10 @@ void Unit::SendEnvironmentalDamageLog(uint8 type, uint32 damage, uint32 absorb, 
     SendMessageToSet(data, true);
 }
 
-void Unit::EnergizeBySpell(Unit* victim, SpellEntry const* spellInfo, uint32 damage, Powers powerType)
+void Unit::EnergizeBySpell(Unit* victim, SpellEntry const* spellInfo, uint32 damage, Powers powerType, bool sendLog)
 {
-    SendEnergizeSpellLog(victim, spellInfo->Id, damage, powerType);
+    if (sendLog)
+        SendEnergizeSpellLog(victim, spellInfo->Id, damage, powerType);
     // needs to be called after sending spell log
     victim->ModifyPower(powerType, damage);
     victim->getHostileRefManager().threatAssist(this, float(damage) * 0.5f * sSpellMgr.GetSpellThreatMultiplier(spellInfo), spellInfo);
@@ -10485,7 +10498,7 @@ bool Unit::SelectHostileTarget()
 
         // do not evade during combat script running
         // some scripts start in combat and disengage all attackers but npc is still locked in combat
-        if (getThreatManager().isThreatListEmpty() && IsCrowdControlled() && !AI()->GetCombatScriptStatus())
+        if (IsInCombat() && getThreatManager().isThreatListEmpty() && IsCrowdControlled() && !AI()->GetCombatScriptStatus())
             evadeFunc();
         return !((AI()->GetCombatScriptStatus() || IsCrowdControlled()) && getThreatManager().isThreatListEmpty());
     }
