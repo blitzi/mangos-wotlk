@@ -109,6 +109,8 @@ struct boss_ingvarAI : public CombatAI
         AddCombatAction(INGVAR_ACTION_ENRAGE, 10000u);
 
         m_isRegularMode = creature->GetMap()->IsRegularDifficulty();
+		m_bIsResurrected = false;
+		m_bIsFakingDeath = false;
     }
 
     instance_utgarde_keep* m_instance;
