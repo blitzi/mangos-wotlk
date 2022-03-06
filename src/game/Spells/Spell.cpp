@@ -3609,7 +3609,7 @@ SpellCastResult Spell::cast(bool skipCheck)
         procTarget = m_caster;
 
     // Okay, everything is prepared. Now we need to distinguish between immediate and evented delayed spells
-    if (GetSpellSpeed() > 0.0f && !IsChanneledSpell(m_spellInfo))
+    if (IsDelayedSpell())
     {
         // For channels, delay starts at channel end
         if (m_spellState != SPELL_STATE_CHANNELING)
@@ -3670,8 +3670,6 @@ void Spell::handle_immediate()
 {
     // AOE caps implementation - only works for non-travelling spells
     ProcessAOECaps();
-
-    DoAllTargetlessEffects(true);
 
     for (auto& ihit : m_UniqueTargetInfo)
         DoAllEffectOnTarget(&ihit);
@@ -3771,6 +3769,9 @@ void Spell::_handle_immediate_phase()
 
     // handle none targeted effects
     DoAllTargetlessEffects(false);
+
+    if (!IsDelayedSpell())
+        DoAllTargetlessEffects(true);
 
     // process items
     for (auto& ihit : m_UniqueItemInfo)
@@ -4752,7 +4753,8 @@ void Spell::SendChannelStart(uint32 duration)
                     diminishLevel = itr->diminishLevel;
                 }
                 target = ObjectAccessor::GetUnit(*m_caster, itr->targetGUID);
-                if (m_spellInfo->EffectRadiusIndex[EFFECT_INDEX_0] != 0 && m_spellInfo->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MOD_POSSESS)
+                if (m_spellInfo->EffectRadiusIndex[EFFECT_INDEX_0] != 0 &&
+                    (m_spellInfo->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_MOD_POSSESS || m_spellInfo->EffectApplyAuraName[EFFECT_INDEX_0] == SPELL_AURA_BIND_SIGHT))
                     m_maxRange = GetSpellRadius(sSpellRadiusStore.LookupEntry(m_spellInfo->EffectRadiusIndex[EFFECT_INDEX_0]));
                 break;
             }
@@ -5984,8 +5986,11 @@ SpellCastResult Spell::CheckCast(bool strict)
             {
                 if (Unit* target = m_targets.getUnitTarget())
                 {
-                    if (target->GetTypeId() != TYPEID_PLAYER && m_spellInfo->EffectImplicitTargetA[i] != TARGET_UNIT_CASTER)
+                    if (!target->IsPlayer() && m_spellInfo->EffectImplicitTargetA[i] != TARGET_UNIT_CASTER && m_spellInfo->EffectImplicitTargetB[i] != TARGET_UNIT_CASTER)
                         return SPELL_FAILED_BAD_TARGETS;
+
+                    if (!target->IsPlayer())
+                        target = m_caster;
 
                     if (i != EFFECT_INDEX_0) // TODO: Partial application
                         break;
@@ -8491,6 +8496,11 @@ float Spell::GetSpellSpeed() const
         return m_overridenSpeed;
     
     return m_spellInfo->speed;
+}
+
+bool Spell::IsDelayedSpell() const
+{
+    return GetSpellSpeed() > 0.0f && !IsChanneledSpell(m_spellInfo);
 }
 
 void Spell::ResetEffectDamageAndHeal()

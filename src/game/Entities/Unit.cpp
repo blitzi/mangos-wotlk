@@ -6158,6 +6158,20 @@ void Unit::RemoveAurasWithInterruptFlags(uint32 flags)
     }
 }
 
+void Unit::RemoveAurasWithInterruptFlags(uint32 flags, SpellAuraHolder* except)
+{
+    for (SpellAuraHolderMap::iterator iter = m_spellAuraHolders.begin(); iter != m_spellAuraHolders.end();)
+    {
+        if (iter->second->GetSpellProto()->AuraInterruptFlags & flags && iter->second != except)
+        {
+            RemoveSpellAuraHolder(iter->second);
+            iter = m_spellAuraHolders.begin();
+        }
+        else
+            ++iter;
+    }
+}
+
 template <class T>
 void Unit::RemoveAurasWithAttribute(T flags)
 {
@@ -9692,7 +9706,10 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy)
                         enemy->GetCombatManager().TriggerCombatTimer(controller);
                 }
                 else if (controller->AI())
+                {
+                    MANGOS_ASSERT(controller->AI()); // a player without UNIT_FLAG_PLAYER_CONTROLLED should always have AI
                     controller->AI()->AttackStart(enemy);
+                }
             }
         }
     }

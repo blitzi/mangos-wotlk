@@ -1993,7 +1993,7 @@ void Player::ToggleAFK()
         SetGroupUpdateFlag(GROUP_UPDATE_FLAG_STATUS);
 
     // afk player not allowed in battleground
-    if (isAFK() && InBattleGround() && !InArena())
+    if (isAFK() && InBattleGround() && !InArena() && !IsGameMaster())
         LeaveBattleground();
 }
 
@@ -2589,7 +2589,7 @@ void Player::RegenerateHealth(uint32 diff)
     if (addvalue < 0)
         addvalue = 0;
 
-    ModifyHealth(int32(addvalue * uint32(float(diff) / 1000)));
+    ModifyHealth(int32(addvalue * float(diff) / 1000));
 }
 
 Creature* Player::GetNPCIfCanInteractWith(ObjectGuid guid, uint32 npcflagmask)
@@ -14557,6 +14557,7 @@ void Player::RewardQuest(Quest const* pQuest, uint32 reward, Object* questGiver,
     {
         SetDailyQuestStatus(quest_id);
         GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST, 1);
+        GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_COMPLETE_DAILY_QUEST_DAILY, quest_id);
     }
 
     if (pQuest->IsWeekly())
@@ -15419,6 +15420,8 @@ void Player::KilledMonster(CreatureInfo const* cInfo, Creature const* creature)
     for (unsigned int i : cInfo->KillCredit)
         if (i)
             KilledMonsterCredit(i, guid);
+
+    GetAchievementMgr().UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_KILL_CREATURE_TYPE, cInfo->CreatureType, 1, const_cast<Creature*>(creature));
 }
 
 void Player::KilledMonsterCredit(uint32 entry, ObjectGuid guid)

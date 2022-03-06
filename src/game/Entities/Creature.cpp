@@ -797,15 +797,15 @@ void Creature::Update(const uint32 diff)
 void Creature::RegenerateAll(uint32 diff)
 {
     m_regenTimer += diff;
-    if (m_regenTimer < REGEN_TIME_FULL)
+    if (m_regenTimer < REGEN_TIME_FULL_UNIT)
         return;
 
     if (!IsInCombat() || GetCombatManager().IsEvadeRegen())
         RegenerateHealth();
 
-    RegeneratePower(2.f);
+    RegeneratePower(REGEN_TIME_FULL_UNIT / 1000);
 
-    m_regenTimer -= REGEN_TIME_FULL;
+    m_regenTimer -= REGEN_TIME_FULL_UNIT;
 }
 
 void Creature::RegeneratePower(float timerMultiplier)
@@ -885,7 +885,8 @@ void Creature::RegenerateHealth()
     if (curValue >= maxValue)
         return;
 
-    uint32 addvalue = maxValue / 3;
+    // regenerate 33% for npc and ~13% for player controlled npc (enslave etc) ToDo: Find Regenvalue based on Spirit, might differ due to mob types
+    uint32 addvalue = IsPlayerControlled() ? maxValue * 0.13 : maxValue / 3;
 
     ModifyHealth(addvalue);
 }
@@ -896,8 +897,8 @@ bool Creature::AIM_Initialize()
     m_ai.reset(FactorySelector::selectAI(this));
 
     // Handle Spawned Events, also calls Reset()
-    m_ai->JustRespawned();
     m_ai->SpellListChanged();
+    m_ai->JustRespawned();
 
     if (InstanceData* mapInstance = GetInstanceData())
         mapInstance->OnCreatureRespawn(this);
@@ -1268,8 +1269,8 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
        << GetGUIDLow() << ","
        << data.id << ","
        << data.mapid << ","
-       << uint32(data.spawnMask) << ","                    // cast to prevent save as symbol
-       << uint16(data.phaseMask) << ","                    // prevent out of range error
+       << static_cast<uint32>(data.spawnMask) << ","       // cast to prevent save as symbol
+       << static_cast<uint16>(data.phaseMask) << ","       // prevent out of range error
        << data.modelid_override << ","
        << data.equipmentId << ","
        << data.posX << ","
@@ -1278,12 +1279,12 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
        << data.orientation << ","
        << data.spawntimesecsmin << ","                     // respawn time minimum
        << data.spawntimesecsmax << ","                     // respawn time maximum
-       << (float) data.spawndist << ","                    // spawn distance (float)
+       << static_cast<float>(data.spawndist) << ","        // spawn distance (float)
        << data.currentwaypoint << ","                      // currentwaypoint
        << data.curhealth << ","                            // curhealth
        << data.curmana << ","                              // curmana
        << (data.is_dead  ? 1 : 0) << ","                   // is_dead
-       << uint32(data.movementType) << ")";                // default movement generator type, cast to prevent save as symbol
+       << static_cast<uint32>(data.movementType) << ")";   // default movement generator type, cast to prevent save as symbol
 
     WorldDatabase.PExecuteLog("%s", ss.str().c_str());
 

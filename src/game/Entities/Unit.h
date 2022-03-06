@@ -1070,6 +1070,7 @@ enum IgnoreUnitState
 
 // Regeneration defines
 #define REGEN_TIME_FULL     2000                            // For this time difference is computed regen value
+#define REGEN_TIME_FULL_UNIT 5000                           // For npcs
 #define REGEN_TIME_PRECISE  500                             // Used in Spell::CheckPower for precise regeneration in spell cast time
 
 // Power type values defines
@@ -1962,6 +1963,7 @@ class Unit : public WorldObject
         void RemoveRankAurasDueToSpell(uint32 spellId);
         bool RemoveNoStackAurasDueToAuraHolder(SpellAuraHolder* holder);
         void RemoveAurasWithInterruptFlags(uint32 flags);
+        void RemoveAurasWithInterruptFlags(uint32 flags, SpellAuraHolder* except);
         void RemoveAurasWithDispelType(DispelType type, ObjectGuid casterGuid = ObjectGuid());
         void RemoveAllAuras(AuraRemoveMode mode = AURA_REMOVE_BY_DEFAULT);
         void RemoveArenaAuras(bool onleave = false);
