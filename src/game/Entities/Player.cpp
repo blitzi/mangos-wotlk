@@ -701,6 +701,8 @@ Player::Player(WorldSession* session): Unit(), m_taxiTracker(*this), m_mover(thi
     m_pendingBindId = 0;
     m_pendingBindTimer = 0;
 
+    m_isDebuggingAreaTriggers = false;
+
 #ifdef ENABLE_PLAYERBOTS
     m_playerbotAI = NULL;
     m_playerbotMgr = NULL;
@@ -19463,6 +19465,36 @@ void Player::PossessSpellInitialize() const
     GetSession()->SendPacket(data);
 }
 
+void Player::VehicleSpellInitialize() const
+{
+    Unit* charm = GetCharm();
+
+    if (!charm)
+        return;
+
+    CharmInfo* charmInfo = charm->GetCharmInfo();
+
+    if (!charmInfo)
+    {
+        sLog.outError("Player::PossessSpellInitialize(): charm (GUID: %u TypeId: %u) has no charminfo!", charm->GetGUIDLow(), charm->GetTypeId());
+        return;
+    }
+
+    WorldPacket data(SMSG_PET_SPELLS, 8 + 2 + 4 + 4 + 4 * MAX_UNIT_ACTION_BAR_INDEX + 1 + 1);
+    data << charm->GetObjectGuid();
+    data << uint16(0);
+    data << uint32(charm->IsCreature() ? static_cast<Creature*>(charm)->GetDuration() : 0);
+    data << uint8(charm->AI()->GetReactState()) << uint8(charmInfo->GetCommandState()) << uint16(0x800); // disable actions sent for all vehicles
+
+    charmInfo->BuildActionBar(data);
+
+    data << uint8(0);                                       // spells count
+
+    CharmCooldownInitialize(data);
+
+    GetSession()->SendPacket(data);
+}
+
 void Player::CharmSpellInitialize() const
 {
     Unit* charm = GetFirstControlled();
@@ -19491,7 +19523,7 @@ void Player::CharmSpellInitialize() const
     WorldPacket data(SMSG_PET_SPELLS, 8 + 2 + 4 + 4 + 4 * MAX_UNIT_ACTION_BAR_INDEX + 1 + 4 * uint32(addlist) + 1);
     data << charm->GetObjectGuid();
     data << uint16(0);
-    data << uint32(0);
+    data << uint32(charm->IsCreature() ? static_cast<Creature*>(charm)->GetDuration() : 0);
     data << uint8(charm->AI()->GetReactState()) << uint8(charmInfo->GetCommandState()) << uint16(0);
 
     charmInfo->BuildActionBar(data);
