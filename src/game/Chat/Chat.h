@@ -309,6 +309,8 @@ class ChatHandler
 
         bool HandleDebugPetDismissSound(char* args);
 
+        bool HandleDebugAreaTriggersCommand(char* args);
+
         bool HandleDebugSendBuyErrorCommand(char* args);
         bool HandleDebugSendChannelNotifyCommand(char* args);
         bool HandleDebugSendChatMsgCommand(char* args);
@@ -370,6 +372,7 @@ class ChatHandler
         bool HandleGoObjectCommand(char* args);
         bool HandleGoTaxinodeCommand(char* args);
         bool HandleGoTriggerCommand(char* args);
+        bool HandleGoWarpCommand(char* args);
         bool HandleGoXYCommand(char* args);
         bool HandleGoXYZCommand(char* args);
         bool HandleGoZoneXYCommand(char* args);
@@ -401,6 +404,7 @@ class ChatHandler
         bool HandleLearnAllMySpellsCommand(char* args);
         bool HandleLearnAllMyTalentsCommand(char* args);
 
+        bool HandleListAreaTriggerCommand(char* args);
         bool HandleListAurasCommand(char* args);
         bool HandleListCreatureCommand(char* args);
         bool HandleListItemCommand(char* args);
@@ -492,6 +496,7 @@ class ChatHandler
         bool HandleNpcMoveCommand(char* args);
         bool HandleNpcPlayEmoteCommand(char* args);
         bool HandleNpcSayCommand(char* args);
+        bool HandleNpcListSpells(char* args);
         bool HandleNpcSetDeathStateCommand(char* args);
         bool HandleNpcShowLootCommand(char* args);
         bool HandleNpcSetModelCommand(char* args);
@@ -557,7 +562,6 @@ class ChatHandler
         bool HandleReloadConditionsCommand(char* args);
         bool HandleReloadCreatureQuestRelationsCommand(char* args);
         bool HandleReloadCreatureQuestInvRelationsCommand(char* args);
-        bool HandleReloadDbScriptStringCommand(char* args);
         bool HandleReloadDBScriptsOnCreatureDeathCommand(char* args);
         bool HandleReloadDBScriptsOnEventCommand(char* args);
         bool HandleReloadDBScriptsOnGossipCommand(char* args);
@@ -567,7 +571,6 @@ class ChatHandler
         bool HandleReloadDBScriptsOnSpellCommand(char* args);
         bool HandleReloadDBScriptsOnRelayCommand(char* args);
 
-        bool HandleReloadEventAITextsCommand(char* args);
         bool HandleReloadEventAISummonsCommand(char* args);
         bool HandleReloadEventAIScriptsCommand(char* args);
         bool HandleReloadGameGraveyardZoneCommand(char* args);

@@ -1049,7 +1049,7 @@ std::shared_ptr<CreatureSpellListContainer> ObjectMgr::LoadCreatureSpellLists()
     std::shared_ptr<CreatureSpellListContainer> newContainer = std::make_shared<CreatureSpellListContainer>();
     uint32 count = 0;
 
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, Type, Param1, Param2, Param3 FROM creature_spell_targeting"));
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, Type, Param1, Param2, Param3, Comments FROM creature_spell_targeting"));
     if (result)
     {
         do
@@ -1069,6 +1069,7 @@ std::shared_ptr<CreatureSpellListContainer> ObjectMgr::LoadCreatureSpellLists()
             target.Param1 = fields[2].GetUInt32();
             target.Param2 = fields[3].GetUInt32();
             target.Param3 = fields[4].GetUInt32();
+            target.Comment = fields[5].GetCppString();
             newContainer->targeting[target.Id] = target;
         } while (result->NextRow());
     }
@@ -1110,6 +1111,12 @@ std::shared_ptr<CreatureSpellListContainer> ObjectMgr::LoadCreatureSpellLists()
             if (!sSpellTemplate.LookupEntry<SpellEntry>(spell.SpellId))
             {
                 sLog.outErrorDb("LoadCreatureSpellLists: Invalid creature_spell_list %u spell %u does not exist. Skipping.", spell.Id, spell.SpellId);
+                continue;
+            }
+
+            if (newContainer->spellLists[spell.Id].Spells.find(spell.SpellId) != newContainer->spellLists[spell.Id].Spells.end())
+            {
+                sLog.outErrorDb("LoadCreatureSpellLists: Invalid creature_spell_list %u contains duplicate position %u. Skipping.", spell.Id, spell.Position);
                 continue;
             }
 
@@ -1178,7 +1185,7 @@ void ObjectMgr::LoadSpawnGroups()
         } while (result->NextRow());
     }
 
-    result.reset(WorldDatabase.Query("SELECT SpawnGroupID, FormationType, FormationSpread, FormationOptions, MovementID, MovementType, Comment FROM spawn_group_formation"));
+    result.reset(WorldDatabase.Query("SELECT Id, FormationType, FormationSpread, FormationOptions, PathId, MovementType, Comment FROM spawn_group_formation"));
     if (result)
     {
         do
@@ -1226,9 +1233,9 @@ void ObjectMgr::LoadSpawnGroups()
 
             fEntry->Type = static_cast<SpawnGroupFormationType>(fType);
 
-            if (fEntry->Spread > 15.0f || fEntry->Spread < 0.5f)
+            if (fEntry->Spread > 15.0f || fEntry->Spread < -15)
             {
-                sLog.outErrorDb("LoadSpawnGroups: Invalid spread value (%5.2f) should be between (0.5..15) in formation ID:%u . Skipping.", fEntry->Spread, fEntry->GroupId);
+                sLog.outErrorDb("LoadSpawnGroups: Invalid spread value (%5.2f) should be between (-15..15) in formation ID:%u . Skipping.", fEntry->Spread, fEntry->GroupId);
                 continue;
             }
 
@@ -1247,6 +1254,8 @@ void ObjectMgr::LoadSpawnGroups()
             guid.Id = fields[0].GetUInt32();
             guid.DbGuid = fields[1].GetUInt32();
             guid.SlotId = fields[2].GetInt32();
+            guid.OwnEntry = 0;
+            guid.RandomEntry = false;
 
             if (newContainer->spawnGroupMap.find(guid.Id) == newContainer->spawnGroupMap.end())
             {
@@ -1387,12 +1396,7 @@ void ObjectMgr::LoadSpawnGroups()
             {
                 maxRandom += randomEntry.MaxCount;
                 if (randomEntry.Chance == 0)
-                {
                     maxCount = true;
-                    entry.EquallyChanced.push_back(&randomEntry);
-                }
-                else
-                    entry.ExplicitlyChanced.push_back(&randomEntry);
             }                
             if (maxCount)
                 entry.MaxCount = entry.DbGuids.size();
@@ -1401,6 +1405,15 @@ void ObjectMgr::LoadSpawnGroups()
             if (!entry.MaxCount && entry.RandomEntries.empty())
                 entry.MaxCount = entry.DbGuids.size();
         }
+
+        for (auto& randomEntry : entry.RandomEntries)
+        {
+            if (randomEntry.Chance == 0)
+                entry.EquallyChanced.push_back(&randomEntry);
+            else
+                entry.ExplicitlyChanced.push_back(&randomEntry);
+        }
+
         for (auto& guidData : entry.DbGuids)
         {
             if (entry.Type == SPAWN_GROUP_CREATURE)
@@ -1424,6 +1437,10 @@ void ObjectMgr::LoadSpawnGroups()
                 }
                 if (data->spawnMask == 0)
                     entry.EnabledByDefault = false;
+                if (data->id)
+                    guidData.OwnEntry = data->id;
+                if (GetAllRandomCreatureEntries(guidData.DbGuid))
+                    guidData.RandomEntry = true;
             }
             else
             {
@@ -1446,6 +1463,10 @@ void ObjectMgr::LoadSpawnGroups()
                 }
                 if (data->spawnMask == 0)
                     entry.EnabledByDefault = false;
+                if (data->id)
+                    guidData.OwnEntry = data->id;
+                if (GetAllRandomGameObjectEntries(guidData.DbGuid))
+                    guidData.RandomEntry = true;
             }
         }
     }
@@ -2457,6 +2478,55 @@ void ObjectMgr::LoadGameObjectSpawnEntry()
     delete result;
 
     sLog.outString(">> Loaded %u gameobject_spawn_entry entries", count);
+    sLog.outString();
+}
+
+void ObjectMgr::LoadGameObjectTemplateAddons()
+{
+    m_gameobjectAddonTemplates.clear();
+
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT entry, artkit0, artkit1, artkit2, artkit3 FROM gameobject_template_addon"));
+
+    if (!result)
+    {
+        BarGoLink bar(1);
+        bar.step();
+        sLog.outErrorDb(">> Loaded gameobject_template_addon, table is empty!");
+        sLog.outString();
+        return;
+    }
+
+    BarGoLink bar(result->GetRowCount());
+
+    uint32 count = 0;
+
+	do
+	{
+		bar.step();
+
+		Field* fields = result->Fetch();
+
+		uint32 entry = fields[0].GetUInt32();
+
+		GameObjectTemplateAddon& gameObjectAddon = m_gameobjectAddonTemplates[entry];
+
+		for (uint32 i = 1; i < gameObjectAddon.artKits.size(); ++i)
+		{
+			uint32 artKitID = fields[i].GetUInt32();
+			if (!artKitID)
+				continue;
+
+			if (!sGameObjectArtKitStore.LookupEntry(artKitID))
+			{
+				sLog.outErrorDb("GameObject (Entry: %u) has invalid `artkit%d` (%d) defined, set to zero instead.", entry, i, artKitID);
+				continue;
+			}
+
+			gameObjectAddon.artKits[i] = artKitID;
+		}
+	} while (result->NextRow());
+
+    sLog.outString(">> Loaded %u gameobject_template_addon entries", count);
     sLog.outString();
 }
 
@@ -5887,7 +5957,7 @@ void ObjectMgr::LoadGossipTextLocales()
     {
         BarGoLink bar(1);
         bar.step();
-        sLog.outString(">> Loaded 0 Quest locale strings. DB table `locales_npc_text` is empty.");
+        sLog.outString(">> Loaded 0 NpcText locale strings. DB table `locales_npc_text` is empty.");
         return;
     }
 
@@ -8148,15 +8218,6 @@ void ObjectMgr::LoadSpellTemplate()
         {
             if (spell->Category)
                 sSpellCategoryStore[spell->Category].insert(i);
-
-            if (spell->SpellFamilyName == SPELLFAMILY_ROGUE)
-            {
-                for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
-                {
-                    if (spell->Effect[i] == SPELL_EFFECT_ENCHANT_ITEM_TEMPORARY)
-                        m_roguePoisonEnchantIds[spell->EffectMiscValue[i]] = true;
-                }
-            }
         }
 
         // DBC not support uint64 fields but SpellEntry have SpellFamilyFlags mapped at 2 uint32 fields
@@ -8328,6 +8389,15 @@ void ObjectMgr::DeleteCreatureData(uint32 guid)
         RemoveCreatureFromGrid(guid, data);
 
     mCreatureDataMap.erase(guid);
+}
+
+GameObjectTemplateAddon const* ObjectMgr::GetGOTemplateAddon(uint32 entry) const
+{
+    auto itr = m_gameobjectAddonTemplates.find(entry);
+    if (itr == m_gameobjectAddonTemplates.end())
+        return nullptr;
+
+    return &itr->second;
 }
 
 void ObjectMgr::DeleteGOData(uint32 guid)
@@ -8811,14 +8881,7 @@ inline void _DoStringError(int32 entry, char const* text, ...)
     vsnprintf(buf, 256, text, ap);
     va_end(ap);
 
-    if (entry <= MAX_CREATURE_AI_TEXT_STRING_ID)            // script library error
-        sLog.outErrorScriptLib("%s", buf);
-    else if (entry <= MIN_CREATURE_AI_TEXT_STRING_ID)       // eventAI error
-        sLog.outErrorEventAI("%s", buf);
-    else if (entry < MIN_DB_SCRIPT_STRING_ID)               // mangos string error
-        sLog.outError("%s", buf);
-    else // if (entry > MIN_DB_SCRIPT_STRING_ID)            // DB script text error
-        sLog.outErrorDb("DB-SCRIPTS: %s", buf);
+    sLog.outError("%s", buf);
 }
 
 bool ObjectMgr::LoadMangosStrings(DatabaseType& db, char const* table, int32 min_value, int32 max_value, bool extra_content)
@@ -9515,7 +9578,7 @@ void ObjectMgr::LoadVendors(char const* tableName, bool isTemplates)
 
     std::set<uint32> skip_vendors;
 
-    QueryResult* result = WorldDatabase.PQuery("SELECT entry, item, maxcount, incrtime, ExtendedCost, condition_id FROM %s", tableName);
+    QueryResult* result = WorldDatabase.PQuery("SELECT entry, item, maxcount, incrtime, ExtendedCost, condition_id FROM %s ORDER BY slot", tableName);
     if (!result)
     {
         BarGoLink bar(1);
@@ -10230,14 +10293,6 @@ void ObjectMgr::GetTrainerGreetingLocales(uint32 entry, int32 loc_idx, std::stri
 // Functions for scripting access
 bool LoadMangosStrings(DatabaseType& db, char const* table, int32 start_value, int32 end_value, bool extra_content)
 {
-    // MAX_DB_SCRIPT_STRING_ID is max allowed negative value for scripts (scrpts can use only more deep negative values
-    // start/end reversed for negative values
-    if (start_value > MAX_DB_SCRIPT_STRING_ID || end_value >= start_value)
-    {
-        sLog.outErrorDb("Table '%s' attempt loaded with reserved by mangos range (%d - %d), strings not loaded.", table, start_value, end_value + 1);
-        return false;
-    }
-
     return sObjectMgr.LoadMangosStrings(db, table, start_value, end_value, extra_content);
 }
 

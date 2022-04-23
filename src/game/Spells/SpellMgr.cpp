@@ -449,7 +449,7 @@ SpellSpecific GetSpellSpecific(uint32 spellId)
                 return SPELL_HAND;
 
             // skip Heart of the Crusader that have also same spell family mask
-            if (spellInfo->IsFitToFamilyMask(uint64(0x00000820180400)) && spellInfo->HasAttribute(SPELL_ATTR_EX3_TRIGGERED_CAN_TRIGGER_SPECIAL) && (spellInfo->SpellIconID != 237)) // TODO: Remove this WTF condition
+            if (spellInfo->IsFitToFamilyMask(uint64(0x00000800180400)) && !spellInfo->IsFitToFamilyMask(uint64(0x20000000), uint64(0x40)))
                 return SPELL_JUDGEMENT;
 
             // only paladin auras have this (for palaldin class family)
@@ -1160,7 +1160,7 @@ bool SpellMgr::IsSpellProcEventCanTriggeredBy(SpellProcEventEntry const* spellPr
         return false;
 
     // Always trigger for this
-    if (EventProcFlag & (PROC_FLAG_HEARTBEAT | PROC_FLAG_KILL | PROC_FLAG_DEAL_HELPFUL_PERIODIC | PROC_FLAG_DEATH))
+    if (EventProcFlag & (PROC_FLAG_HEARTBEAT | PROC_FLAG_KILL | PROC_FLAG_ON_TRAP_ACTIVATION | PROC_FLAG_DEATH))
         return true;
 
     if (procFlags & PROC_FLAG_DEAL_HARMFUL_PERIODIC && EventProcFlag & PROC_FLAG_DEAL_HARMFUL_PERIODIC)

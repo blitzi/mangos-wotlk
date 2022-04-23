@@ -268,13 +268,11 @@ bool ChatHandler::HandleReloadAllScriptsCommand(char* /*args*/)
     HandleReloadDBScriptsOnSpellCommand((char*)"a");
     HandleReloadDBScriptsOnRelayCommand((char*)"a");
     SendGlobalSysMessage("DB tables `*_scripts` reloaded.");
-    HandleReloadDbScriptStringCommand((char*)"a");
     return true;
 }
 
 bool ChatHandler::HandleReloadAllEventAICommand(char* /*args*/)
 {
-    HandleReloadEventAITextsCommand((char*)"a");
     HandleReloadEventAISummonsCommand((char*)"a");
     HandleReloadEventAIScriptsCommand((char*)"a");
     return true;
@@ -845,14 +843,6 @@ bool ChatHandler::HandleReloadBattleEventCommand(char* /*args*/)
     return true;
 }
 
-bool ChatHandler::HandleReloadEventAITextsCommand(char* /*args*/)
-{
-    sLog.outString("Re-Loading Texts from `creature_ai_texts`...");
-    sEventAIMgr.LoadCreatureEventAI_Texts(true);
-    SendGlobalSysMessage("DB table `creature_ai_texts` reloaded.");
-    return true;
-}
-
 bool ChatHandler::HandleReloadEventAISummonsCommand(char* /*args*/)
 {
     sLog.outString("Re-Loading Summons from `creature_ai_summons`...");
@@ -866,14 +856,6 @@ bool ChatHandler::HandleReloadEventAIScriptsCommand(char* /*args*/)
     sLog.outString("Re-Loading Scripts from `creature_ai_scripts`...");
     sEventAIMgr.LoadCreatureEventAI_Scripts();
     SendGlobalSysMessage("DB table `creature_ai_scripts` reloaded.");
-    return true;
-}
-
-bool ChatHandler::HandleReloadDbScriptStringCommand(char* /*args*/)
-{
-    sLog.outString("Re-Loading Script strings from `dbscript_string`...");
-    sScriptMgr.LoadDbScriptStrings();
-    SendGlobalSysMessage("DB table `dbscript_string` reloaded.");
     return true;
 }
 
@@ -4509,6 +4491,63 @@ bool ChatHandler::HandleTeleDelCommand(char* args)
     }
 
     SendSysMessage(LANG_COMMAND_TP_DELETED);
+    return true;
+}
+
+bool ChatHandler::HandleListAreaTriggerCommand(char* args)
+{
+    Player* player = m_session->GetPlayer();
+    if (!player)
+        return false;
+
+    uint32 counter = 0;
+    uint32 playerMap = player->GetMap()->GetId();
+
+    if (player->GetMap()->IsContinent())
+    {
+        // Get areatriggers in the same area as the player
+        uint32 playerArea = player->GetAreaId();
+        AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(playerArea);
+        PSendSysMessage(LANG_AREATRIGGER_LIST, "area", areaEntry ? areaEntry->area_name[GetSessionDbcLocale()] : "<unknown>");
+
+        for (uint32 id = 0; id < sAreaTriggerStore.GetNumRows(); ++id)
+        {
+            AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(id);
+            if (!atEntry)
+                continue;
+
+            if (atEntry->mapid != playerMap)
+                continue;
+
+            uint32 areaTriggerArea = player->GetTerrain()->GetAreaId(atEntry->x, atEntry->y, atEntry->z);
+            if (areaTriggerArea != playerArea)
+                continue;
+
+            ShowTriggerListHelper(atEntry);
+            ++counter;
+        }
+    }
+    else
+    {
+        // Get areatriggers in the same map as the player
+        PSendSysMessage(LANG_AREATRIGGER_LIST, "map", player->GetMap()->GetMapName());
+
+        for (uint32 id = 0; id < sAreaTriggerStore.GetNumRows(); ++id)
+        {
+            AreaTriggerEntry const* atEntry = sAreaTriggerStore.LookupEntry(id);
+            if (!atEntry)
+                continue;
+
+            if (atEntry->mapid != playerMap)
+                continue;
+
+            ShowTriggerListHelper(atEntry);
+            ++counter;
+        }
+    }
+
+    if (counter == 0)
+        SendSysMessage(LANG_COMMAND_NOTRIGGERFOUND);
     return true;
 }
 

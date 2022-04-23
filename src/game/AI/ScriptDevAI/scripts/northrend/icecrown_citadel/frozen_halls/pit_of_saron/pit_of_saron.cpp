@@ -552,11 +552,13 @@ void instance_pit_of_saron::Update(uint32 uiDiff)
                 {
                     script_error_log("instance_pit_of_saron: Error: couldn't find any player in instance");
                     m_uiEyeLichKingTimer = 0;
+					return;
                 }
-
-                pEye->SetFacingToObject(pPlayer);
-
-                m_uiEyeLichKingTimer = urand(10000, 30000);
+                else
+                {
+                    pEye->SetFacingToObject(pPlayer);
+					m_uiEyeLichKingTimer = urand(10000, 30000);
+                }
             }
         }
         else

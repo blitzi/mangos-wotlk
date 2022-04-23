@@ -133,7 +133,7 @@ class CooldownData
 {
         friend class CooldownContainer;
     public:
-        CooldownData(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory, uint32 categoryDuration, uint32 itemId = 0, bool isPermanent = false) :
+        CooldownData(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory, int32 categoryDuration, int32 itemId = 0, bool isPermanent = false) :
             m_spellId(spellId),
             m_category(spellCategory),
             m_expireTime(duration ? std::chrono::milliseconds(duration) + clockNow : TimePoint()),
@@ -153,9 +153,14 @@ class CooldownData
         }
 
         // wotlk+ feature
-        void SpellCDExpireTime(TimePoint expireTime)
+        void SetSpellCDExpireTime(TimePoint expireTime)
         {
             m_expireTime = expireTime;
+        }
+
+        void SetCatCDExpireTime(TimePoint expireTime)
+        {
+            m_catExpireTime = expireTime;
         }
 
         // return false if permanent
@@ -236,14 +241,28 @@ class CooldownContainer
             }
         }
 
-        bool AddCooldown(TimePoint clockNow, uint32 spellId, uint32 duration, uint32 spellCategory = 0, uint32 categoryDuration = 0, uint32 itemId = 0, bool onHold = false)
+        bool AddCooldown(TimePoint clockNow, uint32 spellId, long long duration, int32 spellCategory = 0, int32 categoryDuration = 0, uint32 itemId = 0, bool onHold = false)
         {
             RemoveBySpellId(spellId);
             auto resultItr = m_spellIdMap.emplace(spellId, std::move(std::unique_ptr<CooldownData>(new CooldownData(clockNow, spellId, duration, spellCategory, categoryDuration, itemId, onHold))));
+            // do not overwrite one permanent category cooldown with another permanent category cooldown
             if (resultItr.second && spellCategory && categoryDuration)
             {
-                RemoveByCategory(spellCategory);
-                m_categoryMap.emplace(spellCategory, resultItr.first);
+                auto catItr = FindByCategory(spellCategory);
+                if (!onHold || catItr == m_spellIdMap.end() || !catItr->second->IsPermanent())
+                {
+                    // we must keep original category cd owner for sake of client sync
+                    if (catItr != m_spellIdMap.end())
+                    {
+                        catItr->second->SetCatCDExpireTime(std::chrono::milliseconds(categoryDuration) + clockNow);
+                        catItr->second->m_typePermanent = false;
+                        resultItr.first->second->m_category = 0;
+                    }
+                    else
+                        m_categoryMap.emplace(spellCategory, resultItr.first);
+                }
+                else
+                    resultItr.first->second->m_category = 0;
             }
 
             return resultItr.second;
@@ -685,6 +704,7 @@ struct TempSpawnSettings
     uint32 spawnDataEntry = 0;
     int32 movegen = -1;
     WorldObject* dbscriptTarget = nullptr;
+    uint32 level = 0;
 
     // TemporarySpawnWaypoint subsystem
     bool tempSpawnMovegen = false;
@@ -694,9 +714,9 @@ struct TempSpawnSettings
 
     TempSpawnSettings() {}
     TempSpawnSettings(WorldObject* spawner, uint32 entry, float x, float y, float z, float ori, TempSpawnType spawnType, uint32 despawnTime, bool activeObject = false, bool setRun = false, uint32 pathId = 0, uint32 faction = 0,
-        uint32 modelId = 0, bool spawnCounting = false, bool forcedOnTop = false, uint32 spellId = 0, int32 movegen = -1) :
+        uint32 modelId = 0, bool spawnCounting = false, bool forcedOnTop = false, uint32 spellId = 0, int32 movegen = -1, uint32 level = 0) :
         spawner(spawner), entry(entry), x(x), y(y), z(z), ori(ori), spawnType(spawnType), despawnTime(despawnTime), activeObject(activeObject), setRun(setRun), pathId(pathId), faction(faction), modelId(modelId), spawnCounting(spawnCounting),
-        forcedOnTop(forcedOnTop), spellId(spellId), movegen(movegen)
+        forcedOnTop(forcedOnTop), spellId(spellId), movegen(movegen), level(level)
     {}
 };
 
@@ -992,6 +1012,7 @@ class WorldObject : public Object
         bool GetFanningPoint(const Unit* mover, float& x, float& y, float& z, float dist, float angle) const;
 
         virtual float GetCollisionHeight() const { return 0.f; }
+        virtual float GetCollisionWidth() const { return 0.f; }
         virtual float GetObjectBoundingRadius() const { return DEFAULT_WORLD_OBJECT_SIZE; }
         virtual float GetCombatReach() const { return 0.f; }
         float GetCombinedCombatReach(WorldObject const* pVictim, bool forMeleeRange = true, float flat_mod = 0.0f) const;

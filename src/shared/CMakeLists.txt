@@ -133,6 +133,7 @@ set(LIBRARY_SRCS
     ${SRC_GRP_MT}
     Common.cpp
     Common.h
+    Filesystem.h
     revision_sql.h
     revision.h
     Threading.cpp
@@ -197,13 +198,6 @@ if(WIN32)
       ServiceWin32.cpp
       ServiceWin32.h
      )
-  if(MSVC)
-    set(LIBRARY_SRCS
-      ${LIBRARY_SRCS}
-      WheatyExceptionReport.cpp
-      WheatyExceptionReport.h
-     )
-  endif()
 else()
   set(LIBRARY_SRCS
       ${LIBRARY_SRCS}

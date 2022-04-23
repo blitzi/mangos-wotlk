@@ -93,6 +93,7 @@ enum AIOrders
     ORDER_FLEEING,
     ORDER_RETREATING,
     ORDER_EVADE,
+    ORDER_FLEE_FROM_CALL_FOR_HELP,
     ORDER_CUSTOM,
 };
 
@@ -398,7 +399,7 @@ class UnitAI : public CombatActions
         /*
          * Notifies AI on successful spelllist spell cast
          */
-        virtual void OnSpellCast(SpellEntry const* spellInfo) {}
+        virtual void OnSpellCast(SpellEntry const* spellInfo, Unit* target) {}
 
         /*
          * Notifies AI on stealth alert for player nearby
@@ -421,6 +422,11 @@ class UnitAI : public CombatActions
          */
         virtual void OnCallForHelp(Unit* caller, Unit* enemy) {}
 
+        /*
+         * Notifies AI on pet/totem unsummon - warning: works only for pets/totems
+         */
+        virtual void OnUnsummon() {}
+
         void CheckForHelp(Unit* /*who*/, Unit* /*me*/, float /*dist*/);
         void DetectOrAttack(Unit* who);
         bool CanTriggerStealthAlert(Unit* who, float attackRadius) const;
@@ -438,6 +444,8 @@ class UnitAI : public CombatActions
         CreatureList DoFindFriendlyEligibleDispel(uint32 spellId, bool self = true) const;
         CreatureList DoFindFriendlyEligibleDispel(SpellEntry const* spellInfo, bool self = true) const;
         CreatureList DoFindFriendlyEligibleDispel(float range, uint32 dispelMask = 0, uint32 mechanicMask = 0, bool self = true) const;
+        CreatureList DoFindFriendlyMissingBuff(float range, uint32 spellId, bool inCombat, bool self = true) const;
+        CreatureList DoFindFriendlyMissingBuff(SpellEntry const* spellInfo, bool inCombat, bool self = true) const;
 
         // Start movement toward victim
         void DoStartMovement(Unit* victim);
@@ -485,6 +493,8 @@ class UnitAI : public CombatActions
 
         virtual void HandleDelayedInstantAnimation(SpellEntry const* spellInfo) {}
         virtual bool IsTargetingRestricted() { return GetCombatScriptStatus(); }
+
+        virtual void OnTaunt() {}
 
         virtual void HandleAssistanceCall(Unit* sender, Unit* invoker) {} // implemented for creatures
 

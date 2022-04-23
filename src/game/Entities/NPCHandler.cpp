@@ -318,14 +318,16 @@ void WorldSession::HandleGossipHelloOpcode(WorldPacket& recv_data)
         return;
     }
 
-    pCreature->GetMotionMaster()->PauseWaypoints();
+    // Stop the npc if moving
+    if (uint32 pauseTimer = pCreature->GetInteractionPauseTimer())
+        pCreature->GetMotionMaster()->PauseWaypoints(pauseTimer);
 
     if (pCreature->isSpiritGuide())
         pCreature->SendAreaSpiritHealerQueryOpcode(_player);
 
     if (!sScriptDevAIMgr.OnGossipHello(_player, pCreature))
     {
-        _player->PrepareGossipMenu(pCreature, pCreature->GetCreatureInfo()->GossipMenuId);
+        _player->PrepareGossipMenu(pCreature, pCreature->GetDefaultGossipMenuId());
         _player->SendPreparedGossip(pCreature);
     }
 }
@@ -530,7 +532,7 @@ void WorldSession::SendStablePet(ObjectGuid guid) const
                     data << uint32(fields[2].GetUInt32());          // creature entry
                     data << uint32(fields[3].GetUInt32());          // level
                     data << fields[4].GetString();                  // name
-                    data << uint8(0x01);       // slot
+                    data << uint8(0x01);                            // active
 
                     ++num;
                 } while (result->NextRow());
@@ -554,7 +556,7 @@ void WorldSession::SendStablePet(ObjectGuid guid) const
             data << uint32(fields[3].GetUInt32());          // creature entry
             data << uint32(fields[4].GetUInt32());          // level
             data << fields[5].GetString();                  // name
-            data << uint8(fields[1].GetUInt32() + 1);       // slot
+            data << uint8(0x3);                             // inactive - stabled
 
             ++num;
         }

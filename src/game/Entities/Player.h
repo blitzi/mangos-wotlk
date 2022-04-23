@@ -369,6 +369,7 @@ struct RuneInfo
     uint8  BaseRune;
     uint8  CurrentRune;
     uint16 Cooldown;                                        // msec
+    std::unordered_set<Aura const*> ConvertAuras;
 };
 
 struct Runes
@@ -1148,6 +1149,8 @@ class Player : public Unit
         bool isGMVisible() const { return !(m_ExtraFlags & PLAYER_EXTRA_GM_INVISIBLE); }
         void SetGMVisible(bool on);
         void SetPvPDeath(bool on) { if (on) m_ExtraFlags |= PLAYER_EXTRA_PVP_DEATH; else m_ExtraFlags &= ~PLAYER_EXTRA_PVP_DEATH; }
+        bool isDebuggingAreaTriggers() { return m_isDebuggingAreaTriggers; }
+        void SetDebuggingAreaTriggers(bool on) { m_isDebuggingAreaTriggers = on; }
 
         // 0 = own auction, -1 = enemy auction, 1 = goblin auction
         int GetAuctionAccessMode() const { return m_ExtraFlags & PLAYER_EXTRA_AUCTION_ENEMY ? -1 : (m_ExtraFlags & PLAYER_EXTRA_AUCTION_NEUTRAL ? 1 : 0); }
@@ -1202,7 +1205,8 @@ class Player : public Unit
         * \brief: player is interacting with something.
         * \param: ObjectGuid interactObj > object that interact with this player
         **/
-        void DoInteraction(ObjectGuid const& interactObjGuid);
+        void DoInteraction();
+        void DoLoot();
         RestType GetRestType() const { return m_restType; }
         void SetRestType(RestType n_r_type, uint32 areaTriggerId = 0);
 
@@ -1283,7 +1287,7 @@ class Player : public Unit
         uint8 GetBankBagSlotCount() const { return GetByteValue(PLAYER_BYTES_2, 2); }
         void SetBankBagSlotCount(uint8 count) { SetByteValue(PLAYER_BYTES_2, 2, count); }
         bool HasItemCount(uint32 item, uint32 count, bool inBankAlso = false) const;
-        bool HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item const* ignoreItem = nullptr) const;
+        bool HasItemFitToSpellReqirements(SpellEntry const* spellInfo, Item const* ignoreItem = nullptr, uint32* error = nullptr) const;
         bool CanNoReagentCast(SpellEntry const* spellInfo) const;
         bool HasItemOrGemWithIdEquipped(uint32 item, uint32 count, uint8 except_slot = NULL_SLOT) const;
         bool HasItemOrGemWithLimitCategoryEquipped(uint32 limitCategory, uint32 count, uint8 except_slot = NULL_SLOT) const;
@@ -1612,7 +1616,6 @@ class Player : public Unit
         void RegenerateAll(uint32 diff = REGEN_TIME_FULL);
         void Regenerate(Powers power, uint32 diff);
         void RegenerateHealth(uint32 diff);
-        void setRegenTimer(uint32 time) {m_regenTimer = time;}
 
         uint32 GetMoney() const { return GetUInt32Value(PLAYER_FIELD_COINAGE); }
         void ModifyMoney(int32 d)
@@ -1688,9 +1691,13 @@ class Player : public Unit
         void PetSpellInitialize() const;
         void SendPetGUIDs() const;
         void PossessSpellInitialize() const;
+        void VehicleSpellInitialize() const;
         void CharmSpellInitialize() const;
         void CharmCooldownInitialize(WorldPacket& data) const;
         void RemovePetActionBar() const;
+        Unit* GetFirstControlled() const;
+        std::pair<float, float> RequestFollowData(ObjectGuid guid);
+        void RelinquishFollowData(ObjectGuid guid);
 
         bool HasSpell(uint32 spell) const override;
         bool HasActiveSpell(uint32 spell) const;            // show in spellbook
@@ -1752,6 +1759,7 @@ class Player : public Unit
 
         PlayerTalent const* GetKnownTalentById(int32 talentId) const;
         SpellEntry const* GetKnownTalentRankById(int32 talentId) const;
+        Aura* GetKnownTalentRankAuraById(int32 talentId, SpellEffectIndex effIdx);
 
         void AddSpellMod(SpellModifier* mod, bool apply);
         void SendAllSpellMods(SpellModType modType);
@@ -2394,6 +2402,9 @@ class Player : public Unit
         bool IsPetNeedBeTemporaryUnsummoned(Pet* pet) const;
         uint32 GetBGPetSpell() const { return m_BGPetSpell; }
         void SetBGPetSpell(uint32 petSpell) { m_BGPetSpell = petSpell; }
+        void AddControllable(Unit* controlled);
+        void RemoveControllable(Unit* controlled);
+        GuidSet const& GetControlled() { return m_controlled; }
 
         void SendCinematicStart(uint32 CinematicSequenceId);
         void SendMovieStart(uint32 MovieId) const;
@@ -2471,6 +2482,11 @@ class Player : public Unit
         void ResyncRunes() const;
         void AddRunePower(uint8 index) const;
         void InitRunes();
+        void SetRuneConvertAura(uint8 index, Aura const* aura);
+        void RemoveRuneConvertAura(uint8 index, Aura const* aura);
+        void AddRuneByAuraEffect(uint8 index, RuneType newType, Aura const* aura);
+        void RemoveRunesByAura(Aura const* aura);
+        void RestoreBaseRune(uint8 index);
 
         AchievementMgr const& GetAchievementMgr() const { return m_achievementMgr; }
         AchievementMgr& GetAchievementMgr() { return m_achievementMgr; }
@@ -2571,6 +2587,8 @@ class Player : public Unit
         float GetAverageItemLevel() const;
 
         LfgData& GetLfgData() { return m_lfgData; }
+
+        uint32 LookupHighestLearnedRank(uint32 spellId);
     protected:
         /*********************************************************/
         /***               BATTLEGROUND SYSTEM                 ***/
@@ -2806,6 +2824,7 @@ class Player : public Unit
         Runes* m_runes;
         EquipmentSets m_EquipmentSets;
 
+        bool m_isDebuggingAreaTriggers;
     private:
         void _HandleDeadlyPoison(Unit* Target, WeaponAttackType attType, SpellEntry const* spellInfo);
         // internal common parts for CanStore/StoreItem functions
@@ -2931,6 +2950,9 @@ class Player : public Unit
         uint32 m_pendingBindTimer;
 
         LfgData m_lfgData;
+
+        GuidSet m_controlled;
+        std::map<uint32, ObjectGuid> m_followAngles;
 };
 
 void AddItemsSetItem(Player* player, Item* item);

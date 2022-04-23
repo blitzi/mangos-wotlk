@@ -40,9 +40,25 @@ PetAI::PetAI(Creature* creature) : CreatureAI(creature), inCombat(false), m_foll
     m_AllySet.clear();
     UpdateAllies();
 
-    if (creature->IsPet() && dynamic_cast<Pet*>(creature)->isControlled()
-        && sWorld.getConfig(CONFIG_BOOL_PET_ATTACK_FROM_BEHIND))
-        m_attackAngle = M_PI_F;
+    if (creature->IsPet())
+    {
+        Pet* pet = dynamic_cast<Pet*>(creature);
+        if (pet->isControlled())
+        {
+            if (sWorld.getConfig(CONFIG_BOOL_PET_ATTACK_FROM_BEHIND))
+                m_attackAngle = M_PI_F;
+
+            if (Unit* owner = m_unit->GetOwner())
+            {
+                if (owner->IsPlayer())
+                {
+                    auto data = static_cast<Player*>(owner)->RequestFollowData(creature->GetObjectGuid());
+                    m_followAngle = data.first;
+                    m_followDist = data.second;
+                }
+            }
+        }
+    }
 
     switch (creature->GetUInt32Value(UNIT_CREATED_BY_SPELL))
     {
@@ -299,14 +315,7 @@ void PetAI::UpdateAI(const uint32 diff)
                 targets.setUnitTarget(target);
 
                 if (!m_unit->HasInArc(target))
-                {
-                    m_unit->SetInFront(target);
-                    if (target->GetTypeId() == TYPEID_PLAYER)
-                        m_unit->SendCreateUpdateToPlayer((Player*)target);
-
-                    if (owner && owner->GetTypeId() == TYPEID_PLAYER)
-                        m_unit->SendCreateUpdateToPlayer((Player*)owner);
-                }
+                    m_unit->SetFacingToObject(target);
             }
 
             spell->SpellStart(&targets);
@@ -418,6 +427,25 @@ void PetAI::UpdateAllies()
             m_AllySet.insert(target->GetObjectGuid());
         }
     }
+}
+
+void PetAI::OnUnsummon()
+{
+    CreatureAI::OnUnsummon();
+    RelinquishFollowData();
+}
+
+void PetAI::JustDied(Unit* killer)
+{
+    CreatureAI::JustDied(killer);
+    RelinquishFollowData();
+}
+
+void PetAI::RelinquishFollowData()
+{
+    if (Unit* owner = m_creature->GetOwner())
+        if (owner->IsPlayer())
+            static_cast<Player*>(owner)->RelinquishFollowData(m_creature->GetObjectGuid());
 }
 
 void PetAI::AttackedBy(Unit* attacker)

@@ -55,6 +55,8 @@ struct SpawnGroupDbGuids
     uint32 Id;
     uint32 DbGuid;
     int32 SlotId;
+    uint32 OwnEntry;
+    bool RandomEntry;
 };
 
 enum SpawnGroupType
@@ -127,8 +129,9 @@ enum SpawnGroupFormationSlotType : uint32
 
 enum SpawGroupFormationOptions : uint32
 {
-    SPAWN_GROUP_FORMATION_OPTION_NONE           = 0x00,
-    SPAWN_GROUP_FORMATION_OPTION_KEEP_CONPACT   = 0x01
+    SPAWN_GROUP_FORMATION_OPTION_NONE                                       = 0x00,
+    SPAWN_GROUP_FORMATION_OPTION_FOLLOWERS_WILL_NOT_PATHFIND_TO_LOCATION    = 0x01, // NYI - need examples where used vs normal
+    SPAWN_GROUP_FORMATION_OPTION_KEEP_CONPACT                               = 0x02,
 };
 
 struct FormationEntry

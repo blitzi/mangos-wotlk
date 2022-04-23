@@ -199,6 +199,8 @@ inline bool IsEffectHandledImmediatelySpellLaunch(SpellEntry const* spellInfo, S
         case SPELL_EFFECT_HEAL_PCT:
         case SPELL_EFFECT_CHARGE:
         case SPELL_EFFECT_CHARGE_DEST:
+        case SPELL_EFFECT_JUMP:
+        case SPELL_EFFECT_JUMP_DEST:
             return true;
         default:
             return false;
@@ -1074,7 +1076,7 @@ inline bool IsPointEffectTarget(SpellTarget target)
         case TARGET_LOCATION_SCRIPT_NEAR_CASTER:
         case TARGET_LOCATION_CASTER_TARGET_POSITION:
         case TARGET_LOCATION_UNIT_POSITION:
-        case TARGET_LOCATION_DYNOBJ_POSITION:
+        case TARGET_LOCATION_CHANNEL_TARGET_DEST:
         case TARGET_LOCATION_NORTH:
         case TARGET_LOCATION_SOUTH:
         case TARGET_LOCATION_EAST:
@@ -1889,6 +1891,19 @@ inline Mechanics GetEffectMechanic(SpellEntry const* spellInfo, SpellEffectIndex
     return MECHANIC_NONE;
 }
 
+inline bool IsIgnoreRootSpell(SpellEntry const* spellInfo)
+{
+    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+        return false;
+
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        if (spellInfo->Effect[i] == SPELL_EFFECT_APPLY_AURA && spellInfo->EffectImplicitTargetA[i] == TARGET_UNIT_CASTER &&
+            spellInfo->EffectApplyAuraName[i] == SPELL_AURA_MECHANIC_IMMUNITY && spellInfo->EffectMiscValue[i] == MECHANIC_ROOT)
+            return true;
+
+    return false;
+}
+
 inline uint32 GetDispellMask(DispelType dispel)
 {
     // If dispell all
@@ -2209,6 +2224,10 @@ inline bool IsStackableAuraEffect(SpellEntry const* entry, SpellEntry const* ent
         case SPELL_AURA_MOD_PERCENT_STAT:
             nonmui = true;
             break;
+        case SPELL_AURA_MOD_INCREASE_HEALTH:
+            if (entry->Id == 26522 && entry2->Id == 26522) // Lunar Fortune
+                return false;
+            break;
         case SPELL_AURA_MOD_HEALING_DONE:
         case SPELL_AURA_MOD_HEALING_PCT:
             // Do not stack similar debuffs: Mortal Strike, Aimed Shot, Hex of Weakness
@@ -2410,7 +2429,7 @@ enum ProcFlags : uint32
     PROC_FLAG_TAKE_HARMFUL_PERIODIC         = 0x00080000,   // 19 Taken spell periodic (damage / healing, determined by PROC_EX_PERIODIC_POSITIVE or negative if no procEx)
 
     PROC_FLAG_TAKE_ANY_DAMAGE               = 0x00100000,   // 20 Taken any damage
-    PROC_FLAG_DEAL_HELPFUL_PERIODIC         = 0x00200000,   // 21 On trap activation - TODO: change meaning
+    PROC_FLAG_ON_TRAP_ACTIVATION            = 0x00200000,   // 21 On trap activation - different from enumerated strings - likely reuse
 
     PROC_FLAG_MAIN_HAND_WEAPON_SWING        = 0x00400000,   // 22 Successful main-hand melee attacks
     PROC_FLAG_OFF_HAND_WEAPON_SWING         = 0x00800000,   // 23 Successful off-hand melee attacks
@@ -2735,7 +2754,7 @@ class SpellMgr
             if (!entry)
                 return SPELL_NORMAL;
             // Food / Drinks (mostly)
-            if (entry->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED)
+            if (entry->AuraInterruptFlags & AURA_INTERRUPT_FLAG_STANDING_CANCELS)
             {
                 if (entry->SpellFamilyName == SPELLFAMILY_GENERIC)
                 {

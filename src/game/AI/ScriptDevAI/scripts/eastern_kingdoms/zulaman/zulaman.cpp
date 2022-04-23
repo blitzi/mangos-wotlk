@@ -142,9 +142,6 @@ void instance_zulaman::OnCreatureCreate(Creature* creature)
             else
                 sDrumTriggerGuidSet.insert(creature->GetObjectGuid());
             break;
-        case NPC_REINFORCEMENT:
-            creature->SetInCombatWithZone();
-            break;
         case NPC_DRAGONHAWK_EGG:
             creature->SetCorpseDelay(5);
             break;
@@ -255,6 +252,9 @@ void instance_zulaman::OnCreatureRespawn(Creature* creature)
             creature->SetCanEnterCombat(false);
             creature->AI()->SetReactState(REACT_PASSIVE);
             creature->AI()->SetCombatMovement(false);
+            break;
+        case NPC_REINFORCEMENT:
+            creature->SetInCombatWithZone();
             break;
 	}
 }
@@ -481,7 +481,7 @@ void instance_zulaman::SetData(uint32 type, uint32 data)
             break;
         case TYPE_RUN_EVENT_TIME:
             m_auiEncounter[type] = data;
-            instance->GetVariableManager().SetVariable(WORLD_STATE_ZUL_AMAN_EVENT_RUN_IS_ACTIVE, data);
+            instance->GetVariableManager().SetVariable(WORLD_STATE_ZUL_AMAN_TIME_COUNTER, data);
             instance->GetVariableManager().BroadcastVariable(WORLD_STATE_ZUL_AMAN_TIME_COUNTER);
             break;
         case TYPE_AKILZON_GAUNTLET:
