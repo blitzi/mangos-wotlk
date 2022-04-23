@@ -719,7 +719,7 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
                 }
                 break;
             }
-            case SCRIPT_COMMAND_SET_HOVER:                    // 39
+            case SCRIPT_COMMAND_SET_HOVER:                  // 39
             case SCRIPT_COMMAND_DESPAWN_GO:                 // 40
             case SCRIPT_COMMAND_RESPAWN:                    // 41
                 break;
@@ -1202,7 +1202,7 @@ bool ScriptAction::GetScriptProcessTargets(WorldObject* originalSource, WorldObj
             if (m_script->IsCreatureBuddy())
             {
                 CreatureData const* cData = sObjectMgr.GetCreatureData(m_script->searchRadiusOrGuid);
-                buddy = m_map->GetCreature(cData->GetObjectGuid(m_script->searchRadiusOrGuid));
+                buddy = m_map->GetCreature(m_script->searchRadiusOrGuid);
 
                 if (buddy && ((Creature*)buddy)->IsAlive() == m_script->IsDeadOrDespawnedBuddy())
                 {
@@ -2602,11 +2602,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             if (LogIfNotGameObject(pTarget))
                 break;
 
-            // ToDo: Change this to pGo->ForcedDespawn() when function is implemented!
-            if (((GameObject*)pTarget)->GetSpellId())
-                ((GameObject*)pTarget)->Delete();
-            else
-                ((GameObject*)pTarget)->SetLootState(GO_JUST_DEACTIVATED);
+            static_cast<GameObject*>(pTarget)->ForcedDespawn(m_script->despawnGo.despawnDelay);
 
             break;
         }

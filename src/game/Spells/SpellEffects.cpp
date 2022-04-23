@@ -842,14 +842,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     unitTarget->CastSpell(unitTarget, 9010, TRIGGERED_NONE);
                     return;
                 }
-                case 9204:                                  // Hate to Zero
-                case 20538:
-                case 26569:
-                case 26637:
-                {
-                    m_caster->getThreatManager().modifyThreatPercent(unitTarget, -100);
-                    return;
-                }
                 case 9976:                                  // Polly Eats the E.C.A.C.
                 {
                     if (unitTarget && unitTarget->GetTypeId() == TYPEID_UNIT)
@@ -6047,9 +6039,9 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
     if (!petInvoker->IsPlayer())
     {
         // If EffectMultipleValue <= 0, pets have their calculated level modified by EffectMultipleValue
-        if (m_spellInfo->EffectMultipleValue[eff_idx] <= 0)
+        if (m_spellInfo->EffectMultipleValue[eff_idx] <= 0) // TODO: Check if instead of using level variable, should not use 0 in this check
         {
-            uint32 resultLevel = std::max(petInvoker->GetLevel() + m_spellInfo->EffectMultipleValue[eff_idx], 0.0f);
+            uint32 resultLevel = std::max(level + m_spellInfo->EffectMultipleValue[eff_idx], 0.0f);
 
             // Result level should be a valid level for creatures
             if (resultLevel > 0 && resultLevel <= DEFAULT_MAX_CREATURE_LEVEL)
@@ -12729,24 +12721,7 @@ void Spell::EffectWMOChange(SpellEffectIndex effIdx)
     if (!caster)
         return;
 
-    switch (m_spellInfo->EffectMiscValue[effIdx])
-    {
-        case 0:                                             // Set to full health
-            gameObjTarget->ForceGameObjectHealth(gameObjTarget->GetMaxHealth(), caster);
-            break;
-        case 1:                                             // Set to damaged
-            gameObjTarget->ForceGameObjectHealth(gameObjTarget->GetGOInfo()->destructibleBuilding.damagedNumHits, caster);
-            break;
-        case 2:                                             // Set to destroyed
-            gameObjTarget->ForceGameObjectHealth(-int32(gameObjTarget->GetHealth()), caster);
-            break;
-        case 3:                                             // Set to rebuilding
-            gameObjTarget->ForceGameObjectHealth(0, caster);
-            break;
-        default:
-            sLog.outError("Spell::EffectWMOChange, spell Id %u with undefined change value %u", m_spellInfo->Id, m_spellInfo->EffectMiscValue[effIdx]);
-            break;
-    }
+    gameObjTarget->SetDestructibleState(GameObjectDestructibleState(m_spellInfo->EffectMiscValue[effIdx]), m_caster, true);
 }
 
 void Spell::EffectKillCreditPersonal(SpellEffectIndex eff_idx)

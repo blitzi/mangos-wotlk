@@ -4319,8 +4319,10 @@ void Aura::HandleAuraTransform(bool apply, bool Real)
     bool skipDisplayUpdate = false;
     if (apply)
     {
+        if (uint32 overrideDisplayId = GetAuraScriptCustomizationValue()) // from script
+            m_modifier.m_amount = overrideDisplayId;
         // special case (spell specific functionality)
-        if (m_modifier.m_miscvalue == 0)
+        else if (m_modifier.m_miscvalue == 0)
         {
             switch (GetId())
             {
@@ -4495,12 +4497,6 @@ void Aura::HandleAuraTransform(bool apply, bool Real)
             }
             else
                 m_modifier.m_amount = Creature::ChooseDisplayId(cInfo);   // Will use the default model here
-
-            // Polymorph (sheep/penguin case)
-            if (GetSpellProto()->SpellFamilyName == SPELLFAMILY_MAGE && GetSpellProto()->SpellIconID == 82)
-                if (Unit* caster = GetCaster())
-                    if (caster->HasAura(52648))             // Glyph of the Penguin
-                        m_modifier.m_amount = 26452;
 
             // creature case, need to update equipment if additional provided
             if (cInfo && target->GetTypeId() == TYPEID_UNIT)
@@ -11615,6 +11611,13 @@ void Aura::OnHeartbeat()
     // TODO: move HB resist here
     if (AuraScript* script = GetAuraScript())
         script->OnHeartbeat(this);
+}
+
+uint32 Aura::GetAuraScriptCustomizationValue()
+{
+    if (AuraScript* script = GetAuraScript())
+       return script->GetAuraScriptCustomizationValue(this);
+    return 0;
 }
 
 void Aura::ForcePeriodicity(uint32 periodicTime)

@@ -486,6 +486,14 @@ void UnitAI::OnChannelStateChange(Spell const* spell, bool state, WorldObject* t
     }
 }
 
+void UnitAI::HandleDelayedInstantAnimation(SpellEntry const* /*spellInfo*/)
+{
+    if (m_unit->GetVictim() && !IsTargetingRestricted())
+        m_unit->SetTarget(m_unit->GetVictim());
+    else
+        m_unit->SetTarget(nullptr);
+}
+
 void UnitAI::CheckForHelp(Unit* who, Unit* me, float distance)
 {
     Unit* victim = who->getAttackerForHelper();
@@ -820,14 +828,17 @@ void UnitAI::TimedFleeingEnded()
     DoStartMovement(m_unit->GetVictim());
 }
 
-bool UnitAI::DoFlee()
+bool UnitAI::DoFlee(uint32 duration)
 {
     Unit* victim = m_unit->GetVictim();
     if (!victim)
         return false;
 
+    if (!duration)
+        duration = sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_FLEE_DELAY);
+
     // call the fear method and check if fear method succeed
-    if (!m_unit->SetInPanic(sWorld.getConfig(CONFIG_UINT32_CREATURE_FAMILY_FLEE_DELAY)))
+    if (!m_unit->SetInPanic(duration))
         return false;
 
     // set the ai state to feared so it can reset movegen and ai state at the end of the fear

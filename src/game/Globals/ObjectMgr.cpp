@@ -1831,7 +1831,7 @@ void ObjectMgr::LoadCreatureSpawnDataTemplates()
 {
     m_creatureSpawnTemplateMap.clear();
 
-    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Entry, UnitFlags, Faction, ModelId, EquipmentId, CurHealth, CurMana, SpawnFlags, RelayId FROM creature_spawn_data_template"));
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Entry, NpcFlags, UnitFlags, Faction, ModelId, EquipmentId, CurHealth, CurMana, SpawnFlags, RelayId FROM creature_spawn_data_template"));
     if (!result)
     {
         BarGoLink bar(1);
@@ -1852,18 +1852,20 @@ void ObjectMgr::LoadCreatureSpawnDataTemplates()
         Field* fields = result->Fetch();
 
         uint32 entry =      fields[0].GetUInt32();
-        int64 unitFlags =   int64(fields[1].GetUInt64());
-        uint32 faction =    fields[2].GetUInt32();
-        uint32 modelId =    fields[3].GetUInt32();
-        int32 equipmentId = fields[4].GetInt32();
-        uint32 curHealth =  fields[5].GetUInt32();
-        uint32 curMana =    fields[6].GetUInt32();
-        uint32 spawnFlags = fields[7].GetUInt32();
-        uint32 relayId = fields[8].GetUInt32();
+        int32 npcFlags =    int32(fields[1].GetUInt32());
+        int64 unitFlags =   int64(fields[2].GetUInt64());
+        uint32 faction =    fields[3].GetUInt32();
+        uint32 modelId =    fields[4].GetUInt32();
+        int32 equipmentId = fields[5].GetInt32();
+        uint32 curHealth =  fields[6].GetUInt32();
+        uint32 curMana =    fields[7].GetUInt32();
+        uint32 spawnFlags = fields[8].GetUInt32();
+        uint32 relayId = fields[9].GetUInt32();
 
         // leave room for invalidation in future
 
         auto& data = m_creatureSpawnTemplateMap[entry];
+        data.npcFlags = npcFlags;
         data.unitFlags = unitFlags;
         data.faction = faction;
         data.modelId = modelId;
@@ -4747,8 +4749,8 @@ void ObjectMgr::LoadQuests()
                           "IncompleteEmote, IncompleteEmoteDelay, CompleteEmote, CompleteEmoteDelay, OfferRewardEmote1, OfferRewardEmote2, OfferRewardEmote3, OfferRewardEmote4,"
                           //   137                     138                     139                     140
                           "OfferRewardEmoteDelay1, OfferRewardEmoteDelay2, OfferRewardEmoteDelay3, OfferRewardEmoteDelay4,"
-                          //   141          142          143             144              145              146              147              148
-                          "StartScript, CompleteScript, RewMaxRepValue1, RewMaxRepValue2, RewMaxRepValue3, RewMaxRepValue4, RewMaxRepValue5, RequiredCondition"
+                          //   141          142          143             144              145              146              147              148                149
+                          "StartScript, CompleteScript, RewMaxRepValue1, RewMaxRepValue2, RewMaxRepValue3, RewMaxRepValue4, RewMaxRepValue5, RequiredCondition, BreadcrumbForQuestId "
 
                           " FROM quest_template");
     if (!result)
@@ -5314,14 +5316,13 @@ void ObjectMgr::LoadQuests()
         // fill additional data stores
         if (qinfo->PrevQuestId)
         {
-            if (mQuestTemplates.find(abs(qinfo->GetPrevQuestId())) == mQuestTemplates.end())
-            {
+            QuestMap::iterator qPrevItr = mQuestTemplates.find(abs(qinfo->GetPrevQuestId()));
+            if (qPrevItr == mQuestTemplates.end())
                 sLog.outErrorDb("Quest %d has PrevQuestId %i, but no such quest", qinfo->GetQuestId(), qinfo->GetPrevQuestId());
-            }
+            else if (qPrevItr->second->BreadcrumbForQuestId)
+                sLog.outErrorDb("Quest %d should not be unlocked by breadcrumb quest %u", qinfo->GetQuestId(), qinfo->GetPrevQuestId());
             else
-            {
                 qinfo->prevQuests.push_back(qinfo->PrevQuestId);
-            }
         }
 
         if (qinfo->NextQuestId)
@@ -5345,6 +5346,50 @@ void ObjectMgr::LoadQuests()
             qinfo->SetSpecialFlag(QUEST_SPECIAL_FLAG_TIMED);
         if (qinfo->PlayersSlain)
             qinfo->SetSpecialFlag(QUEST_SPECIAL_FLAGS_PLAYER_KILL);
+
+        if (uint32 breadcrumbQuestId = qinfo->BreadcrumbForQuestId)
+        {
+            QuestMap::iterator qBreadcrumbQuestItr = mQuestTemplates.find(breadcrumbQuestId);
+            if (qBreadcrumbQuestItr == mQuestTemplates.end())
+            {
+                sLog.outErrorDb("Quest %u has BreadcrumbForQuestId %u, but there is no such quest", qinfo->GetQuestId(), breadcrumbQuestId);
+                qinfo->BreadcrumbForQuestId = 0;
+            }
+            else
+            {
+                if (qinfo->NextQuestId)
+                    sLog.outErrorDb("Quest %u is a breadcrumb, it should not unlock quest %d", qinfo->GetQuestId(), qinfo->NextQuestId);
+                if (qinfo->ExclusiveGroup)
+                    sLog.outErrorDb("Quest %u is a breadcrumb, it should not be in exclusive group %d", qinfo->GetQuestId(), qinfo->ExclusiveGroup);
+            }
+        }
+    }
+
+    // Prevent any breadcrumb loops, and inform target quests of their breadcrumbs
+    for (auto& mQuestTemplate : mQuestTemplates)
+    {
+        Quest* qinfo = mQuestTemplate.second;
+        uint32   qid = qinfo->GetQuestId();
+        uint32 breadcrumbForQuestId = qinfo->BreadcrumbForQuestId;
+        std::set<uint32> questSet;
+
+        while (breadcrumbForQuestId)
+        {
+            // If the insertion fails, then we already processed this breadcrumb quest in this iteration. This means that two breadcrumb quests have each other set as targets
+            if (!questSet.insert(qinfo->QuestId).second)
+            {
+                sLog.outErrorDb("Breadcrumb quests %u and %u are in a loop!", qid, breadcrumbForQuestId);
+                qinfo->BreadcrumbForQuestId = 0;
+                break;
+            }
+
+            qinfo = const_cast<Quest*>(sObjectMgr.GetQuestTemplate(breadcrumbForQuestId));
+
+            // Every quest has a list of breadcrumb quests that point toward it
+            qinfo->DependentBreadcrumbQuests.push_back(qid);
+
+            breadcrumbForQuestId = qinfo->GetBreadcrumbForQuestId();
+        }
     }
 
     sLog.outString(">> Loaded " SIZEFMTD " quests definitions", mQuestTemplates.size());

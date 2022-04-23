@@ -2874,12 +2874,12 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* caster, SpellSchoolMask schoolMa
 
             uint32 splitted = currentAbsorb;
             uint32 splitted_absorb = 0;
-            Unit::DealDamageMods(this, caster, splitted, &splitted_absorb, DIRECT_DAMAGE, (*i)->GetSpellProto());
+            Unit::DealDamageMods(this, caster, splitted, &splitted_absorb, SPLIT_DAMAGE, (*i)->GetSpellProto());
 
             Unit::SendSpellNonMeleeDamageLog(this, caster, (*i)->GetSpellProto()->Id, splitted, schoolMask, splitted_absorb, 0, (damagetype == DOT), 0, false, true);
 
             CleanDamage cleanDamage(splitted, BASE_ATTACK, MELEE_HIT_NORMAL, splitted > 0);
-            Unit::DealDamage(this, caster, splitted, &cleanDamage, DIRECT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
+            Unit::DealDamage(this, caster, splitted, &cleanDamage, SPLIT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
         }
 
         AuraList const& vSplitDamagePct = GetAurasByType(SPELL_AURA_SPLIT_DAMAGE_PCT);
@@ -2907,12 +2907,12 @@ void Unit::CalculateDamageAbsorbAndResist(Unit* caster, SpellSchoolMask schoolMa
             }
 
             uint32 split_absorb = 0;
-            Unit::DealDamageMods(this, caster, splitted, &split_absorb, DIRECT_DAMAGE, (*i)->GetSpellProto());
+            Unit::DealDamageMods(this, caster, splitted, &split_absorb, SPLIT_DAMAGE, (*i)->GetSpellProto());
 
             Unit::SendSpellNonMeleeDamageLog(this, caster, (*i)->GetSpellProto()->Id, splitted, schoolMask, split_absorb, 0, (damagetype == DOT), 0, false, true);
 
             CleanDamage cleanDamage(splitted, BASE_ATTACK, MELEE_HIT_NORMAL, splitted > 0);
-            Unit::DealDamage(this, caster, splitted, &cleanDamage, DIRECT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
+            Unit::DealDamage(this, caster, splitted, &cleanDamage, SPLIT_DAMAGE, schoolMask, (*i)->GetSpellProto(), false);
         }
     }
 
@@ -7367,9 +7367,9 @@ bool Unit::Attack(Unit* victim, bool meleeAttack)
     if (CanHaveThreatList())
         getThreatManager().setCurrentVictimByTarget(victim);
 
-    // delay offhand weapon attack to next attack time
+    // delay offhand weapon attack to half of offhand attack speed
     if (hasOffhandWeaponForAttack())
-        resetAttackTimer(OFF_ATTACK);
+        setAttackTimer(OFF_ATTACK, (GetAttackTime(OFF_ATTACK) * m_modAttackSpeedPct[OFF_ATTACK]) / 2);
 
     if (meleeAttack)
         MeleeAttackStart(m_attacking);
@@ -13349,10 +13349,21 @@ bool Unit::TakePossessOf(Unit* possessed)
     possessed->SetCharmerGuid(GetObjectGuid());
     SetCharm(possessed);
 
-    // stop any generated movement TODO:: this may not be correct! what about possessing a feared creature?
-    possessed->GetMotionMaster()->Clear();
-    possessed->GetMotionMaster()->MoveIdle();
+    const bool panic = possessed->IsInPanic(), fleeing = possessed->IsFleeing(), confused = possessed->IsConfused();
+
+    // stop any generated movement: current solution
     possessed->StopMoving(true);
+    possessed->GetMotionMaster()->Clear(false, true);
+    possessed->GetMotionMaster()->MoveIdle();
+
+    if (confused)
+        possessed->GetMotionMaster()->MoveConfused();
+    else if (fleeing && !panic)
+    {
+        AuraList const& fears = possessed->GetAurasByType(SPELL_AURA_MOD_FEAR);
+        Unit* source = (fears.empty() ? nullptr : fears.back()->GetCaster());
+        possessed->GetMotionMaster()->MoveFleeing(source ? source : this);
+    }
 
     Position combatStartPosition;
 
@@ -13409,7 +13420,7 @@ bool Unit::TakePossessOf(Unit* possessed)
     {
         player->GetCamera().SetView(possessed);
         // Force client control (required to function propely)
-        player->UpdateClientControl(possessed, true, true);
+        player->UpdateClientControl(possessed, !IsCrowdControlled(), true);
         player->SetMover(possessed);
         player->SendForcedObjectUpdate();
 

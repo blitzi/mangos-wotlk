@@ -6209,7 +6209,8 @@ void Player::UpdateSkillsForLevel(bool maximize/* = false*/)
         if (!pSkill)
             continue;
 
-        if (GetSkillRangeType(pSkill, false) != SKILL_RANGE_LEVEL)
+        SkillRangeType skillType = GetSkillRangeType(pSkill, false);
+        if (skillType != SKILL_RANGE_LEVEL && skillType != SKILL_RANGE_MONO)
             continue;
 
         bool maxed = maximize;
@@ -13712,7 +13713,7 @@ void Player::OnGossipSelect(WorldObject* pSource, uint32 gossipListId, uint32 me
                 return;
             }
 
-            GetSession()->SendBattlegGroundList(guid, bgTypeId);
+            GetSession()->SendBattleGroundList(guid, bgTypeId);
             break;
         }
 #ifdef BUILD_PLAYERBOT
@@ -14069,8 +14070,9 @@ bool Player::CanSeeStartQuest(Quest const* pQuest) const
 {
     if (SatisfyQuestClass(pQuest, false) && SatisfyQuestRace(pQuest, false) && SatisfyQuestSkill(pQuest, false) && SatisfyQuestCondition(pQuest, false) &&
             SatisfyQuestExclusiveGroup(pQuest, false) && SatisfyQuestReputation(pQuest, false) &&
-            SatisfyQuestPreviousQuest(pQuest, false) && SatisfyQuestNextChain(pQuest, false) &&
-            SatisfyQuestPrevChain(pQuest, false) && SatisfyQuestDay(pQuest, false) && SatisfyQuestWeek(pQuest) &&
+            SatisfyQuestPreviousQuest(pQuest, false) && SatisfyQuestBreadcrumbQuest(pQuest, false) && SatisfyQuestDependentBreadcrumbQuests(pQuest, false) &&
+            SatisfyQuestNextChain(pQuest, false) && SatisfyQuestPrevChain(pQuest, false) &&
+            SatisfyQuestDay(pQuest, false) && SatisfyQuestWeek(pQuest) &&
             SatisfyQuestMonth(pQuest) &&
             pQuest->IsActive())
     {
@@ -14090,6 +14092,7 @@ bool Player::CanTakeQuest(Quest const* pQuest, bool msg) const
            SatisfyQuestSkill(pQuest, msg) && SatisfyQuestCondition(pQuest, msg) && SatisfyQuestReputation(pQuest, msg) &&
            SatisfyQuestPreviousQuest(pQuest, msg) && SatisfyQuestTimed(pQuest, msg) &&
            SatisfyQuestNextChain(pQuest, msg) && SatisfyQuestPrevChain(pQuest, msg) &&
+           SatisfyQuestBreadcrumbQuest(pQuest, msg) && SatisfyQuestDependentBreadcrumbQuests(pQuest, msg) &&
            SatisfyQuestDay(pQuest, msg) && SatisfyQuestWeek(pQuest) && SatisfyQuestMonth(pQuest) &&
            pQuest->IsActive();
 }
@@ -14890,6 +14893,42 @@ bool Player::SatisfyQuestPreviousQuest(Quest const* qInfo, bool msg) const
         SendCanTakeQuestResponse(INVALIDREASON_DONT_HAVE_REQ);
 
     return false;
+}
+
+bool Player::SatisfyQuestBreadcrumbQuest(Quest const* qInfo, bool msg) const
+{
+    // If the target quest is not available, then we cannot accept the breadcrumb
+    uint32 breadcrumbTargetQuestId = qInfo->GetBreadcrumbForQuestId();
+    if (!breadcrumbTargetQuestId)
+        return true;
+
+    if (!CanTakeQuest(sObjectMgr.GetQuestTemplate(breadcrumbTargetQuestId), false))
+    {
+        if (msg)
+            SendCanTakeQuestResponse(INVALIDREASON_DONT_HAVE_REQ);
+
+        return false;
+    }
+
+    return true;
+}
+
+bool Player::SatisfyQuestDependentBreadcrumbQuests(Quest const* qInfo, bool msg) const
+{
+    // If we have one of the breadcrumb quests, then we can't accept the target quest
+    for (uint32 breadcrumbQuestId : qInfo->DependentBreadcrumbQuests)
+    {
+        QuestStatus status = GetQuestStatus(breadcrumbQuestId);
+        if ((status == QUEST_STATUS_INCOMPLETE || status == QUEST_STATUS_COMPLETE || status == QUEST_STATUS_FAILED) && !GetQuestRewardStatus(breadcrumbQuestId))
+        {
+            if (msg)
+                SendCanTakeQuestResponse(INVALIDREASON_DONT_HAVE_REQ);
+
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool Player::SatisfyQuestClass(Quest const* qInfo, bool msg) const
@@ -21613,46 +21652,10 @@ void Player::learnQuestRewardedSpells(Quest const* quest)
     if (!found)
         return;
 
-    // prevent learn non first rank unknown profession and second specialization for same profession)
+    // Prevent learning profession specializations, because unlearning and re-learning a profession doesn't automatically re-add the specialization
     uint32 learned_0 = spellInfo->EffectTriggerSpell[EFFECT_INDEX_0];
-    if (sSpellMgr.GetSpellRank(learned_0) > 1 && !HasSpell(learned_0))
-    {
-        // not have first rank learned (unlearned prof?)
-        uint32 first_spell = sSpellMgr.GetFirstSpellInChain(learned_0);
-        if (!HasSpell(first_spell))
-            return;
-
-        SpellEntry const* learnedInfo = sSpellTemplate.LookupEntry<SpellEntry>(learned_0);
-        if (!learnedInfo)
-            return;
-
-        // specialization
-        if (learnedInfo->Effect[EFFECT_INDEX_0] == SPELL_EFFECT_TRADE_SKILL && learnedInfo->Effect[EFFECT_INDEX_1] == 0)
-        {
-            // search other specialization for same prof
-            for (PlayerSpellMap::const_iterator itr = m_spells.begin(); itr != m_spells.end(); ++itr)
-            {
-                if (itr->second.state == PLAYERSPELL_REMOVED || itr->first == learned_0)
-                    continue;
-
-                SpellEntry const* itrInfo = sSpellTemplate.LookupEntry<SpellEntry>(itr->first);
-                if (!itrInfo)
-                    return;
-
-                // compare only specializations
-                if (itrInfo->Effect[EFFECT_INDEX_0] != SPELL_EFFECT_TRADE_SKILL || itrInfo->Effect[EFFECT_INDEX_1] != 0)
-                    continue;
-
-                // compare same chain spells
-                if (sSpellMgr.GetFirstSpellInChain(itr->first) != first_spell)
-                    continue;
-
-                // now we have 2 specialization, learn possible only if found is lesser specialization rank
-                if (!sSpellMgr.IsSpellHigherRankOfSpell(learned_0, itr->first))
-                    return;
-            }
-        }
-    }
+    if (sSpellMgr.GetSpellRank(learned_0) > 1)
+        return;
 
     CastSpell(this, spell_id, TRIGGERED_OLD_TRIGGERED);
 }
@@ -25000,7 +25003,7 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
     int32 categoryRecTime = spellEntry.CategoryRecoveryTime; // int because of spellmod calculations
     uint32 itemId = 0;
 
-    if (itemProto)
+    auto pickCooldowns = [&](ItemPrototype const* itemProto)
     {
         for (const auto& Spell : itemProto->Spells)
         {
@@ -25016,9 +25019,14 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
                 break;
             }
         }
-    }
+    };
+
+    if (itemProto)
+        pickCooldowns(itemProto);
 
     bool haveToSendEvent = false;
+    bool wasPermanent = false;
+    uint32 oldItemId = 0;
     auto cdDataItr = m_cooldownMap.FindBySpellId(spellEntry.Id);
     if (cdDataItr != m_cooldownMap.end())
     {
@@ -25028,6 +25036,8 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
             sLog.outError("Player::AddCooldown> Spell(%u) Category(%u) try to add and already existing cooldown %u %u?", spellEntry.Id, spellEntry.Category, forcedDuration);
             return;
         }
+        wasPermanent = cdData->IsPermanent();
+        oldItemId = cdData->GetItemId();
         m_cooldownMap.erase(cdDataItr);
         haveToSendEvent = true;
     }
@@ -25054,10 +25064,15 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
     if (spellCategory && categoryRecTime)
         ApplySpellMod(spellEntry.Id, SPELLMOD_COOLDOWN, categoryRecTime);
 
-    if (recTime || categoryRecTime)
+    if (recTime || categoryRecTime || wasPermanent)
     {
+        if (wasPermanent && oldItemId && !itemProto)
+            if (ItemPrototype const* itemProto = sObjectMgr.GetItemPrototype(oldItemId))
+                pickCooldowns(itemProto);
+
         // ready to add the cooldown
-        m_cooldownMap.AddCooldown(GetMap()->GetCurrentClockTime(), spellEntry.Id, recTime, spellCategory, categoryRecTime, itemId);
+        if (recTime || categoryRecTime) // only send event if was permanent but no cds
+            m_cooldownMap.AddCooldown(GetMap()->GetCurrentClockTime(), spellEntry.Id, recTime, spellCategory, categoryRecTime, itemId);
 
         // after some aura fade or potion activation we have to send cooldown event to start cd client side
         if (haveToSendEvent)
