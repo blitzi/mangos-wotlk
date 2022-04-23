@@ -171,7 +171,7 @@ void PathFinder::setArea(uint32 mapId, float x, float y, float z, uint32 area, f
     MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
 
     dtNavMeshQuery const* query = mmap->GetNavMeshQuery(mapId, 0);
-    dtNavMesh const* cnavMesh = mmap->GetNavMesh(mapId);
+    dtNavMesh const* cnavMesh = mmap->GetNavMesh(mapId, 0);
     dtNavMesh* navMesh = const_cast<dtNavMesh*> (cnavMesh);
     dtQueryFilter m_filter;
 
@@ -227,7 +227,7 @@ uint32 PathFinder::getArea(uint32 mapId, float x, float y, float z)
     MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
 
     dtNavMeshQuery const* query = mmap->GetNavMeshQuery(mapId, 0);
-    dtNavMesh const* cnavMesh = mmap->GetNavMesh(mapId);
+    dtNavMesh const* cnavMesh = mmap->GetNavMesh(mapId, 0);
     dtNavMesh* navMesh = const_cast<dtNavMesh*> (cnavMesh);
     dtQueryFilter m_filter;
     dtPolyRef polyRef = INVALID_POLYREF;
@@ -257,7 +257,7 @@ unsigned short PathFinder::getFlags(uint32 mapId, float x, float y, float z)
     MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
 
     dtNavMeshQuery const* query = mmap->GetNavMeshQuery(mapId, 0);
-    dtNavMesh const* cnavMesh = mmap->GetNavMesh(mapId);
+    dtNavMesh const* cnavMesh = mmap->GetNavMesh(mapId, 0);
     dtNavMesh* navMesh = const_cast<dtNavMesh*> (cnavMesh);
     dtQueryFilter m_filter;
     dtPolyRef polyRef = INVALID_POLYREF;
