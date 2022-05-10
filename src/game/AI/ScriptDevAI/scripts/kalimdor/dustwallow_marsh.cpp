@@ -1617,7 +1617,7 @@ struct npc_theramore_spar_controller : public CombatAI
             Creature* redMember = GetClosestCreatureWithEntry(m_creature, red, 20.f);
             if (redMember && redMember->IsAlive())
             {
-                redMember->setFaction(FACTION_THERAMORE_FRIENDLY);
+                redMember->SetFaction(FACTION_THERAMORE_FRIENDLY);
                 teams[RED_TEAM].push_back(redMember->GetObjectGuid());
             }
         }
@@ -1627,7 +1627,7 @@ struct npc_theramore_spar_controller : public CombatAI
             Creature* blueMember = GetClosestCreatureWithEntry(m_creature, blue, 20.f);
             if (blueMember && blueMember->IsAlive())
             {
-                blueMember->setFaction(FACTION_THERAMORE_FRIENDLY);
+                blueMember->SetFaction(FACTION_THERAMORE_FRIENDLY);
                 teams[BLUE_TEAM].push_back(blueMember->GetObjectGuid());
             }
         }
