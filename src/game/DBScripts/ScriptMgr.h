@@ -62,7 +62,7 @@ enum ScriptCommand                                          // resSource, resTar
     SCRIPT_COMMAND_CREATE_ITEM              = 17,           // source or target must be player, datalong = item entry, datalong2 = amount
     SCRIPT_COMMAND_DESPAWN_SELF             = 18,           // resSource = Creature, datalong = despawn delay
     SCRIPT_COMMAND_PLAY_MOVIE               = 19,           // target can only be a player, datalog = movie id
-    SCRIPT_COMMAND_MOVEMENT                 = 20,           // resSource = Creature. datalong = MovementType (0:idle, 1:random or 2:waypoint), datalong2 = wander-distance/pathId, datalong3 = timer/passTarget, dataint1 = forcedMovement
+    SCRIPT_COMMAND_MOVEMENT                 = 20,           // resSource = Creature. datalong = MovementType (0:idle, 1:random, 2:waypoint, 3:path or 15:jump), datalong2 = wander-distance/pathId/relayId, datalong3 = timer/passTarget, dataint1 = forcedMovement
     // data_flags &  SCRIPT_FLAG_COMMAND_ADDITIONAL = Random-movement around current position
     SCRIPT_COMMAND_SET_ACTIVEOBJECT         = 21,           // resSource = Creature
     // datalong=bool 0=off, 1=on
@@ -134,6 +134,7 @@ enum ScriptCommand                                          // resSource, resTar
     SCRIPT_COMMAND_ZONE_PULSE               = 50,           //
     SCRIPT_COMMAND_SPAWN_GROUP              = 51,           // dalalong = command
     SCRIPT_COMMAND_SET_GOSSIP_MENU          = 52,           // datalong = gossip_menu_id
+    SCRIPT_COMMAND_SET_WORLDSTATE           = 53,           // dataint = worldstate id, dataint2 = new value, 
 };
 
 #define MAX_TEXT_ID 4                                       // used for SCRIPT_COMMAND_TALK, SCRIPT_COMMAND_EMOTE, SCRIPT_COMMAND_CAST_SPELL, SCRIPT_COMMAND_TERMINATE_SCRIPT
@@ -285,7 +286,7 @@ struct ScriptInfo
         struct                                              // SCRIPT_COMMAND_MOVEMENT (20)
         {
             uint32 movementType;                            // datalong
-            uint32 wanderORpathId;                          // datalong2
+            uint32 wanderORpathIdORRelayId;                 // datalong2
             uint32 timerOrPassTarget;                       // datalong3
         } movement;
 
@@ -462,11 +463,7 @@ struct ScriptInfo
             uint32 gossipMenuId;                            // datalong
         } setGossipMenu;
 
-        struct                                              // SCRIPT_COMMAND_LOG_KILL (99)
-        {
-            uint32 empty1;                                  // datalong
-            uint32 empty2;                                  // datalong2
-        } logKill;
+        // unused                                           // SCRIPT_COMMAND_SET_WORLDSTATE (53)
 
         struct
         {
@@ -481,13 +478,27 @@ struct ScriptInfo
 
     int32 textId[MAX_TEXT_ID];                              // dataint to dataint4
 
+    union
+    {
+        struct                                              // SCRIPT_COMMAND_MOVEMENT (20)
+        {
+            float verticalSpeed;
+        } movementFloat;
+
+        struct
+        {
+            float data[1];
+        } rawFloat;
+    };
+
     float x;
     float y;
     float z;
     float o;
+    float speed;
     uint32 condition_id;
 
-    ScriptInfo() : id(0), delay(0), command(0), buddyEntry(0), searchRadiusOrGuid(0), data_flags(0), x(0), y(0), z(0), o(0), condition_id(0)
+    ScriptInfo() : id(0), delay(0), command(0), buddyEntry(0), searchRadiusOrGuid(0), data_flags(0), x(0), y(0), z(0), o(0), speed(0), condition_id(0)
     {
         memset(raw.data, 0, sizeof(raw.data));
         memset(textId, 0, sizeof(textId));

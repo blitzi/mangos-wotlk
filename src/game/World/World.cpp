@@ -1142,9 +1142,6 @@ void World::SetInitialWorldSettings()
     sLog.outString("Loading SpellsScriptTarget...");
     sSpellMgr.LoadSpellScriptTarget();                      // must be after LoadCreatureTemplates, LoadCreatures and LoadGameobjectInfo
 
-    sLog.outString("Loading Spawn Groups");                 // must be after creature and GO load
-    sObjectMgr.LoadSpawnGroups();
-
     sLog.outString("Generating SpellTargetMgr data...\n");
     SpellTargetMgr::Initialize(); // must be after LoadSpellScriptTarget
 
@@ -1187,8 +1184,14 @@ void World::SetInitialWorldSettings()
     sLog.outString(">>> Game Event Data loaded");
     sLog.outString();
 
+    sLog.outString("Loading WorldState Names...");          // must be before conditions and dbscripts
+    sObjectMgr.LoadWorldStateNames();
+
     sLog.outString("Loading Conditions...");                // Load Conditions
     sObjectMgr.LoadConditions();
+
+    sLog.outString("Loading Spawn Groups");                 // must be after creature and GO load
+    sObjectMgr.LoadSpawnGroups();
 
     // Not sure if this can be moved up in the sequence (with static data loading) as it uses MapManager
     sLog.outString("Loading Transports...");
@@ -2132,6 +2135,14 @@ void World::BroadcastToGroup(ObjectGuid groupGuid, std::vector<WorldPacket> cons
     if (Group* group = sObjectMgr.GetGroupById(groupGuid.GetCounter()))
         for (auto& packet : packets)
             group->BroadcastPacket(packet, false);
+}
+
+void World::BroadcastPersonalized(std::map<ObjectGuid, std::vector<WorldPacket>> const& personalizedPackets)
+{
+    for (auto& packets : personalizedPackets)
+        if (Player* player = ObjectAccessor::FindPlayer(packets.first)) // TODO: pass these along directly to worldsession
+            for (WorldPacket const& packet : packets.second)
+                player->GetSession()->SendPacket(packet);
 }
 
 /// Update the game time

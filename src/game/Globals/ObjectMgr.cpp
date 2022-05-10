@@ -1009,6 +1009,20 @@ CreatureSpellList* ObjectMgr::GetCreatureSpellList(uint32 Id) const
     return &(*itr).second;
 }
 
+bool ObjectMgr::HasWorldStateName(int32 Id) const
+{
+    return m_worldStateNames.find(Id) != m_worldStateNames.end();
+}
+
+WorldStateName* ObjectMgr::GetWorldStateName(int32 Id)
+{
+    auto itr = m_worldStateNames.find(Id);
+    if (itr == m_worldStateNames.end())
+        return nullptr;
+
+    return &(itr->second);
+}
+
 void ObjectMgr::LoadCreatureImmunities()
 {
     uint32 count = 0;
@@ -1163,7 +1177,7 @@ void ObjectMgr::LoadSpawnGroups()
             entry.Name = fields[1].GetCppString();
             if (entry.Name.empty())
             {
-                sLog.outErrorDb("LoadSpawnGroups: Invalid spawn_group empty name.");
+                sLog.outErrorDb("LoadSpawnGroups: Invalid spawn_group empty name. Skipping.");
                 continue;
             }
 
@@ -1171,16 +1185,28 @@ void ObjectMgr::LoadSpawnGroups()
 
             if (entry.Type > SPAWN_GROUP_GAMEOBJECT)
             {
-                sLog.outErrorDb("LoadSpawnGroups: Invalid spawn_group unknown type %u.", entry.Type);
+                sLog.outErrorDb("LoadSpawnGroups: Invalid spawn_group unknown type %u. Skipping.", entry.Type);
                 continue;
             }
 
             entry.MaxCount = fields[3].GetUInt32();
-            entry.WorldStateId = fields[4].GetInt32();
+            entry.WorldStateCondition = fields[4].GetInt32();
+
+            if (entry.WorldStateCondition)
+            {
+                const ConditionEntry* condition = sConditionStorage.LookupEntry<ConditionEntry>(entry.WorldStateCondition);
+                if (!condition) // condition does not exist for some reason
+                {
+                    sLog.outErrorDb("LoadSpawnGroups: Invalid spawn_group (%u) condition entry %u. Skipping.", entry.Id, entry.WorldStateCondition);
+                    continue;
+                }
+            }
+
             entry.Flags = fields[5].GetUInt32();
             entry.Active = false;
             entry.EnabledByDefault = true;
             entry.formationEntry = nullptr;
+            entry.HasChancedSpawns = false;
             newContainer->spawnGroupMap.emplace(entry.Id, entry);
         } while (result->NextRow());
     }
@@ -1243,7 +1269,7 @@ void ObjectMgr::LoadSpawnGroups()
         } while (result->NextRow());
     }
 
-    result.reset(WorldDatabase.Query("SELECT Id, Guid, SlotId FROM spawn_group_spawn"));
+    result.reset(WorldDatabase.Query("SELECT Id, Guid, SlotId, Chance FROM spawn_group_spawn"));
     if (result)
     {
         do
@@ -1254,6 +1280,7 @@ void ObjectMgr::LoadSpawnGroups()
             guid.Id = fields[0].GetUInt32();
             guid.DbGuid = fields[1].GetUInt32();
             guid.SlotId = fields[2].GetInt32();
+            guid.Chance = fields[3].GetUInt32();
             guid.OwnEntry = 0;
             guid.RandomEntry = false;
 
@@ -1282,7 +1309,9 @@ void ObjectMgr::LoadSpawnGroups()
                 }
             }
 
-            group.DbGuids.push_back(guid);            
+            group.DbGuids.push_back(guid);
+            if (guid.Chance)
+                group.HasChancedSpawns = true;
         } while (result->NextRow());
 
         // check and fix correctness of slot id indexation
@@ -4749,8 +4778,8 @@ void ObjectMgr::LoadQuests()
                           "IncompleteEmote, IncompleteEmoteDelay, CompleteEmote, CompleteEmoteDelay, OfferRewardEmote1, OfferRewardEmote2, OfferRewardEmote3, OfferRewardEmote4,"
                           //   137                     138                     139                     140
                           "OfferRewardEmoteDelay1, OfferRewardEmoteDelay2, OfferRewardEmoteDelay3, OfferRewardEmoteDelay4,"
-                          //   141          142          143             144              145              146              147              148                149
-                          "StartScript, CompleteScript, RewMaxRepValue1, RewMaxRepValue2, RewMaxRepValue3, RewMaxRepValue4, RewMaxRepValue5, RequiredCondition, BreadcrumbForQuestId "
+                          //   141          142          143             144              145              146              147              148                149                   150
+                          "StartScript, CompleteScript, RewMaxRepValue1, RewMaxRepValue2, RewMaxRepValue3, RewMaxRepValue4, RewMaxRepValue5, RequiredCondition, BreadcrumbForQuestId, MaxLevel "
 
                           " FROM quest_template");
     if (!result)
@@ -5815,6 +5844,44 @@ void ObjectMgr::LoadWorldTemplate()
     }
 
     sLog.outString(">> Loaded %u World Template definitions", sWorldTemplate.GetRecordCount());
+    sLog.outString();
+}
+
+void ObjectMgr::LoadWorldStateNames()
+{
+    std::unique_ptr<QueryResult> result(WorldDatabase.Query("SELECT Id, Name FROM worldstate_name"));
+
+    uint32 count = 0;
+
+    if (!result)
+    {
+        BarGoLink bar(1);
+        bar.step();
+
+        sLog.outString();
+        sLog.outString(">> Loaded %u worldstate names", count);
+        return;
+    }
+
+    BarGoLink bar(result->GetRowCount());
+
+    Field* fields;
+    do
+    {
+        bar.step();
+
+        fields = result->Fetch();
+
+        WorldStateName name;
+        name.Id = fields[0].GetInt32();
+        name.Name = fields[1].GetCppString();
+
+        m_worldStateNames.emplace(name.Id, name);
+
+        ++count;
+    } while (result->NextRow());
+
+    sLog.outString(">> Loaded %u worldstate names", count);
     sLog.outString();
 }
 

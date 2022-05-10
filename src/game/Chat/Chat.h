@@ -294,6 +294,7 @@ class ChatHandler
         bool HandleDebugLootDropStats(char* args);
         bool HandleDebugOverflowCommand(char* args);
         bool HandleDebugChatFreezeCommand(char* args);
+        bool HandleDebugLfgCommand(char* args);
 
         bool HandleDebugObjectFlags(char* args);
         bool HandleDebugHaveAtClientCommand(char* args);

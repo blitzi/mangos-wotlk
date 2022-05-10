@@ -20,6 +20,7 @@
 #include "Entities/Player.h"
 #include "World/World.h"
 #include "Server/DBCStores.h"
+#include "Globals/SharedDefines.h"
 
 Quest::Quest(Field* questRecord)
 {
@@ -27,6 +28,7 @@ Quest::Quest(Field* questRecord)
     QuestMethod = questRecord[1].GetUInt32();
     ZoneOrSort = questRecord[2].GetInt32();
     MinLevel = questRecord[3].GetUInt32();
+    MaxLevel = questRecord[150].GetUInt32();
     QuestLevel = questRecord[4].GetInt32();
     Type = questRecord[5].GetUInt32();
     RequiredClasses = questRecord[6].GetUInt32();
@@ -183,7 +185,7 @@ Quest::Quest(Field* questRecord)
     }
 }
 
-uint32 Quest::XPValue(Player* pPlayer) const
+uint32 Quest::GetXPReward(Player* pPlayer) const
 {
     if (pPlayer)
     {
@@ -278,6 +280,11 @@ int32  Quest::GetRewOrReqMoney() const
     return int32(RewOrReqMoney * sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY));
 }
 
+bool Quest::IsSeasonal() const
+{
+    return (ZoneOrSort == -QUEST_SORT_SEASONAL || ZoneOrSort == -QUEST_SORT_SPECIAL || ZoneOrSort == -QUEST_SORT_LUNAR_FESTIVAL || ZoneOrSort == -QUEST_SORT_MIDSUMMER || ZoneOrSort == -QUEST_SORT_BREWFEST || ZoneOrSort == -QUEST_SORT_LOVE_IS_IN_THE_AIR || ZoneOrSort == -QUEST_SORT_NOBLEGARDEN) && !IsRepeatable();
+}
+
 bool Quest::IsAllowedInRaid() const
 {
     if (Type == QUEST_TYPE_RAID || Type == QUEST_TYPE_RAID_10 || Type == QUEST_TYPE_RAID_25)
@@ -304,6 +311,13 @@ bool Quest::IsRaidQuest(Difficulty difficulty) const
         return true;
 
     return false;
+}
+
+bool Quest::CanIncreaseRewardedQuestCounters() const
+{
+    // Dungeon Finder/Daily/Repeatable (if not weekly, monthly or seasonal) quests are never considered rewarded serverside.
+    // This affects counters and client requests for completed quests.
+    return (!IsDungeonFinderQuest() && !IsDaily() && (!IsRepeatable() || IsWeekly() || IsMonthly() || IsSeasonal()));
 }
 
 uint32 Quest::CalculateRewardHonor(uint32 level) const

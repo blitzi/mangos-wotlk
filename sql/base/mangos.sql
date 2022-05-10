@@ -24,7 +24,7 @@ CREATE TABLE `db_version` (
   `version` varchar(120) DEFAULT NULL,
   `creature_ai_version` varchar(120) DEFAULT NULL,
   `cache_id` int(10) DEFAULT '0',
-  `required_14054_01_mangos_command` bit(1) DEFAULT NULL
+  `required_14058_01_mangos_quest_maxlevel` bit(1) DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC COMMENT='Used DB version notes';
 
 --
@@ -1847,10 +1847,12 @@ CREATE TABLE `dbscripts_on_creature_movement` (
   `dataint2` int(11) NOT NULL DEFAULT '0',
   `dataint3` int(11) NOT NULL DEFAULT '0',
   `dataint4` int(11) NOT NULL DEFAULT '0',
+  `datafloat` float NOT NULL DEFAULT '0',
   `x` float NOT NULL DEFAULT '0',
   `y` float NOT NULL DEFAULT '0',
   `z` float NOT NULL DEFAULT '0',
   `o` float NOT NULL DEFAULT '0',
+  `speed` float NOT NULL DEFAULT '0',
   `condition_id` MEDIUMINT UNSIGNED NOT NULL DEFAULT '0',
   `comments` varchar(255) NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
@@ -15814,6 +15816,7 @@ CREATE TABLE `quest_template` (
   `Method` tinyint(3) unsigned NOT NULL DEFAULT '2',
   `ZoneOrSort` smallint(6) NOT NULL DEFAULT '0',
   `MinLevel` tinyint(3) unsigned NOT NULL DEFAULT '0',
+  `MaxLevel` tinyint(3) unsigned NOT NULL DEFAULT '255',
   `QuestLevel` smallint(6) NOT NULL DEFAULT '0',
   `Type` smallint(5) unsigned NOT NULL DEFAULT '0',
   `RequiredClasses` smallint(5) unsigned NOT NULL DEFAULT '0',
@@ -16297,6 +16300,7 @@ CREATE TABLE `spawn_group_spawn`  (
   `Id` int(11) NOT NULL COMMENT 'Spawn Group ID',
   `Guid` int(11) NOT NULL COMMENT 'Guid of creature or GO',
   `SlotId` tinyint(4) NOT NULL DEFAULT -1 COMMENT '0 is the leader, -1 not part of the formation',
+  `Chance` INT UNSIGNED NOT NULL DEFAULT '0' COMMENT 'Chance for a spawn to occur',
   PRIMARY KEY (`Id`, `Guid`)
 );
 
@@ -20088,6 +20092,16 @@ CREATE TABLE `world_safe_locs` (
    `name` varchar(50) NOT NULL DEFAULT '',
    PRIMARY KEY (`id`)
  ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+--
+-- Table structure for table `worldstate_name`
+--
+
+CREATE TABLE worldstate_name (
+`Id` INT(11) NOT NULL COMMENT 'Worldstate variable Id',
+`Name` VARCHAR(200) NOT NULL COMMENT 'Name and use of variable',
+PRIMARY KEY(`Id`)
+);
 
 --
 -- Table structure for table `world_template`
