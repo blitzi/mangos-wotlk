@@ -215,7 +215,7 @@ namespace MMAP
         MMapData* mmap = m_loadedMMaps[packInstanceId(mapId, instanceId)];
         MANGOS_ASSERT(mmap->navMesh);
 
-        char fileName[100];
+        char fileName[256];
         if (number == 0)
             sprintf(fileName, "%03u%02i%02i.mmtile", mapId, x, y);
         else
@@ -229,7 +229,7 @@ namespace MMAP
             return false;
         }
 
-        std::string filePath = std::string("mmaps/") + fileName;
+        std::string filePath = sWorld.GetDataPath() + std::string("mmaps/") + fileName;
         // load this tile
         FILE* file = fopen(filePath.c_str(), "rb");
         if (!file)
