@@ -6011,6 +6011,10 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
     if (summon_prop->Group == SUMMON_PROP_GROUP_VEHICLE || summon_prop->Group == SUMMON_PROP_GROUP_UNCONTROLLABLE_VEHICLE || summon_prop->Group == SUMMON_PROP_GROUP_CONTROLLABLE)
         amount = 1;
 
+    // basepoints of summoned critters are unk - set amount to 1
+    if (summon_prop->Slot == SUMMON_PROP_SLOT_CRITTER)
+        amount = 1;
+
     // Expected Level
     WorldObject* petInvoker = responsibleCaster ? responsibleCaster : m_trueCaster;
     uint32 level = 0;
@@ -6163,7 +6167,7 @@ void Spell::EffectSummonType(SpellEffectIndex eff_idx)
                     break;
                 case UNITNAME_SUMMON_TITLE_COMPANION:
                     // slot 6 set for critters that can help to player in fighting
-                    if (summon_prop->Slot == 6)
+                    if (summon_prop->Slot == SUMMON_PROP_SLOT_QUEST_PLAYERS_ONLY)
                         summonResult = DoSummonGuardian(summonPositions, summon_prop, eff_idx, level);
                     else
                         summonResult = DoSummonCritter(summonPositions, summon_prop, eff_idx, level);

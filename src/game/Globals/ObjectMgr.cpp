@@ -986,6 +986,15 @@ std::vector<std::pair<TypeID, uint32>> const& ObjectMgr::GetDbGuidsForTransport(
     return (*m_guidsForMap.find(mapId)).second;
 }
 
+VehicleSeatParameters const* ObjectMgr::GetVehicleSeatParameters(uint32 seatEntry) const
+{
+    auto itr = m_seatParameters.find(seatEntry);
+    if (itr == m_seatParameters.end())
+        return nullptr;
+
+    return &itr->second;
+}
+
 CreatureImmunityVector const* ObjectMgr::GetCreatureImmunitySet(uint32 entry, uint32 setId) const
 {
     auto itr = m_creatureImmunities.find(entry);
@@ -2244,10 +2253,10 @@ void ObjectMgr::LoadGameObjects()
 {
     uint32 count = 0;
 
-    //                                                0                           1   2    3           4           5           6
-    QueryResult* result = WorldDatabase.Query("SELECT gameobject.guid, gameobject.id, map, position_x, position_y, position_z, orientation,"
-                          //   7          8          9          10         11                 12               13         14       15         16      17
-                          "rotation0, rotation1, rotation2, rotation3, spawntimesecsmin, spawntimesecsmax, animprogress, state, spawnMask, phaseMask, event,"
+    //                                                0                           1   2    3                      4                      5                      6
+    QueryResult* result = WorldDatabase.Query("SELECT gameobject.guid, gameobject.id, map, round(position_x, 20), round(position_y, 20), round(position_z, 20), round(orientation, 20),"
+                          // 7                   8                     9                     10                    11                12                13            14     15         16         17
+                          "round(rotation0, 20), round(rotation1, 20), round(rotation2, 20), round(rotation3, 20), spawntimesecsmin, spawntimesecsmax, animprogress, state, spawnMask, phaseMask, event,"
                           //   18                          19
                           "pool_gameobject.pool_entry, pool_gameobject_template.pool_entry "
                           "FROM gameobject "
@@ -10265,13 +10274,13 @@ bool ObjectMgr::IsVendorItemValid(bool isTemplate, char const* tableName, uint32
     uint32 countItems = vItems ? vItems->GetItemCount() : 0;
     countItems += tItems ? tItems->GetItemCount() : 0;
 
-    if (countItems >= MAX_VENDOR_ITEMS)
+    if (countItems > std::numeric_limits<uint8>::max())
     {
         if (pl)
             ChatHandler(pl).SendSysMessage(LANG_COMMAND_ADDVENDORITEMITEMS);
         else
-            sLog.outErrorDb("Table `%s` has too many items (%u >= %i) for %s %u, ignoring",
-                            tableName, countItems, MAX_VENDOR_ITEMS, idStr, vendor_entry);
+            sLog.outErrorDb("Table `%s` has too many items (%u > %i) for %s %u, ignoring",
+                            tableName, countItems, std::numeric_limits<uint8>::max(), idStr, vendor_entry);
         return false;
     }
 

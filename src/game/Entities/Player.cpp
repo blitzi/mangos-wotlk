@@ -7502,6 +7502,8 @@ void Player::UpdateZone(uint32 newZone, uint32 newArea, bool force)
             Weather* wth = GetMap()->GetWeatherSystem()->FindOrCreateWeather(newZone);
             wth->SendWeatherUpdateToPlayer(this);
         }
+
+        GetMap()->SendZoneDynamicInfo(this);
     }
 
     if (m_areaUpdateId != newArea || force)
@@ -14100,7 +14102,7 @@ bool Player::CanSeeStartQuest(Quest const* pQuest) const
         int32 highLevelDiff = sWorld.getConfig(CONFIG_INT32_QUEST_HIGH_LEVEL_HIDE_DIFF);
         if (highLevelDiff < 0)
             return true;
-        return GetLevel() + uint32(highLevelDiff) >= pQuest->GetMinLevel();
+        return (GetLevel() + uint32(highLevelDiff) >= pQuest->GetMinLevel()) && GetLevel() <= pQuest->GetMaxLevel();
     }
 
     return false;
