@@ -3385,15 +3385,21 @@ SpellMissInfo Unit::SpellHitResult(WorldObject* caster, Unit* pVictim, SpellEntr
             return SPELL_MISS_IMMUNE;
     }
 
+    Unit* hitCaster = nullptr;
     if (caster->IsUnit())
+        hitCaster = static_cast<Unit*>(caster);
+    else if (caster->IsGameObject())
+        hitCaster = static_cast<GameObject*>(caster)->GetOwner();
+
+    if (hitCaster)
     {
         switch (spell->DmgClass)
         {
             case SPELL_DAMAGE_CLASS_MELEE:
             case SPELL_DAMAGE_CLASS_RANGED:
-                return static_cast<Unit*>(caster)->MeleeSpellHitResult(pVictim, spell, heartbeatResistChance);
+                return hitCaster->MeleeSpellHitResult(pVictim, spell, heartbeatResistChance);
             case SPELL_DAMAGE_CLASS_MAGIC:
-                return static_cast<Unit*>(caster)->MagicSpellHitResult(pVictim, spell, schoolMask, heartbeatResistChance);
+                return hitCaster->MagicSpellHitResult(pVictim, spell, schoolMask, heartbeatResistChance);
             case SPELL_DAMAGE_CLASS_NONE:
                 // Usually never misses, but needs more research for some spells
                 break;
@@ -9195,22 +9201,6 @@ uint32 Unit::MeleeDamageBonusDone(Unit* victim, uint32 pdamage, WeaponAttackType
                 continue;
             switch (i->GetMiscValue())
             {
-                // Dirty Deeds
-                case 6427:
-                case 6428:
-                    if (victim->HasAuraState(AURA_STATE_HEALTHLESS_35_PERCENT))
-                    {
-                        Aura* eff0 = i->GetHolder()->m_auras[EFFECT_INDEX_0];
-                        if (!eff0)
-                        {
-                            sLog.outError("Spell structure of DD (%u) changed.", i->GetId());
-                            continue;
-                        }
-
-                        // effect 0 have expected value but in negative state
-                        DoneTotalMod *= (-eff0->GetModifier()->m_amount + 100.0f) / 100.0f;
-                    }
-                    break;
                 // Tundra Stalker
                 case 7277: // Merciless Combat
                 {
