@@ -319,7 +319,7 @@ inline bool IsAuraSpellRefreshInsteadOfRecast(SpellEntry const* spellInfo)
 
 inline bool IsAllowingDeadTarget(SpellEntry const* spellInfo)
 {
-    return spellInfo->HasAttribute(SPELL_ATTR_EX2_CAN_TARGET_DEAD) || spellInfo->HasAttribute(SPELL_ATTR_PASSIVE) || spellInfo->Targets & (TARGET_FLAG_CORPSE_ENEMY | TARGET_FLAG_UNIT_DEAD | TARGET_FLAG_CORPSE_ALLY);
+    return spellInfo->HasAttribute(SPELL_ATTR_EX2_ALLOW_DEAD_TARGET) || spellInfo->HasAttribute(SPELL_ATTR_PASSIVE) || spellInfo->Targets & (TARGET_FLAG_CORPSE_ENEMY | TARGET_FLAG_UNIT_DEAD | TARGET_FLAG_CORPSE_ALLY);
 }
 
 inline bool IsElementalShield(SpellEntry const* spellInfo)
@@ -436,12 +436,12 @@ inline bool IsPassiveSpellStackableWithRanks(SpellEntry const* spellProto)
 
 inline bool IsSpellAffectedBySpellMods(SpellEntry const* spellInfo)
 {
-    return !(spellInfo->HasAttribute(SPELL_ATTR_EX3_CAN_PROC_FROM_TRIGGERED) && IsPassiveSpell(spellInfo));
+    return !(spellInfo->HasAttribute(SPELL_ATTR_EX3_CAN_PROC_FROM_PROCS) && IsPassiveSpell(spellInfo));
 }
 
 inline bool IsAutocastable(SpellEntry const* spellInfo)
 {
-    return !(spellInfo->HasAttribute(SPELL_ATTR_EX_UNAUTOCASTABLE_BY_CHARMED) || spellInfo->HasAttribute(SPELL_ATTR_PASSIVE));
+    return !(spellInfo->HasAttribute(SPELL_ATTR_EX_NO_AUTOCAST_AI) || spellInfo->HasAttribute(SPELL_ATTR_PASSIVE));
 }
 
 inline bool IsAutocastable(uint32 spellId)
@@ -482,7 +482,7 @@ inline bool IsSpellRemoveAllMovementAndControlLossEffects(SpellEntry const* spel
            spellProto->EffectMiscValue[EFFECT_INDEX_0] == 1 &&
            spellProto->EffectApplyAuraName[EFFECT_INDEX_1] == 0 &&
            spellProto->EffectApplyAuraName[EFFECT_INDEX_2] == 0 &&
-           spellProto->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY)/* && -- all above selected spells have SPELL_ATTR_EX5_* mask
+           spellProto->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT)/* && -- all above selected spells have SPELL_ATTR_EX5_* mask
         ((spellProto->AttributesEx5 &
             (SPELL_ATTR_EX5_USABLE_WHILE_CONFUSED|SPELL_ATTR_EX5_USABLE_WHILE_FEARED|SPELL_ATTR_EX5_USABLE_WHILE_STUNNED)) ==
             (SPELL_ATTR_EX5_USABLE_WHILE_CONFUSED|SPELL_ATTR_EX5_USABLE_WHILE_FEARED|SPELL_ATTR_EX5_USABLE_WHILE_STUNNED))*/;
@@ -507,7 +507,7 @@ inline uint32 GetAllowedMechanicMask(SpellEntry const* spellProto)
 // based on client Spell_C::CancelsAuraEffect
 inline bool SpellCancelsAuraEffect(SpellEntry const* spellInfo, SpellEntry const* auraSpellInfo, uint8 auraEffIndex)
 {
-    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
         return false;
 
     if (auraSpellInfo->HasAttribute(SPELL_ATTR_NO_IMMUNITIES))
@@ -526,7 +526,7 @@ inline bool SpellCancelsAuraEffect(SpellEntry const* spellInfo, SpellEntry const
                     continue;
                 break;
             case SPELL_AURA_SCHOOL_IMMUNITY:
-                if (auraSpellInfo->HasAttribute(SPELL_ATTR_EX2_UNAFFECTED_BY_AURA_SCHOOL_IMMUNE) || !(auraSpellInfo->SchoolMask & miscValue))
+                if (auraSpellInfo->HasAttribute(SPELL_ATTR_EX2_NO_SCHOOL_IMMUNITIES) || !(auraSpellInfo->SchoolMask & miscValue))
                     continue;
                 break;
             case SPELL_AURA_DISPEL_IMMUNITY:
@@ -550,17 +550,17 @@ inline bool SpellCancelsAuraEffect(SpellEntry const* spellInfo, SpellEntry const
 
 inline bool IsDeathOnlySpell(SpellEntry const* spellInfo)
 {
-    return spellInfo->HasAttribute(SPELL_ATTR_EX3_CAST_ON_DEAD) || spellInfo->Id == 2584;
+    return spellInfo->HasAttribute(SPELL_ATTR_EX3_ONLY_ON_GHOSTS) || spellInfo->Id == 2584;
 }
 
 inline bool IsDeathPersistentSpell(SpellEntry const* spellInfo)
 {
-    return spellInfo->HasAttribute(SPELL_ATTR_EX3_DEATH_PERSISTENT);
+    return spellInfo->HasAttribute(SPELL_ATTR_EX3_ALLOW_AURA_WHILE_DEAD);
 }
 
 inline bool IsNonCombatSpell(SpellEntry const* spellInfo)
 {
-    return spellInfo->HasAttribute(SPELL_ATTR_CANT_USED_IN_COMBAT);
+    return spellInfo->HasAttribute(SPELL_ATTR_NOT_IN_COMBAT_ONLY_PEACEFUL);
 }
 
 // some creatures should run immediately after being summoned by spell
@@ -593,6 +593,9 @@ inline bool IsSpellRemovedOnEvade(SpellEntry const* spellInfo)
         return false;
 
     if (spellInfo->HasAttribute(SPELL_ATTR_SS_IGNORE_EVADE))
+        return false;
+
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX_AURA_STAYS_AFTER_COMBAT))
         return false;
 
     switch (spellInfo->Id)
@@ -850,7 +853,7 @@ inline bool IsSpellRemovedOnEvade(SpellEntry const* spellInfo)
 
 inline bool IsChanneledDelayedSpell(SpellEntry const* spellInfo)
 {
-    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNELED_1) && !spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNELED_2))
+    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_IS_CHANNELED) && !spellInfo->HasAttribute(SPELL_ATTR_EX_IS_SELF_CHANNELED))
         return false;
 
     switch (spellInfo->Id)
@@ -867,7 +870,7 @@ bool IsExplicitNegativeTarget(uint32 targetA);
 
 inline bool IsResistableSpell(const SpellEntry* entry)
 {
-    return (entry->DmgClass != SPELL_DAMAGE_CLASS_NONE && !entry->HasAttribute(SPELL_ATTR_EX4_IGNORE_RESISTANCES));
+    return entry->DmgClass != SPELL_DAMAGE_CLASS_NONE;
 }
 
 inline bool IsSpellEffectDamage(SpellEntry const& spellInfo, SpellEffectIndex i)
@@ -1583,8 +1586,18 @@ inline bool IsPositiveEffect(const SpellEntry* spellproto, SpellEffectIndex effI
 
 inline bool IsPositiveAuraEffect(const SpellEntry* entry, SpellEffectIndex effIndex, const WorldObject* /*caster*/ = nullptr, const WorldObject* /*target*/ = nullptr)
 {
-    return IsAuraApplyEffect(entry, effIndex) && !IsEffectTargetNegative(entry->EffectImplicitTargetA[effIndex], entry->EffectImplicitTargetB[effIndex])
-        && !entry->HasAttribute(SPELL_ATTR_AURA_IS_DEBUFF) && entry->Effect[effIndex] != SPELL_EFFECT_APPLY_AREA_AURA_ENEMY;
+    if (IsAuraApplyEffect(entry, effIndex))
+    {
+        if (entry->HasAttribute(SPELL_ATTR_EX4_AURA_IS_BUFF))
+            return true;
+
+        if (entry->HasAttribute(SPELL_ATTR_AURA_IS_DEBUFF))
+            return false;
+
+        return !IsEffectTargetNegative(entry->EffectImplicitTargetA[effIndex], entry->EffectImplicitTargetB[effIndex]) && entry->Effect[effIndex] != SPELL_EFFECT_APPLY_AREA_AURA_ENEMY;
+    }
+
+    return false;
 }
 
 inline bool IsPositiveSpellTargetModeForSpecificTarget(const SpellEntry* entry, uint8 effectMask, const WorldObject* caster = nullptr, const WorldObject* target = nullptr)
@@ -1683,7 +1696,7 @@ inline bool CanPierceImmuneAura(SpellEntry const* spellInfo, SpellEntry const* a
         return false;
 
     // these spells (Cyclone for example) can pierce all...
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX_UNAFFECTED_BY_SCHOOL_IMMUNE) || spellInfo->HasAttribute(SPELL_ATTR_EX2_UNAFFECTED_BY_AURA_SCHOOL_IMMUNE))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX_IMMUNITY_TO_HOSTILE_AND_FRIENDLY_EFFECTS) || spellInfo->HasAttribute(SPELL_ATTR_EX2_NO_SCHOOL_IMMUNITIES))
     {
         // ...but not these (Divine shield, Ice block, Cyclone and Banish for example)
         if (auraSpellInfo->Mechanic != MECHANIC_IMMUNE_SHIELD &&
@@ -1692,7 +1705,7 @@ inline bool CanPierceImmuneAura(SpellEntry const* spellInfo, SpellEntry const* a
             return true;
     }
 
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
     {
         for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
         {
@@ -1750,12 +1763,12 @@ inline bool IsDispelSpell(SpellEntry const* spellInfo)
 
 inline bool isSpellBreakStealth(SpellEntry const* spellInfo)
 {
-    return !spellInfo->HasAttribute(SPELL_ATTR_EX_NOT_BREAK_STEALTH);
+    return !spellInfo->HasAttribute(SPELL_ATTR_EX_ALLOW_WHILE_STEALTHED);
 }
 
 inline bool IsAutoRepeatRangedSpell(SpellEntry const* spellInfo)
 {
-    return spellInfo->HasAttribute(SPELL_ATTR_RANGED) && spellInfo->HasAttribute(SPELL_ATTR_EX2_AUTOREPEAT_FLAG);
+    return spellInfo->HasAttribute(SPELL_ATTR_USES_RANGED_SLOT) && spellInfo->HasAttribute(SPELL_ATTR_EX2_AUTO_REPEAT);
 }
 
 inline bool IsSpellRequiresRangedAP(SpellEntry const* spellInfo)
@@ -1767,7 +1780,7 @@ SpellCastResult GetErrorAtShapeshiftedCast(SpellEntry const* spellInfo, uint32 f
 
 inline bool IsChanneledSpell(SpellEntry const* spellInfo)
 {
-    return spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNELED_1) || spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNELED_2);
+    return spellInfo->HasAttribute(SPELL_ATTR_EX_IS_CHANNELED) || spellInfo->HasAttribute(SPELL_ATTR_EX_IS_SELF_CHANNELED);
 }
 
 inline bool IsNeedCastSpellAtFormApply(SpellEntry const* spellInfo, ShapeshiftForm form)
@@ -1776,24 +1789,27 @@ inline bool IsNeedCastSpellAtFormApply(SpellEntry const* spellInfo, ShapeshiftFo
         return false;
 
     // passive spells with SPELL_ATTR_EX2_NOT_NEED_SHAPESHIFT are already active without shapeshift, do no recast!
-    return (spellInfo->Stances[0] & (1 << (form - 1)) && !spellInfo->HasAttribute(SPELL_ATTR_EX2_NOT_NEED_SHAPESHIFT));
+    return (spellInfo->Stances[0] & (1 << (form - 1)) && !spellInfo->HasAttribute(SPELL_ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED));
 }
 
 inline bool IsNeedCastSpellAtOutdoor(SpellEntry const* spellInfo)
 {
-    return (spellInfo->HasAttribute(SPELL_ATTR_OUTDOORS_ONLY) && spellInfo->HasAttribute(SPELL_ATTR_PASSIVE));
+    return (spellInfo->HasAttribute(SPELL_ATTR_ONLY_OUTDOORS) && spellInfo->HasAttribute(SPELL_ATTR_PASSIVE));
 }
 
 inline bool IsReflectableSpell(SpellEntry const* spellInfo)
 {
-    return spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC && !spellInfo->HasAttribute(SPELL_ATTR_ABILITY)
-           && !spellInfo->HasAttribute(SPELL_ATTR_EX_CANT_BE_REFLECTED) && !spellInfo->HasAttribute(SPELL_ATTR_NO_IMMUNITIES)
+    return spellInfo->DmgClass == SPELL_DAMAGE_CLASS_MAGIC && !spellInfo->HasAttribute(SPELL_ATTR_IS_ABILITY)
+           && !spellInfo->HasAttribute(SPELL_ATTR_EX_NO_REFLECTION) && !spellInfo->HasAttribute(SPELL_ATTR_NO_IMMUNITIES)
            && !spellInfo->HasAttribute(SPELL_ATTR_PASSIVE) && !IsPositiveSpell(spellInfo);
 }
 
 // Mostly required by spells that target a creature inside GO
 inline bool IsIgnoreLosSpell(SpellEntry const* spellInfo)
 {
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX5_ALWAYS_LINE_OF_SIGHT))
+        return false;
+
     switch (spellInfo->Id)
     {
         case 36795:                                 // Cannon Channel
@@ -1808,11 +1824,14 @@ inline bool IsIgnoreLosSpell(SpellEntry const* spellInfo)
             break;
     }
 
-    return spellInfo->HasAttribute(SPELL_ATTR_EX2_IGNORE_LOS);
+    return spellInfo->HasAttribute(SPELL_ATTR_EX2_IGNORE_LINE_OF_SIGHT);
 }
 
 inline bool IsIgnoreLosSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex effIdx)
 {
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX5_ALWAYS_LINE_OF_SIGHT))
+        return false;
+
     // TODO: Move this to target logic
     switch (spellInfo->EffectImplicitTargetA[effIdx])
     {
@@ -1845,7 +1864,7 @@ inline bool IsItemAura(SpellEntry const* spellInfo)
 
 inline bool NeedsComboPoints(SpellEntry const* spellInfo)
 {
-    return spellInfo->HasAttribute(SPELL_ATTR_EX_REQ_TARGET_COMBO_POINTS) || spellInfo->HasAttribute(SPELL_ATTR_EX_REQ_COMBO_POINTS);
+    return spellInfo->HasAttribute(SPELL_ATTR_EX_FINISHING_MOVE_DAMAGE) || spellInfo->HasAttribute(SPELL_ATTR_EX_FINISHING_MOVE_DURATION);
 }
 
 inline SpellSchoolMask GetSpellSchoolMask(SpellEntry const* spellInfo)
@@ -1893,7 +1912,7 @@ inline Mechanics GetEffectMechanic(SpellEntry const* spellInfo, SpellEffectIndex
 
 inline bool IsIgnoreRootSpell(SpellEntry const* spellInfo)
 {
-    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
         return false;
 
     for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -2163,7 +2182,7 @@ inline bool IsStackableAuraEffect(SpellEntry const* entry, SpellEntry const* ent
                 const bool attacktable = (entry->DmgClass && entry->DmgClass == entry2->DmgClass);
                 if ((attacktable || type) && !entry->SpellFamilyName && !entry2->SpellFamilyName)
                     return false; // Do not stack scrolls with other srolls and some procs (such as Hyjal ring)
-                if (player && related && siblings && entry->HasAttribute(SPELL_ATTR_EX3_STACK_FOR_DIFF_CASTERS))
+                if (player && related && siblings && entry->HasAttribute(SPELL_ATTR_EX3_DOT_STACKING_RULE))
                     return true;
             }
             else
@@ -2207,7 +2226,7 @@ inline bool IsStackableAuraEffect(SpellEntry const* entry, SpellEntry const* ent
                 {
                     if (type)
                         return false; // Do not stack scrolls and other non-player buffs with each other
-                    if (entry->HasAttribute(SPELL_ATTR_EX2_UNK28) && entry2->HasAttribute(SPELL_ATTR_EX2_UNK28))
+                    if (entry->HasAttribute(SPELL_ATTR_EX2_NOT_AN_ACTION) && entry2->HasAttribute(SPELL_ATTR_EX2_NOT_AN_ACTION))
                         return false; // FIXME: Cozy fire hack
                 }
             }
@@ -2790,7 +2809,7 @@ class SpellMgr
                 }
             }
             // Well Fed buffs (must be exclusive with Food / Drink replenishment effects, or else Well Fed will cause them to be removed)
-            else if (entry->HasAttribute(SPELL_ATTR_EX2_FOOD_BUFF))
+            else if (entry->HasAttribute(SPELL_ATTR_EX2_RETAIN_ITEM_CAST))
                 return SPELL_WELL_FED;
 
             // Spells without attributes, but classified as well fed
@@ -3091,7 +3110,7 @@ class SpellMgr
 
         bool IsSingleTargetSpell(SpellEntry const* entry) const
         {
-            if (entry->HasAttribute(SPELL_ATTR_EX5_SINGLE_TARGET_SPELL))
+            if (entry->HasAttribute(SPELL_ATTR_EX5_LIMIT_N))
                 return true;
 
             // single target triggered spell.
@@ -3131,8 +3150,11 @@ class SpellMgr
             if (!entry1 || !entry2)
                 return true;
 
+            if (entry1 == entry2 && entry1->HasAttribute(SPELL_ATTR_EX_AURA_UNIQUE))
+                return false;
+
             // Uncancellable spells are expected to be persistent at all times
-            if (entry1->HasAttribute(SPELL_ATTR_CANT_CANCEL) || entry2->HasAttribute(SPELL_ATTR_CANT_CANCEL))
+            if (entry1->HasAttribute(SPELL_ATTR_NO_AURA_CANCEL) || entry2->HasAttribute(SPELL_ATTR_NO_AURA_CANCEL))
                 return true;
 
             // Allow stacking passive and active spells
@@ -3149,13 +3171,13 @@ class SpellMgr
 
             // If spells are two instances of the same spell, check attribute first, and formal aura holder stacking rules after
             if (entry1 == entry2)
-                return (entry1->HasAttribute(SPELL_ATTR_EX3_STACK_FOR_DIFF_CASTERS) || IsSpellStackableWithSpell(entry1, entry2));
+                return (entry1->HasAttribute(SPELL_ATTR_EX3_DOT_STACKING_RULE) || entry1->HasAttribute(SPELL_ATTR_EX5_AURA_UNIQUE_PER_CASTER) || IsSpellStackableWithSpell(entry1, entry2));
 
             // If spells are in the same spell chain
             if (IsSpellAnotherRankOfSpell(entry1->Id, entry2->Id))
             {
                 // Both ranks have attribute, allow stacking
-                if (entry1->HasAttribute(SPELL_ATTR_EX3_STACK_FOR_DIFF_CASTERS) && entry2->HasAttribute(SPELL_ATTR_EX3_STACK_FOR_DIFF_CASTERS))
+                if (entry1->HasAttribute(SPELL_ATTR_EX3_DOT_STACKING_RULE) && entry2->HasAttribute(SPELL_ATTR_EX3_DOT_STACKING_RULE))
                     return true;
             }
 

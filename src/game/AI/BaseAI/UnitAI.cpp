@@ -351,7 +351,7 @@ void UnitAI::OnSpellCastStateChange(Spell const* spell, bool state, WorldObject*
         return;
 
     SpellEntry const* spellInfo = spell->m_spellInfo;
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_CAN_CAST_WHILE_CASTING) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING_NO_DAMAGE) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING) || spellInfo->HasAttribute(SPELL_ATTR_EX5_AI_DOESNT_FACE_TARGET))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_ALLOW_CAST_WHILE_CASTING) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING_NO_DAMAGE) || spellInfo->HasAttribute(SPELL_ATTR_ON_NEXT_SWING) || spellInfo->HasAttribute(SPELL_ATTR_EX5_AI_DOESNT_FACE_TARGET))
         return;
 
     // Creature should always stop before it will cast a non-instant spell
@@ -436,9 +436,9 @@ void UnitAI::OnChannelStateChange(Spell const* spell, bool state, WorldObject* t
 
     SpellEntry const* spellInfo = spell->m_spellInfo;
     // TODO: Determine if CHANNEL_FLAG_MOVEMENT is worth implementing
-    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNEL_TRACK_TARGET))
+    if (!spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL))
     {
-        if (spellInfo->HasAttribute(SPELL_ATTR_EX4_CAN_CAST_WHILE_CASTING))
+        if (spellInfo->HasAttribute(SPELL_ATTR_EX4_ALLOW_CAST_WHILE_CASTING))
             return;
     }
 
@@ -456,12 +456,12 @@ void UnitAI::OnChannelStateChange(Spell const* spell, bool state, WorldObject* t
         default: break;
     }
 
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNEL_TRACK_TARGET))
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL))
         forceTarget = true;
 
     if (state)
     {
-        if ((spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_TURNING && !spellInfo->HasAttribute(SPELL_ATTR_EX_CHANNEL_TRACK_TARGET)) || !forceTarget)
+        if ((spellInfo->ChannelInterruptFlags & AURA_INTERRUPT_FLAG_TURNING && !spellInfo->HasAttribute(SPELL_ATTR_EX_TRACK_TARGET_IN_CHANNEL)) || !forceTarget)
         {
             m_unit->SetFacingTo(m_unit->GetOrientation());
             m_unit->SetTarget(nullptr);

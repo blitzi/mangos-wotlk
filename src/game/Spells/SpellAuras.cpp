@@ -442,11 +442,11 @@ Aura::Aura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* curr
     if (modOwner && m_modifier.periodictime)
         modOwner->ApplySpellMod(spellproto->Id, SPELLMOD_ACTIVATION_TIME, m_modifier.periodictime);
 
-    if (caster && (spellproto->HasAttribute(SPELL_ATTR_EX5_HASTE_AFFECT_DURATION) || caster->HasAffectedAura(SPELL_AURA_PERIODIC_HASTE, spellproto)))
+    if (caster && (spellproto->HasAttribute(SPELL_ATTR_EX5_SPELL_HASTE_AFFECTS_PERIODIC) || caster->HasAffectedAura(SPELL_AURA_PERIODIC_HASTE, spellproto)))
         m_modifier.periodictime = int32(m_modifier.periodictime * caster->GetFloatValue(UNIT_MOD_CAST_SPEED));
 
     // Start periodic on next tick or at aura apply
-    if (!spellproto->HasAttribute(SPELL_ATTR_EX5_START_PERIODIC_AT_APPLY))
+    if (!spellproto->HasAttribute(SPELL_ATTR_EX5_EXTRA_INITIAL_PERIOD))
         m_periodicTimer = m_modifier.periodictime;
 }
 
@@ -772,7 +772,13 @@ void AreaAura::Update(uint32 diff)
                     continue;
 
                 // Skip some targets (TODO: Might require better checks, also unclear how the actual caster must/can be handled)
-                if (actualSpellInfo->HasAttribute(SPELL_ATTR_EX3_TARGET_ONLY_PLAYER) && target->GetTypeId() != TYPEID_PLAYER)
+                if (actualSpellInfo->HasAttribute(SPELL_ATTR_EX3_ONLY_ON_PLAYER) && target->GetTypeId() != TYPEID_PLAYER)
+                    continue;
+
+                if (actualSpellInfo->HasAttribute(SPELL_ATTR_EX5_NOT_ON_PLAYER) && target->GetTypeId() == TYPEID_PLAYER)
+                    continue;
+
+                if (actualSpellInfo->HasAttribute(SPELL_ATTR_EX5_NOT_ON_PLAYER_CONTROLLED_NPC) && target->IsPlayerControlled() && target->GetTypeId() != TYPEID_PLAYER)
                     continue;
 
                 int32 actualBasePoints = m_currentBasePoints;
@@ -938,7 +944,7 @@ void Aura::ApplyModifier(bool apply, bool Real)
     if (!apply)
         OnApply(apply);
 
-    if (GetSpellProto()->HasAttribute(SPELL_ATTR_EX4_IS_PET_SCALING) && m_removeMode != AURA_REMOVE_BY_GAINED_STACK)
+    if (GetSpellProto()->HasAttribute(SPELL_ATTR_EX4_OWNER_POWER_SCALING) && m_removeMode != AURA_REMOVE_BY_GAINED_STACK)
         GetTarget()->RegisterScalingAura(this, apply);
 }
 
@@ -1133,6 +1139,8 @@ void Aura::PickTargetsForSpellTrigger(Unit*& triggerCaster, Unit*& triggerTarget
 void Aura::CastTriggeredSpell(PeriodicTriggerData& data)
 {
     Spell* spell = new Spell(data.caster, data.spellInfo, TRIGGERED_OLD_TRIGGERED, data.caster->GetObjectGuid(), GetSpellProto());
+    if (data.spellInfo->HasAttribute(SPELL_ATTR_EX2_RETAIN_ITEM_CAST)) // forward guid to at least spell go
+        spell->SetForwardedCastItem(GetCastItemGuid());
     SpellCastTargets targets;
     if (data.spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
     {
@@ -5662,7 +5670,7 @@ void Aura::HandleModMechanicImmunity(bool apply, bool /*Real*/)
 
     Unit* target = GetTarget();
 
-    if (apply && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+    if (apply && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
     {
         uint32 mechanic = 1 << (misc - 1);
 
@@ -5716,7 +5724,7 @@ void Aura::HandleModMechanicImmunityMask(bool apply, bool /*Real*/)
 {
     uint32 mechanic  = m_modifier.m_miscvalue;
 
-    if (apply && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+    if (apply && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
         GetTarget()->RemoveAurasAtMechanicImmunity(mechanic, GetId());
 
     // check implemented in Unit::IsImmuneToSpell and Unit::IsImmuneToSpellEffect
@@ -5764,7 +5772,7 @@ void Aura::HandleAuraModEffectImmunity(bool apply, bool /*Real*/)
 
 void Aura::HandleAuraModStateImmunity(bool apply, bool Real)
 {
-    if (apply && Real && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
+    if (apply && Real && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
     {
         Unit::AuraList const& auraList = GetTarget()->GetAurasByType(AuraType(m_modifier.m_miscvalue));
         for (Unit::AuraList::const_iterator itr = auraList.begin(); itr != auraList.end();)
@@ -5788,12 +5796,12 @@ void Aura::HandleAuraModSchoolImmunity(bool apply, bool Real)
     target->ApplySpellImmune(this, IMMUNITY_SCHOOL, m_modifier.m_miscvalue, apply);
 
     // remove all flag auras (they are positive, but they must be removed when you are immune)
-    if (GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY) && GetSpellProto()->HasAttribute(SPELL_ATTR_EX2_DAMAGE_REDUCED_SHIELD))
+    if (GetSpellProto()->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT))
         target->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_INVULNERABILITY_BUFF_CANCELS);
 
     // TODO: optimalize this cycle - use RemoveAurasWithInterruptFlags call or something else
     if (Real && apply
-            && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY)
+            && GetSpellProto()->HasAttribute(SPELL_ATTR_EX_IMMUNITY_PURGES_EFFECT)
             && IsPositiveSpell(GetId(), GetCaster(), target))                    // Only positive immunity removes auras
     {
         uint32 school_mask = m_modifier.m_miscvalue;
@@ -6800,7 +6808,7 @@ void Aura::HandleModTotalPercentStat(bool apply, bool /*Real*/)
     }
 
     // recalculate current HP/MP after applying aura modifications (only for spells with 0x10 flag)
-    if (m_modifier.m_miscvalue == STAT_STAMINA && maxHPValue > 0 && GetSpellProto()->HasAttribute(SPELL_ATTR_ABILITY))
+    if (m_modifier.m_miscvalue == STAT_STAMINA && maxHPValue > 0 && GetSpellProto()->HasAttribute(SPELL_ATTR_IS_ABILITY) && target->GetHealth() > 0)
     {
         // newHP = (curHP / maxHP) * newMaxHP = (newMaxHP * curHP) / maxHP -> which is better because no int -> double -> int conversion is needed
         uint32 newHPValue = std::max(1u, (target->GetMaxHealth() * curHPValue) / maxHPValue);
@@ -7727,7 +7735,7 @@ void Aura::HandleShapeshiftBoosts(bool apply)
             for (Unit::SpellAuraHolderMap::iterator itr = tAuras.begin(); itr != tAuras.end();)
             {
                 SpellEntry const* spellInfo = itr->second->GetSpellProto();
-                if (itr->second->IsPassive() && spellInfo->HasAttribute(SPELL_ATTR_EX2_NOT_NEED_SHAPESHIFT)
+                if (itr->second->IsPassive() && spellInfo->HasAttribute(SPELL_ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED)
                         && (spellInfo->StancesNot[0] & (1 << (form - 1))))
                 {
                     target->RemoveAurasDueToSpell(itr->second->GetId());
@@ -7844,7 +7852,7 @@ void Aura::HandleShapeshiftBoosts(bool apply)
                 SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(itr.first);
                 if (!spellInfo || !IsPassiveSpell(spellInfo))
                     continue;
-                if (spellInfo->HasAttribute(SPELL_ATTR_EX2_NOT_NEED_SHAPESHIFT) && (spellInfo->StancesNot[0] & (1 << (form - 1))))
+                if (spellInfo->HasAttribute(SPELL_ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED) && (spellInfo->StancesNot[0] & (1 << (form - 1))))
                     target->CastSpell(nullptr, itr.first, TRIGGERED_OLD_TRIGGERED, nullptr, this);
             }
         }
@@ -8319,7 +8327,7 @@ void Aura::PeriodicTick()
                     pdamage -= target->GetResilienceRatingDamageReduction(pdamage, SpellDmgClass(spellProto->DmgClass), true);
             }
 
-            target->CalculateDamageAbsorbAndResist(caster, GetSpellSchoolMask(spellProto), DOT, pdamage, &absorb, &resist, IsReflectableSpell(spellProto), IsResistableSpell(spellProto));
+            target->CalculateDamageAbsorbAndResist(caster, GetSpellSchoolMask(spellProto), DOT, pdamage, &absorb, &resist, IsReflectableSpell(spellProto), IsResistableSpell(spellProto) && !spellProto->HasAttribute(SPELL_ATTR_EX5_NO_PARTIAL_RESISTS));
 
             DETAIL_FILTER_LOG(LOG_FILTER_PERIODIC_AFFECTS, "PeriodicTick: %s attacked %s for %u dmg inflicted by %u abs is %u",
                               GetCasterGuid().GetString().c_str(), target->GetGuidStr().c_str(), pdamage, GetId(), absorb);
@@ -8544,29 +8552,6 @@ void Aura::PeriodicTick()
                 target->getHostileRefManager().threatAssist(pCaster, float(gain) * 0.5f * sSpellMgr.GetSpellThreatMultiplier(spellProto), spellProto, false, true);
 
             Unit::ProcDamageAndSpell(ProcSystemArguments(pCaster, target, procAttacker, procVictim, procEx, gain, BASE_ATTACK, spellProto, nullptr, gain, true));
-
-            // apply damage part to caster if needed (ex. health funnel)
-            if (target != pCaster && spellProto->HasAttribute(SPELL_ATTR_EX2_HEALTH_FUNNEL))
-            {
-                uint32 damage = spellProto->manaPerSecond;
-                uint32 absorb = 0;
-
-                Unit::DealDamageMods(pCaster, pCaster, damage, &absorb, NODAMAGE, spellProto);
-                if (pCaster->GetHealth() > damage)
-                {
-                    CleanDamage cleanDamage(damage, BASE_ATTACK, MELEE_HIT_NORMAL, damage > 0);
-                    Unit::DealDamage(pCaster, pCaster, damage, &cleanDamage, NODAMAGE, GetSpellSchoolMask(spellProto), spellProto, true);
-                }
-                else
-                {
-                    // cannot apply damage part so we have to cancel responsible aura
-                    pCaster->RemoveAurasDueToSpell(GetId());
-
-                    // finish current generic/channeling spells, don't affect autorepeat
-                    pCaster->FinishSpell(CURRENT_GENERIC_SPELL);
-                    pCaster->FinishSpell(CURRENT_CHANNELED_SPELL);
-                }
-            }
             break;
         }
         case SPELL_AURA_PERIODIC_MANA_LEECH:
@@ -8708,7 +8693,9 @@ void Aura::PeriodicTick()
             {
                 if (target->IsImmuneToSchool(spellProto, (1 << GetEffIndex())))
                 {
-                    Unit::SendSpellOrDamageImmune(GetCasterGuid(), target, spellProto->Id);
+                    // likely need to ignore all of them but the only case is periodic energize
+                    if (!spellProto->HasAttribute(SPELL_ATTR_DO_NOT_LOG_IMMUNE_MISSES))
+                        Unit::SendSpellOrDamageImmune(GetCasterGuid(), target, spellProto->Id);
                     break;
                 }
             }
@@ -9923,7 +9910,7 @@ inline bool IsRemovedOnShapeshiftLost(SpellEntry const* spellproto, ObjectGuid c
                     break;
             }
 
-            if (!spellproto->HasAttribute(SPELL_ATTR_EX2_NOT_NEED_SHAPESHIFT) && !spellproto->HasAttribute(SPELL_ATTR_NOT_SHAPESHIFT))
+            if (!spellproto->HasAttribute(SPELL_ATTR_EX2_ALLOW_WHILE_NOT_SHAPESHIFTED) && !spellproto->HasAttribute(SPELL_ATTR_NOT_SHAPESHIFT))
                 return true;
         }
         else if (spellproto->SpellFamilyName == SPELLFAMILY_DRUID && spellproto->EffectApplyAuraName[0] == SPELL_AURA_MOD_DODGE_PERCENT)
@@ -10258,7 +10245,7 @@ void SpellAuraHolder::_RemoveSpellAuraHolder()
                 m_target->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PREVENT_ANIM);
 
         // reset cooldown state for spells
-        if (caster && GetSpellProto()->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
+        if (caster && GetSpellProto()->HasAttribute(SPELL_ATTR_COOLDOWN_ON_EVENT))
         {
             // some spells need to start cooldown at aura fade (like stealth)
             caster->AddCooldown(*GetSpellProto());
@@ -11169,23 +11156,30 @@ void SpellAuraHolder::Update(uint32 diff)
 
         if (m_timeCla <= 0)
         {
-            if (Unit* caster = GetCaster())
+            if (!GetSpellProto()->HasAttribute(SPELL_ATTR_EX2_NO_TARGET_PER_SECOND_COSTS) || GetCasterGuid() == GetTarget()->GetObjectGuid())
             {
-                // This should not be used for health funnel (already processed in PeriodicTick()).
-                // TODO:: is the fallowing code can be removed?
-                if (GetSpellProto()->SpellVisual[0] != 163)
-                {
-                    Powers powertype = Powers(GetSpellProto()->powerType);
-                    int32 manaPerSecond = GetSpellProto()->manaPerSecond + GetSpellProto()->manaPerSecondPerLevel * caster->GetLevel();
-                    m_timeCla = 1 * IN_MILLISECONDS;
+                Powers powertype = Powers(GetSpellProto()->powerType);
+                int32 manaPerSecond = GetSpellProto()->manaPerSecond + GetSpellProto()->manaPerSecondPerLevel * GetTarget()->GetLevel();
+                m_timeCla = 1 * IN_MILLISECONDS;
 
-                    if (manaPerSecond)
+                if (manaPerSecond)
+                {
+                    if (powertype == POWER_HEALTH)
                     {
-                        if (powertype == POWER_HEALTH)
-                            caster->ModifyHealth(-manaPerSecond);
+                        if (GetTarget()->GetHealth() <= manaPerSecond)
+                        {
+                            // cannot apply damage part so we have to cancel responsible aura
+                            GetTarget()->RemoveAurasDueToSpell(GetId());
+
+                            // finish current generic/channeling spells, don't affect autorepeat
+                            GetTarget()->FinishSpell(CURRENT_GENERIC_SPELL);
+                            GetTarget()->FinishSpell(CURRENT_CHANNELED_SPELL);
+                        }
                         else
-                            caster->ModifyPower(powertype, -manaPerSecond);
+                            GetTarget()->ModifyHealth(-manaPerSecond);
                     }
+                    else
+                        GetTarget()->ModifyPower(powertype, -manaPerSecond);
                 }
             }
         }
@@ -11197,9 +11191,6 @@ void SpellAuraHolder::Update(uint32 diff)
 
 void SpellAuraHolder::RefreshHolder()
 {
-    if (GetSpellProto()->HasAttribute(SPELL_ATTR_EX_DONT_REFRESH_DURATION_ON_RECAST))
-        return;
-
     SetAuraDuration(GetAuraMaxDuration());
     SendAuraUpdate(false);
 }
@@ -11209,7 +11200,7 @@ void SpellAuraHolder::SetAuraMaxDuration(int32 duration)
     m_maxDuration = duration;
 
     // possible overwrite persistent state
-    if (!GetSpellProto()->HasAttribute(SPELL_ATTR_EX5_HIDE_DURATION) && duration > 0)
+    if (!GetSpellProto()->HasAttribute(SPELL_ATTR_EX5_DO_NOT_DISPLAY_DURATION) && duration > 0)
     {
         if (!(IsPassive() && GetSpellProto()->DurationIndex == 0))
             SetPermanent(false);

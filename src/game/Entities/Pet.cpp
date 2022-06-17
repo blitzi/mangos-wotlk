@@ -2488,7 +2488,23 @@ void Pet::StartCooldown(Unit* owner)
         m_imposedCooldown = true;
         SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(GetUInt32Value(UNIT_CREATED_BY_SPELL));
         // Remove infinity cooldown
-        if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
+        if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_COOLDOWN_ON_EVENT))
             owner->AddCooldown(*spellInfo);
     }
+}
+
+bool Pet::IgnoresOwnersDeath() const
+{
+    if (IsGuardian())
+    {
+        if (uint32 spellId = GetUInt32Value(UNIT_CREATED_BY_SPELL))
+        {
+            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+            // Remove infinity cooldown
+            if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_EX_IGNORE_OWNERS_DEATH))
+                return true;
+        }
+        return false;
+    }
+    return true;
 }

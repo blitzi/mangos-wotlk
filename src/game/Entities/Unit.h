@@ -1455,7 +1455,7 @@ class Unit : public WorldObject
         bool CanAssist(Unit const* unit, bool ignoreFlags = false) const;
         bool CanAssist(Corpse const* corpse) const;
 
-        bool CanAttack(Unit const* unit) const;
+        bool CanAttack(Unit const* unit, bool ignoreUntargetable = false) const;
         bool CanAttackNow(Unit const* unit) const;
 
         bool CanCooperate(Unit const* unit) const;
@@ -1481,7 +1481,7 @@ class Unit : public WorldObject
         virtual bool CanAssistSpell(Unit const* target, SpellEntry const* spellInfo = nullptr) const override;
 
         bool CanAttackOnSight(Unit const* target) const; // Used in MoveInLineOfSight checks
-        bool CanAttackInCombat(Unit const* target) const;
+        bool CanAttackInCombat(Unit const* target, bool ignoreUntargetable = false) const;
         bool CanAssistInCombatAgainst(Unit const* who, Unit const* enemy) const;
         bool CanJoinInAttacking(Unit const* enemy) const;
 
@@ -1514,6 +1514,7 @@ class Unit : public WorldObject
 
         void SetVisFlags(uint8 flags) { SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAGS, flags); }
         void RemoveVisFlags(uint8 flags) { RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAGS, flags); }
+        bool HasVisFlags(uint8 flags) { return GetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAGS) & flags; }
 
         bool IsMounted() const { return HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_MOUNT); } // not used with creature non-aura mounts
         uint32 GetMountID() const { return GetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID); }
@@ -2019,7 +2020,8 @@ class Unit : public WorldObject
         // set withDelayed to true to account delayed spells as casted
         // delayed+channeled spells are always accounted as casted
         // we can skip channeled or delayed checks using flags
-        bool IsNonMeleeSpellCasted(bool withDelayed, bool skipChanneled = false, bool skipAutorepeat = false, bool forMovement = false, bool forAutoIgnore = false) const;
+        bool IsNonMeleeSpellCasted(bool withDelayed, bool skipChanneled = false, bool skipAutorepeat = false, bool forMovement = false, bool forAutoIgnore = false, bool forEquip = false) const;
+        bool IsDelayCombatTimerSpellCasted() const;
 
         // set withDelayed to true to interrupt delayed spells too
         // delayed+channeled spells are always interrupted
@@ -2121,6 +2123,8 @@ class Unit : public WorldObject
         TrackedAuraTargetMap&       GetTrackedAuraTargets(TrackedAuraType type)       { return m_trackedAuraTargets[type]; }
         TrackedAuraTargetMap const& GetTrackedAuraTargets(TrackedAuraType type) const { return m_trackedAuraTargets[type]; }
         SpellImmuneList m_spellImmune[MAX_SPELL_IMMUNITY];
+        bool IsAOEImmune() const { return m_aoeImmune; }
+        void SetAOEImmune(bool state) { m_aoeImmune = state; }
 
         // Threat related methods
         bool CanHaveThreatList(bool ignoreAliveState = false) const;
@@ -2241,7 +2245,14 @@ class Unit : public WorldObject
         uint32 MeleeDamageBonusDone(Unit* victim, uint32 damage, WeaponAttackType attType, SpellSchoolMask schoolMask, SpellEntry const* spellProto = nullptr, DamageEffectType damagetype = DIRECT_DAMAGE, uint32 stack = 1, bool flat = true);
         uint32 MeleeDamageBonusTaken(Unit* caster, uint32 pdamage, WeaponAttackType attType, SpellSchoolMask schoolMask, SpellEntry const* spellProto = nullptr, DamageEffectType damagetype = DIRECT_DAMAGE, uint32 stack = 1, bool flat = true);
 
-        bool IsTriggeredAtSpellProcEvent(ProcExecutionData& data, SpellAuraHolder* holder, SpellProcEventEntry const*& spellProcEvent);
+        enum class SpellProcEventTriggerCheck
+        {
+            SPELL_PROC_TRIGGER_FAILED = 0,
+            SPELL_PROC_TRIGGER_ROLL_FAILED = 1,
+            SPELL_PROC_TRIGGER_OK = 2,
+        };
+
+        SpellProcEventTriggerCheck IsTriggeredAtSpellProcEvent(ProcExecutionData& data, SpellAuraHolder* holder, SpellProcEventEntry const*& spellProcEvent);
         // only to be used in proc handlers - basepoints is expected to be a MAX_EFFECT_INDEX sized array
         SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, uint32 triggeredSpellId, Item* castItem, Aura* triggeredByAura, uint32 cooldown, ObjectGuid originalCaster);
         SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, SpellEntry const* spellInfo, Item* castItem, Aura* triggeredByAura, uint32 cooldown, ObjectGuid originalCaster);
@@ -2715,6 +2726,8 @@ class Unit : public WorldObject
 
         bool m_isMountOverriden;
         uint32 m_overridenMountId;
+
+        bool m_aoeImmune;
 
     private:                                                // Error traps for some wrong args using
         // this will catch and prevent build for any cases when all optional args skipped and instead triggered used non boolean type
