@@ -514,7 +514,7 @@ enum UnitFlags
     UNIT_FLAG_SILENCED              = 0x00002000,           // silenced, 2.1.1
     UNIT_FLAG_UNK_14                = 0x00004000,           // 2.0.8
     UNIT_FLAG_SWIMMING              = 0x00008000,           // related to jerky movement in water?
-    UNIT_FLAG_NON_ATTACKABLE_2      = 0x00010000,           // removes attackable icon, if on yourself, cannot assist self but can cast TARGET_UNIT_CASTER spells - added by SPELL_AURA_MOD_UNATTACKABLE
+    UNIT_FLAG_UNTARGETABLE          = 0x00010000,           // is not targetable by attack or spell
     UNIT_FLAG_PACIFIED              = 0x00020000,           // 3.0.3 ok
     UNIT_FLAG_STUNNED               = 0x00040000,           // Unit is a subject to stun, turn and strafe movement disabled
     UNIT_FLAG_IN_COMBAT             = 0x00080000,
@@ -523,7 +523,7 @@ enum UnitFlags
     UNIT_FLAG_CONFUSED              = 0x00400000,           // Unit is a subject to confused movement, movement checks disabled, paired with loss of client control packet.
     UNIT_FLAG_FLEEING               = 0x00800000,           // Unit is a subject to fleeing movement, movement checks disabled, paired with loss of client control packet.
     UNIT_FLAG_POSSESSED             = 0x01000000,           // Unit is under remote control by another unit, movement checks disabled, paired with loss of client control packet. New master is allowed to use melee attack and can't select this unit via mouse in the world (as if it was own character).
-    UNIT_FLAG_NOT_SELECTABLE        = 0x02000000,
+    UNIT_FLAG_UNINTERACTIBLE        = 0x02000000,
     UNIT_FLAG_SKINNABLE             = 0x04000000,
     UNIT_FLAG_MOUNT                 = 0x08000000,
     UNIT_FLAG_UNK_28                = 0x10000000,
@@ -1115,6 +1115,7 @@ enum SelectFlags
     SELECT_FLAG_CASTING             = 0x8000,               // Selects only targets that are casting
     SELECT_FLAG_SKIP_CUSTOM         =0x10000,               // skips custom target
     SELECT_FLAG_NOT_IMMUNE          =0x20000,
+    SELECT_FLAG_USE_EFFECT_RADIUS_OF_TRIGGERED_SPELL = 0x40000 // For AOE targeted abilities which have correct data in triggered spell effect index 0
 };
 
 struct SelectAttackingTargetParams
@@ -2526,6 +2527,7 @@ class Unit : public WorldObject
         virtual bool CanCheckForHelp() const { return true; }
 
         virtual std::vector<uint32> GetCharmSpells() const { return {}; }
+        void CharmCooldownInitialize(WorldPacket& data) const;
 
         FormationSlotDataSPtr GetFormationSlot() { return m_formationSlot; }
         void SetFormationSlot(FormationSlotDataSPtr fSlot) { m_formationSlot = fSlot; }

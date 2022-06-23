@@ -7163,7 +7163,7 @@ bool Unit::CanInitiateAttack() const
     if (hasUnitState(UNIT_STAT_CAN_NOT_REACT))
         return false;
 
-    if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING | UNIT_FLAG_NOT_SELECTABLE))
+    if (HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING | UNIT_FLAG_UNINTERACTIBLE))
         if (GetTypeId() != TYPEID_UNIT || !((Creature*)this)->GetForceAttackingCapability())
             return false;
 
@@ -11574,9 +11574,9 @@ void CharmInfo::InitPossessCreateSpells()
         if (spells[x] == 2 || (spells[x] == 0 && m_unit->hasUnitState(UNIT_STAT_MELEE_ATTACKING)))
             SetActionBar(x, COMMAND_ATTACK, ACT_COMMAND);
         SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spells[x]);
-        if (spellInfo->HasAttribute(SPELL_ATTR_EX5_NOT_AVAILABLE_WHILE_CHARMED))
+        if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_EX5_NOT_AVAILABLE_WHILE_CHARMED))
             continue;
-        if (IsPassiveSpell(spellInfo))
+        if (spellInfo && IsPassiveSpell(spellInfo))
             m_unit->CastSpell(m_unit, spells[x], TRIGGERED_OLD_TRIGGERED);
         else
             AddSpellToActionBar(spells[x], ACT_PASSIVE, x);
@@ -13521,6 +13521,11 @@ bool Unit::TakePossessOf(Unit* possessed)
             if (possessed->AI())
                 possessed->AI()->SetReactState(REACT_PASSIVE);
             charmInfo->SetCommandState(COMMAND_STAY);
+            player->PossessSpellInitialize(); // but still initialize pet bar for even own pet
+        }
+        else
+        {
+            charmInfo->InitPossessCreateSpells();
             player->PossessSpellInitialize();
         }
 
@@ -14388,7 +14393,7 @@ bool Unit::MeetsSelectAttackingRequirement(Unit* target, SpellEntry const* spell
 
     if (spellInfo)
     {
-        if (!spellInfo->HasAttribute(SPELL_ATTR_EX6_CAN_TARGET_UNTARGETABLE) && target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE_2))
+        if (!spellInfo->HasAttribute(SPELL_ATTR_EX6_CAN_TARGET_UNTARGETABLE) && target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNTARGETABLE))
             return false;
 
         if (selectFlags & (SELECT_FLAG_HAS_AURA | SELECT_FLAG_NOT_AURA))
@@ -14425,9 +14430,12 @@ bool Unit::MeetsSelectAttackingRequirement(Unit* target, SpellEntry const* spell
             case SPELL_RANGE_IDX_COMBAT:    return CanReachWithMeleeAttack(target);
         }
 
-        if (selectFlags & SELECT_FLAG_USE_EFFECT_RADIUS)
+        if (selectFlags & (SELECT_FLAG_USE_EFFECT_RADIUS | SELECT_FLAG_USE_EFFECT_RADIUS_OF_TRIGGERED_SPELL))
         {
-            SpellRadiusEntry const* srange = sSpellRadiusStore.LookupEntry(spellInfo->EffectRadiusIndex[0]);
+            SpellEntry const* resultingEntry = spellInfo;
+            if (selectFlags & SELECT_FLAG_USE_EFFECT_RADIUS_OF_TRIGGERED_SPELL)
+                resultingEntry = sSpellTemplate.LookupEntry<SpellEntry>(spellInfo->EffectTriggerSpell[0]);
+            SpellRadiusEntry const* srange = sSpellRadiusStore.LookupEntry(resultingEntry->EffectRadiusIndex[0]);
             float max_range = GetSpellRadius(srange);
             float dist = target->GetDistance(GetPositionX(), GetPositionY(), GetPositionZ(), DIST_CALC_COMBAT_REACH);
             return dist < max_range;
@@ -14807,4 +14815,41 @@ void Unit::SetWaterWalk(bool enable)
     WorldPacket data(enable ? SMSG_SPLINE_MOVE_WATER_WALK : SMSG_SPLINE_MOVE_LAND_WALK, 9);
     data << GetPackGUID();
     SendMessageToSet(data, true);
+}
+
+void Unit::CharmCooldownInitialize(WorldPacket& data) const
+{
+    // write cooldown data
+    uint32 cdCount = 0;
+    const size_t cdCountPos = data.wpos();
+    data << uint8(0);
+    auto currTime = GetMap()->GetCurrentClockTime();
+
+    for (auto& cdItr : m_cooldownMap)
+    {
+        auto& cdData = cdItr.second;
+        TimePoint spellRecTime = currTime;
+        TimePoint catRecTime = currTime;
+        cdData->GetSpellCDExpireTime(spellRecTime);
+        cdData->GetCatCDExpireTime(catRecTime);
+        uint32 spellCDDuration = 0;
+        uint32 catCDDuration = 0;
+        if (spellRecTime > currTime)
+            spellCDDuration = std::chrono::duration_cast<std::chrono::milliseconds>(spellRecTime - currTime).count();
+        if (catRecTime > currTime)
+            catCDDuration = std::chrono::duration_cast<std::chrono::milliseconds>(catRecTime - currTime).count();
+
+        if (!spellCDDuration && !catCDDuration && !cdData->IsPermanent())
+            continue;
+
+        if (cdData->IsPermanent())
+            catCDDuration |= 0x80000000;
+
+        data << uint32(cdData->GetSpellId());
+        data << uint16(cdData->GetCategory());              // spell category
+        data << uint32(spellCDDuration);                    // cooldown
+        data << uint32(catCDDuration);                      // category cooldown
+        ++cdCount;
+    }
+    data.put<uint8>(cdCountPos, cdCount);
 }

@@ -3119,8 +3119,9 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
             case 35079:                                     // Misdirection, triggered buff
             case 59628:                                     // Tricks of the Trade, triggered buff
             {
+                uint32 spellId = GetId() == 35079 ? 34477 : 57934;
                 if (Unit* pCaster = GetCaster())
-                    pCaster->getHostileRefManager().ResetThreatRedirection();
+                    pCaster->getHostileRefManager().ResetThreatRedirection(spellId);
                 return;
             }
             case 36301:                                     // On Fire
@@ -3607,7 +3608,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                 case 56422:                                 // Nerubian Submerge
                 case 70733:                                 // Stoneform
                     // not known if there are other things todo, only flag are confirmed valid
-                    target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE, apply);
+                    target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE, apply);
                     return;
                 case 58204:                                 // LK Intro VO (1)
                     if (target->GetTypeId() == TYPEID_PLAYER)
@@ -3775,7 +3776,7 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                     {
                         // used for direct in code aura removes and spell proc event charges expire
                         if (m_removeMode != AURA_REMOVE_BY_DEFAULT)
-                            target->getHostileRefManager().ResetThreatRedirection();
+                            target->getHostileRefManager().ResetThreatRedirection(57934);
                     }
                     return;
                 }
@@ -3794,9 +3795,9 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         // used for direct in code aura removes and spell proc event charges expire
                         if (m_removeMode != AURA_REMOVE_BY_DEFAULT)
                         {
-                            if (Unit* misdirectTarget = target->getHostileRefManager().GetThreatRedirectionTarget())
+                            if (Unit* misdirectTarget = target->getHostileRefManager().GetThreatRedirectionTarget(34477))
                                 misdirectTarget->RemoveAurasDueToSpell(35079);
-                            target->getHostileRefManager().ResetThreatRedirection();
+                            target->getHostileRefManager().ResetThreatRedirection(34477);
                         }
                     }
                     return;
@@ -5894,7 +5895,7 @@ void Aura::HandleAuraProcTriggerSpell(bool apply, bool Real)
                     target->CastSpell(caster, 59665, TRIGGERED_OLD_TRIGGERED);
             }
             else
-                target->getHostileRefManager().ResetThreatRedirection();
+                target->getHostileRefManager().ResetThreatRedirection(59665);
             break;
         default:
             break;
@@ -6842,9 +6843,9 @@ void Aura::HandleAuraModTotalHealthPercentRegen(bool apply, bool /*Real*/)
     if (GetId() == 40409)
     {
         if (apply)
-            GetTarget()->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            GetTarget()->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
         else
-            GetTarget()->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+            GetTarget()->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
     }
 }
 
@@ -8054,7 +8055,7 @@ void Aura::HandleModUnattackable(bool apply, bool Real)
 {
     Unit* target = GetTarget();
 
-    target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NON_ATTACKABLE_2, apply);
+    target->ApplyModFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNTARGETABLE, apply);
 
     if (Real && apply)
     {
@@ -10310,6 +10311,7 @@ void SpellAuraHolder::SetStackAmount(uint32 stackAmount, Unit* newCaster)
     if (!target)
         return;
 
+    bool refresh = false;
     if (stackAmount >= m_stackAmount)
     {
         // Change caster
@@ -10319,12 +10321,9 @@ void SpellAuraHolder::SetStackAmount(uint32 stackAmount, Unit* newCaster)
             m_casterGuid = newCaster->GetObjectGuid();
             // New caster duration sent for owner in RefreshHolder
         }
-        // Stack increased refresh duration
-        RefreshHolder();
+
+        refresh = true;
     }
-    else
-        // Stack decreased only send update
-        SendAuraUpdate(false);
 
     int32 oldStackAmount = m_stackAmount;
     if (m_spellProto->Id == 32264) // temporary hack for Inhibit Magic
@@ -10354,6 +10353,11 @@ void SpellAuraHolder::SetStackAmount(uint32 stackAmount, Unit* newCaster)
             }
         }
     }
+
+    if (refresh) // Stack increased refresh duration
+        RefreshHolder();
+    else // Stack decreased only send update
+        SendAuraUpdate(false);
 }
 
 Unit* SpellAuraHolder::GetCaster() const

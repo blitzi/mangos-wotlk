@@ -3172,7 +3172,7 @@ void Player::InitStatsForLevel(bool reapplyMods)
                UNIT_FLAG_PET_IN_COMBAT  | UNIT_FLAG_SILENCED     | UNIT_FLAG_PACIFIED         |
                UNIT_FLAG_STUNNED        | UNIT_FLAG_IN_COMBAT    | UNIT_FLAG_DISARMED         |
                UNIT_FLAG_CONFUSED       | UNIT_FLAG_FLEEING      | UNIT_FLAG_POSSESSED        |
-               UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_SKINNABLE    | UNIT_FLAG_MOUNT            |
+               UNIT_FLAG_UNINTERACTIBLE | UNIT_FLAG_SKINNABLE    | UNIT_FLAG_MOUNT            |
                UNIT_FLAG_TAXI_FLIGHT    | UNIT_FLAG_PREVENT_ANIM);
     SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED);    // must be set
 
@@ -19592,7 +19592,8 @@ void Player::PossessSpellInitialize() const
     charmInfo->BuildActionBar(data);
 
     data << uint8(0);                                       // spells count
-    data << uint8(0);                                       // cooldowns count
+    
+    charm->CharmCooldownInitialize(data);
 
     GetSession()->SendPacket(data);
 }
@@ -19672,46 +19673,9 @@ void Player::CharmSpellInitialize() const
         }
     }
 
-    CharmCooldownInitialize(data);
+    charm->CharmCooldownInitialize(data);
 
     GetSession()->SendPacket(data);
-}
-
-void Player::CharmCooldownInitialize(WorldPacket& data) const
-{
-    // write cooldown data
-    uint32 cdCount = 0;
-    const size_t cdCountPos = data.wpos();
-    data << uint8(0);
-    auto currTime = GetMap()->GetCurrentClockTime();
-
-    for (auto& cdItr : m_cooldownMap)
-    {
-        auto& cdData = cdItr.second;
-        TimePoint spellRecTime = currTime;
-        TimePoint catRecTime = currTime;
-        cdData->GetSpellCDExpireTime(spellRecTime);
-        cdData->GetCatCDExpireTime(catRecTime);
-        uint32 spellCDDuration = 0;
-        uint32 catCDDuration = 0;
-        if (spellRecTime > currTime)
-            spellCDDuration = std::chrono::duration_cast<std::chrono::milliseconds>(spellRecTime - currTime).count();
-        if (catRecTime > currTime)
-            catCDDuration = std::chrono::duration_cast<std::chrono::milliseconds>(catRecTime - currTime).count();
-
-        if (!spellCDDuration && !catCDDuration && !cdData->IsPermanent())
-            continue;
-
-        if (cdData->IsPermanent())
-            catCDDuration |= 0x8000000;
-
-        data << uint32(cdData->GetSpellId());
-        data << uint16(cdData->GetCategory());              // spell category
-        data << uint32(spellCDDuration);                    // cooldown
-        data << uint32(catCDDuration);                      // category cooldown
-        ++cdCount;
-    }
-    data.put<uint8>(cdCountPos, cdCount);
 }
 
 void Player::RemovePetActionBar() const
@@ -25106,9 +25070,9 @@ void Player::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* item
             {
                 if (Spell.SpellCategory)
                     spellCategory = Spell.SpellCategory;
-                if (Spell.SpellCooldown < 0)
+                if (Spell.SpellCooldown >= 0)
                     recTime = Spell.SpellCooldown;
-                if (Spell.SpellCategoryCooldown < 0)
+                if (Spell.SpellCategoryCooldown >= 0)
                     categoryRecTime = Spell.SpellCategoryCooldown;
                 itemId = itemProto->ItemId;
                 break;

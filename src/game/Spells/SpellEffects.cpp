@@ -858,7 +858,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     if (m_caster->GetTypeId() == TYPEID_UNIT) // see spell 10255 (aura dummy)
                     {
                         m_caster->clearUnitState(UNIT_STAT_ROOT);
-                        m_caster->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC | UNIT_FLAG_NOT_SELECTABLE);
+                        m_caster->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_IMMUNE_TO_NPC | UNIT_FLAG_UNINTERACTIBLE);
                     }
 
                     return;
@@ -3695,7 +3695,7 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
 
                     m_caster->CastSpell(m_caster, m_caster->GetMap()->IsRegularDifficulty() ? 66351 : 63009, TRIGGERED_OLD_TRIGGERED);
                     m_caster->RemoveAurasDueToSpell(65345);
-                    m_caster->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                    m_caster->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
                     return;
                 }
                 case 66390:                                 // Read Last Rites
@@ -10323,7 +10323,7 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
                         return;
 
                     unitTarget->RemoveAurasDueToSpell(62468);
-                    unitTarget->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+                    unitTarget->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
                     unitTarget->CastSpell(unitTarget, 64474, TRIGGERED_OLD_TRIGGERED);
 
                     if (m_caster->GetVictim())
@@ -12919,7 +12919,7 @@ void Spell::EffectRedirectThreat(SpellEffectIndex /*eff_idx*/)
         if (Aura* glyph = unitTarget->GetDummyAura(63326))  // Glyph of Vigilance
             damage += glyph->GetModifier()->m_amount;
 
-    m_caster->getHostileRefManager().SetThreatRedirection(unitTarget->GetObjectGuid(), uint32(damage));
+    m_caster->getHostileRefManager().SetThreatRedirection(unitTarget->GetObjectGuid(), uint32(damage), m_spellInfo->Id);
 }
 
 void Spell::EffectTeachTaxiNode(SpellEffectIndex eff_idx)
