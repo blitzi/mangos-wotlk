@@ -245,7 +245,7 @@ bool Pet::LoadPetFromDB(Player* owner, Position const& spawnPos, uint32 petentry
     }
 
     // DK Permanent ghoul spell
-    if (summon_spell_id == 52150 && current && !forced) // must cast through spell in order to trigger correct ghoul CD
+    if (spellInfo->HasAttribute(SPELL_ATTR_EX7_RECAST_ON_RESUMMON) && current && !forced) // must cast through spell in order to trigger correct ghoul CD
     {
         Position pos = Pet::GetPetSpawnPosition(owner);
         owner->CastSpell(pos.x, pos.y, pos.z, summon_spell_id, TRIGGERED_IGNORE_GCD | TRIGGERED_IGNORE_COOLDOWNS);
@@ -2488,7 +2488,44 @@ void Pet::StartCooldown(Unit* owner)
         m_imposedCooldown = true;
         SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(GetUInt32Value(UNIT_CREATED_BY_SPELL));
         // Remove infinity cooldown
-        if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_DISABLED_WHILE_ACTIVE))
+        if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_COOLDOWN_ON_EVENT))
             owner->AddCooldown(*spellInfo);
     }
+}
+
+bool Pet::IgnoresOwnersDeath() const
+{
+    if (IsGuardian())
+    {
+        if (uint32 spellId = GetUInt32Value(UNIT_CREATED_BY_SPELL))
+        {
+            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+            // Remove infinity cooldown
+            if (spellInfo && spellInfo->HasAttribute(SPELL_ATTR_EX_IGNORE_OWNERS_DEATH))
+                return true;
+        }
+        return false;
+    }
+    return true;
+}
+
+std::vector<uint32> Pet::GetCharmSpells() const
+{
+    if (getPetType() != HUNTER_PET) // this override is only for hunter pets with eye of the beast
+        return Creature::GetCharmSpells();
+
+    std::vector<uint32> spells(CREATURE_MAX_SPELLS, 0);
+    uint32 position = 0;
+    for (PetSpellMap::const_iterator itr = m_spells.begin(); itr != m_spells.end() && position < CREATURE_MAX_SPELLS; ++itr)
+    {
+        if (itr->second.state == PETSPELL_REMOVED)
+            continue;
+
+        if (IsPassiveSpell(itr->first))
+            continue;
+
+        spells[position] = itr->first;
+        ++position;
+    }
+    return spells;
 }

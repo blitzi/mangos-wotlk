@@ -117,13 +117,12 @@ void CreatureAI::AttackPassengersIfCan(Unit* who)
     }
 }
 
-void CreatureAI::DamageTaken(Unit* dealer, uint32& damage, DamageEffectType /*damageType*/, SpellEntry const* /*spellInfo*/)
+void CreatureAI::DamageTaken(Unit* dealer, uint32& damage, DamageEffectType damageType, SpellEntry const* /*spellInfo*/)
 {
-    if (m_deathPrevention)
+    if (m_deathPrevention && damageType != INSTAKILL)
     {
-        if (m_creature->GetHealth() <= damage)
+        if (m_creature->GetHealth() <= damage) // the damage will be reduced in Unit::DealDamage
         {
-            damage = m_creature->GetHealth() - 1;
             if (!m_deathPrevented)
             {
                 m_deathPrevented = true;
@@ -148,7 +147,7 @@ void CreatureAI::DoFakeDeath(uint32 spellId)
     m_creature->RemoveAllAurasOnDeath();
     m_creature->ModifyAuraState(AURA_STATE_HEALTHLESS_20_PERCENT, false);
     m_creature->ModifyAuraState(AURA_STATE_HEALTHLESS_35_PERCENT, false);
-    m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    m_creature->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE);
     m_creature->ClearAllReactives();
     m_creature->SetTarget(nullptr);
     m_creature->GetMotionMaster()->Clear();

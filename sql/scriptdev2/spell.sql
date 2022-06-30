@@ -25,6 +25,7 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (4130,'spell_banish_exile'),
 (4131,'spell_banish_exile'),
 (4132,'spell_banish_exile'),
+(5166,'spell_harvest_silithid_egg'),
 (6467,'spell_unarmed_woodcutter'),
 (7054,'spell_forsaken_skill'),
 (8555,'spell_left_for_dead'),
@@ -739,7 +740,8 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (74792,'spell_soul_consumption_aura'),
 (74812,'spell_leave_twilight_realm_aura'),
 (75396,'spell_clear_debuffs'),
-(75415,'spell_rallying_shout');
+(75415,'spell_rallying_shout'),
+(75475,'spell_proc_only_below_35_percent');
 
 -- Death Knight
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
@@ -1043,6 +1045,15 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (12575,'spell_arcane_concentration'),
 (12576,'spell_arcane_concentration'),
 (12577,'spell_arcane_concentration'),
+(42208,'spell_blizzard'),
+(42209,'spell_blizzard'),
+(42210,'spell_blizzard'),
+(42211,'spell_blizzard'),
+(42212,'spell_blizzard'),
+(42213,'spell_blizzard'),
+(42198,'spell_blizzard'),
+(42937,'spell_blizzard'),
+(42938,'spell_blizzard'),
 (12654,'spell_mage_ignite'),
 (118,'spell_polymorph'),
 (12824,'spell_polymorph'),
@@ -1087,6 +1098,12 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (1856,'spell_vanish'),
 (1857,'spell_vanish'),
 (26889,'spell_vanish'),
+(6770,'spell_sap'),
+(2070,'spell_sap'), -- check ranks before changing
+(11297,'spell_sap'),
+(51724,'spell_sap'),
+(14082,'spell_dirty_deeds'),
+(14083,'spell_dirty_deeds'),
 (13983,'spell_setup_rogue'),
 (14070,'spell_setup_rogue'),
 (14071,'spell_setup_rogue'),
@@ -1112,6 +1129,26 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (51557,'spell_ancestral_awakening'),
 (51558,'spell_ancestral_awakening'),
 (52759,'spell_ancestral_awakening_search'),
+(5730,'spell_stoneclaw_totem'),
+(6390,'spell_stoneclaw_totem'),
+(6391,'spell_stoneclaw_totem'),
+(6392,'spell_stoneclaw_totem'),
+(10427,'spell_stoneclaw_totem'),
+(10428,'spell_stoneclaw_totem'),
+(25525,'spell_stoneclaw_totem'),
+(58580,'spell_stoneclaw_totem'),
+(58581,'spell_stoneclaw_totem'),
+(58582,'spell_stoneclaw_totem'),
+(55328,'spell_stoneclaw_totem_absorb'),
+(55329,'spell_stoneclaw_totem_absorb'),
+(55330,'spell_stoneclaw_totem_absorb'),
+(55332,'spell_stoneclaw_totem_absorb'),
+(55333,'spell_stoneclaw_totem_absorb'),
+(55335,'spell_stoneclaw_totem_absorb'),
+(55278,'spell_stoneclaw_totem_absorb'),
+(58589,'spell_stoneclaw_totem_absorb'),
+(58590,'spell_stoneclaw_totem_absorb'),
+(58591,'spell_stoneclaw_totem_absorb'),
 (70811,'spell_item_shaman_t10_elemental_2p_bonus');
 
 -- Food and Drink
@@ -1253,6 +1290,9 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 
 -- Battleground and Outdoor PvP
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
+(23333,'spell_flag_aura_bg'),
+(23335,'spell_flag_aura_bg'),
+(34976,'spell_flag_aura_bg'),
 -- Arathi basin
 (23936,'spell_battleground_banner_trigger'),
 (23932,'spell_battleground_banner_trigger'),

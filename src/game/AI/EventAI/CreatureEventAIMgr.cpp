@@ -685,7 +685,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                                 sLog.outErrorEventAI("Event %u Action %u has TARGET_T_ACTION_INVOKER(%u) target type, but should have TARGET_T_ACTION_INVOKER_OWNER(%u).", eventId, j + 1, TARGET_T_ACTION_INVOKER, TARGET_T_ACTION_INVOKER_OWNER);
 
                             // Spell that should only target players, but could get any
-                            if (spell->HasAttribute(SPELL_ATTR_EX3_TARGET_ONLY_PLAYER) &&
+                            if (spell->HasAttribute(SPELL_ATTR_EX3_ONLY_ON_PLAYER) &&
                                     (action.cast.target == TARGET_T_ACTION_INVOKER || action.cast.target == TARGET_T_HOSTILE_RANDOM || action.cast.target == TARGET_T_HOSTILE_RANDOM_NOT_TOP))
                                 sLog.outErrorEventAI("Event %u Action %u uses Target type %u for a spell (%u) that should only target players. This could be wrong.", eventId, j + 1, action.cast.target, action.cast.spellId);
 
@@ -1048,7 +1048,7 @@ void CreatureEventAIMgr::LoadCreatureEventAI_Scripts()
                         if (temp.action[j].type == ACTION_T_CAST && temp.action[j].cast.target == TARGET_T_EVENT_SPECIFIC)
                         {
                             SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(temp.action[j].cast.spellId);
-                            if (spellInfo->HasAttribute(SPELL_ATTR_EX_CANT_TARGET_SELF))
+                            if (spellInfo->HasAttribute(SPELL_ATTR_EX_EXCLUDE_CASTER))
                                 data.friendlyHp.targetSelf = false;
                         }
                     }

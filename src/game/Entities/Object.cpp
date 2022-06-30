@@ -622,7 +622,7 @@ void Object::BuildValuesUpdate(uint8 updatetype, ByteBuffer* data, UpdateMask* u
                     if (target->IsGameMaster())
                     {
                         // Gamemasters should be always able to select units - remove not selectable flag:
-                        value &= ~UNIT_FLAG_NOT_SELECTABLE;
+                        value &= ~UNIT_FLAG_UNINTERACTIBLE;
                     }
 
                     // Client bug workaround: Fix for missing chat channels when resuming taxi flight on login
@@ -3130,7 +3130,7 @@ int32 WorldObject::CalculateSpellEffectValue(Unit const* target, SpellEntry cons
         }
     }
 
-    if (unitCaster && spellProto->HasAttribute(SPELL_ATTR_LEVEL_DAMAGE_CALCULATION) && spellProto->spellLevel)
+    if (unitCaster && spellProto->HasAttribute(SPELL_ATTR_SCALES_WITH_CREATURE_LEVEL) && spellProto->spellLevel)
     {
         // TODO: Drastically beter than before, but still needs some additional aura scaling research
         bool damage = false;

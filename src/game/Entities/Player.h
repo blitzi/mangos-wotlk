@@ -1697,7 +1697,6 @@ class Player : public Unit
         void PossessSpellInitialize() const;
         void VehicleSpellInitialize() const;
         void CharmSpellInitialize() const;
-        void CharmCooldownInitialize(WorldPacket& data) const;
         void RemovePetActionBar() const;
         Unit* GetFirstControlled() const;
         std::pair<float, float> RequestFollowData(ObjectGuid guid);
@@ -2337,7 +2336,7 @@ class Player : public Unit
         bool CanWalk() const override { return true; }
         bool IsFreeFlying() const { return HasAuraType(SPELL_AURA_MOD_FLIGHT_SPEED_MOUNTED) || HasAuraType(SPELL_AURA_FLY); }
         bool IsSwimming() const { return m_movementInfo.HasMovementFlag(MOVEFLAG_SWIMMING); }
-        bool CanStartFlyInArea(uint32 mapid, uint32 zone, uint32 area) const;
+        bool CanStartFlyInArea(uint32 mapid, uint32 zone, uint32 area, bool ignoreColdWeather) const;
 
         void UpdateClientControl(Unit const* target, bool enabled, bool forced = false) const;
 
@@ -2549,7 +2548,8 @@ class Player : public Unit
         void RemoveArenaSpellCooldowns();
         void _LoadSpellCooldowns(QueryResult* result);
         void _SaveSpellCooldowns();
-        void SetLastPotionId(uint32 item_id) { m_lastPotionId = item_id; }
+        void SetLastPotionId(uint32 itemId) { m_lastPotionId = itemId; }
+        void SetCooldownEventOnLeaveCombatSpellId(uint32 spellId) { m_triggerCoooldownOnLeaveCombatSpellId = spellId; }
         uint32 GetLastPotionId() const { return m_lastPotionId; }
         void UpdatePotionCooldown(Spell* spell = nullptr);
 
@@ -2736,6 +2736,7 @@ class Player : public Unit
         PlayerSpellMap m_spells;
         PlayerTalentMap m_talents[MAX_TALENT_SPEC_COUNT];
         uint32 m_lastPotionId;                              // last used health/mana potion in combat, that block next potion use
+        uint32 m_triggerCoooldownOnLeaveCombatSpellId;
 
         uint8 m_activeSpec;
         uint8 m_specsCount;
@@ -2959,6 +2960,8 @@ class Player : public Unit
 
         GuidSet m_controlled;
         std::map<uint32, ObjectGuid> m_followAngles;
+
+        uint8 m_fishingSteps;
 
         std::set<uint32> m_serversideDailyQuests;
 };

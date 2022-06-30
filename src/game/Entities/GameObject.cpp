@@ -502,7 +502,7 @@ void GameObject::Update(const uint32 diff)
                                 }
                             }
 
-                            if (target && (!goInfo->trapCustom.triggerOn || !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))) // do not trigger on hostile traps if not selectable
+                            if (target && (!goInfo->trapCustom.triggerOn || !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE))) // do not trigger on hostile traps if not selectable
                                 Use(target);
                         }
                         else
@@ -1720,16 +1720,6 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
             if (Unit* owner = GetOwner())
                 spellCaster = owner;
 
-            // database may contain a dummy spell, so it need replacement by actually existing
-            switch (spellId)
-            {
-                case 34448: spellId = 26566; break;
-                case 34452: spellId = 26572; break;
-                case 37639: spellId = 36326; break;
-                case 45367: spellId = 45371; break;
-                case 45370: spellId = 45368; break;
-            }
-
             break;
         }
         case GAMEOBJECT_TYPE_CAMERA:                        // 13
@@ -1806,8 +1796,7 @@ void GameObject::Use(Unit* user, SpellEntry const* spellInfo)
                         // TODO: find reasonable value for fishing hole search
                         fishingHole = LookupFishingHoleAround(20.0f + CONTACT_DISTANCE);
 
-                    if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_GAIN_FISHING))
-                        player->UpdateFishingSkill();
+                    player->UpdateFishingSkill();
 
                     // fish catch or fail and junk allowed (after 3.1.0)
                     if (success || sWorld.getConfig(CONFIG_BOOL_SKILL_FAIL_LOOT_FISHING))

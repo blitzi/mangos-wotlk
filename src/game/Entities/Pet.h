@@ -299,6 +299,10 @@ class Pet : public Creature
         void InitializeSpellsForControllableGuardian(bool load);
 
         void StartCooldown(Unit* owner);
+
+        bool IgnoresOwnersDeath() const;
+
+        std::vector<uint32> GetCharmSpells() const;
     protected:
         uint32  m_happinessTimer;
         PetType m_petType;

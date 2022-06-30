@@ -51,7 +51,6 @@ struct Stealth : public AuraScript
         {
             switch (data.spell->m_spellInfo->Id)
             {
-                case SPELL_DISTRACT:
                 case SPELL_EARTHBIND:
                 case SPELL_MASS_DISPEL:
                 case SPELL_MASS_DISPEL_2:
@@ -92,12 +91,54 @@ struct VanishRogue : public SpellScript
     }
 };
 
+// 6770 - Sap
+struct SapRogue : public SpellScript
+{
+    // SPELL_ATTR_EX3_SUPPRESS_TARGET_PROCS prevents sap to proc stealth normally
+    void OnHit(Spell* spell, SpellMissInfo missInfo) const override
+    {
+        if (missInfo == SPELL_MISS_NONE && spell->GetUnitTarget())
+            spell->GetUnitTarget()->RemoveSpellsCausingAura(SPELL_AURA_MOD_STEALTH);
+    }
+};
+
 // 13983 - Setup
 struct SetupRogue : public AuraScript
 {
     bool OnCheckProc(Aura* /*aura*/, ProcExecutionData& data) const override
     {
         return data.victim->GetTarget() == data.attacker;
+    }
+};
+
+// 14082 - Dirty Deeds
+struct DirtyDeeds : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_1)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+        else if (aura->GetEffIndex() == EFFECT_INDEX_2)
+            aura->GetTarget()->RegisterScriptedLocationAura(aura, SCRIPT_LOCATION_MELEE_DAMAGE_DONE, apply);
+    }
+
+    void OnDamageCalculate(Aura* aura, Unit* victim, int32& /*advertisedBenefit*/, float& totalMod) const override
+    {
+        if (aura->GetEffIndex() == EFFECT_INDEX_0)
+            return;
+
+        if (victim->HasAuraState(AURA_STATE_HEALTHLESS_35_PERCENT))
+        {
+            Aura* eff0 = aura->GetHolder()->m_auras[EFFECT_INDEX_0];
+            if (!eff0)
+            {
+                sLog.outError("Spell structure of DD (%u) changed.", aura->GetId());
+                return;
+            }
+
+            // effect 0 have expected value but in negative state
+            totalMod *= (-eff0->GetModifier()->m_amount + 100.0f) / 100.0f;
+        }
     }
 };
 
@@ -184,7 +225,9 @@ void LoadRogueScripts()
     RegisterSpellScript<Preparation>("spell_preparation");
     RegisterSpellScript<Stealth>("spell_stealth");
     RegisterSpellScript<VanishRogue>("spell_vanish");
+    RegisterSpellScript<SapRogue>("spell_sap");
     RegisterSpellScript<SetupRogue>("spell_setup_rogue");
+    RegisterSpellScript<DirtyDeeds>("spell_dirty_deeds");
     RegisterSpellScript<KillingSpree>("spell_killing_spree");
     RegisterSpellScript<PreyOnTheWeak>("spell_prey_on_the_weak");
 }

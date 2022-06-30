@@ -514,7 +514,7 @@ enum UnitFlags
     UNIT_FLAG_SILENCED              = 0x00002000,           // silenced, 2.1.1
     UNIT_FLAG_UNK_14                = 0x00004000,           // 2.0.8
     UNIT_FLAG_SWIMMING              = 0x00008000,           // related to jerky movement in water?
-    UNIT_FLAG_NON_ATTACKABLE_2      = 0x00010000,           // removes attackable icon, if on yourself, cannot assist self but can cast TARGET_UNIT_CASTER spells - added by SPELL_AURA_MOD_UNATTACKABLE
+    UNIT_FLAG_UNTARGETABLE          = 0x00010000,           // is not targetable by attack or spell
     UNIT_FLAG_PACIFIED              = 0x00020000,           // 3.0.3 ok
     UNIT_FLAG_STUNNED               = 0x00040000,           // Unit is a subject to stun, turn and strafe movement disabled
     UNIT_FLAG_IN_COMBAT             = 0x00080000,
@@ -523,7 +523,7 @@ enum UnitFlags
     UNIT_FLAG_CONFUSED              = 0x00400000,           // Unit is a subject to confused movement, movement checks disabled, paired with loss of client control packet.
     UNIT_FLAG_FLEEING               = 0x00800000,           // Unit is a subject to fleeing movement, movement checks disabled, paired with loss of client control packet.
     UNIT_FLAG_POSSESSED             = 0x01000000,           // Unit is under remote control by another unit, movement checks disabled, paired with loss of client control packet. New master is allowed to use melee attack and can't select this unit via mouse in the world (as if it was own character).
-    UNIT_FLAG_NOT_SELECTABLE        = 0x02000000,
+    UNIT_FLAG_UNINTERACTIBLE        = 0x02000000,
     UNIT_FLAG_SKINNABLE             = 0x04000000,
     UNIT_FLAG_MOUNT                 = 0x08000000,
     UNIT_FLAG_UNK_28                = 0x10000000,
@@ -552,6 +552,7 @@ enum UnitFlags2
     UNIT_FLAG2_INTERACT_ANY_REACTION = 0x00004000,
     UNIT_FLAG2_UNK15                = 0x00008000,
     UNIT_FLAG2_UNK16                = 0x00010000,
+    UNIT_FLAG2_ALLOW_CHEAT_SPELLS   = 0x00040000,
 };
 
 /// Non Player Character flags
@@ -1114,6 +1115,7 @@ enum SelectFlags
     SELECT_FLAG_CASTING             = 0x8000,               // Selects only targets that are casting
     SELECT_FLAG_SKIP_CUSTOM         =0x10000,               // skips custom target
     SELECT_FLAG_NOT_IMMUNE          =0x20000,
+    SELECT_FLAG_USE_EFFECT_RADIUS_OF_TRIGGERED_SPELL = 0x40000 // For AOE targeted abilities which have correct data in triggered spell effect index 0
 };
 
 struct SelectAttackingTargetParams
@@ -1455,7 +1457,7 @@ class Unit : public WorldObject
         bool CanAssist(Unit const* unit, bool ignoreFlags = false) const;
         bool CanAssist(Corpse const* corpse) const;
 
-        bool CanAttack(Unit const* unit) const;
+        bool CanAttack(Unit const* unit, bool ignoreUntargetable = false) const;
         bool CanAttackNow(Unit const* unit) const;
 
         bool CanCooperate(Unit const* unit) const;
@@ -1481,7 +1483,7 @@ class Unit : public WorldObject
         virtual bool CanAssistSpell(Unit const* target, SpellEntry const* spellInfo = nullptr) const override;
 
         bool CanAttackOnSight(Unit const* target) const; // Used in MoveInLineOfSight checks
-        bool CanAttackInCombat(Unit const* target) const;
+        bool CanAttackInCombat(Unit const* target, bool ignoreUntargetable = false) const;
         bool CanAssistInCombatAgainst(Unit const* who, Unit const* enemy) const;
         bool CanJoinInAttacking(Unit const* enemy) const;
 
@@ -1514,6 +1516,7 @@ class Unit : public WorldObject
 
         void SetVisFlags(uint8 flags) { SetByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAGS, flags); }
         void RemoveVisFlags(uint8 flags) { RemoveByteFlag(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAGS, flags); }
+        bool HasVisFlags(uint8 flags) { return GetByteValue(UNIT_FIELD_BYTES_1, UNIT_BYTES_1_OFFSET_VIS_FLAGS) & flags; }
 
         bool IsMounted() const { return HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_MOUNT); } // not used with creature non-aura mounts
         uint32 GetMountID() const { return GetUInt32Value(UNIT_FIELD_MOUNTDISPLAYID); }
@@ -2019,7 +2022,8 @@ class Unit : public WorldObject
         // set withDelayed to true to account delayed spells as casted
         // delayed+channeled spells are always accounted as casted
         // we can skip channeled or delayed checks using flags
-        bool IsNonMeleeSpellCasted(bool withDelayed, bool skipChanneled = false, bool skipAutorepeat = false, bool forMovement = false, bool forAutoIgnore = false) const;
+        bool IsNonMeleeSpellCasted(bool withDelayed, bool skipChanneled = false, bool skipAutorepeat = false, bool forMovement = false, bool forAutoIgnore = false, bool forEquip = false) const;
+        bool IsDelayCombatTimerSpellCasted() const;
 
         // set withDelayed to true to interrupt delayed spells too
         // delayed+channeled spells are always interrupted
@@ -2121,6 +2125,8 @@ class Unit : public WorldObject
         TrackedAuraTargetMap&       GetTrackedAuraTargets(TrackedAuraType type)       { return m_trackedAuraTargets[type]; }
         TrackedAuraTargetMap const& GetTrackedAuraTargets(TrackedAuraType type) const { return m_trackedAuraTargets[type]; }
         SpellImmuneList m_spellImmune[MAX_SPELL_IMMUNITY];
+        bool IsAOEImmune() const { return m_aoeImmune; }
+        void SetAOEImmune(bool state) { m_aoeImmune = state; }
 
         // Threat related methods
         bool CanHaveThreatList(bool ignoreAliveState = false) const;
@@ -2241,7 +2247,14 @@ class Unit : public WorldObject
         uint32 MeleeDamageBonusDone(Unit* victim, uint32 damage, WeaponAttackType attType, SpellSchoolMask schoolMask, SpellEntry const* spellProto = nullptr, DamageEffectType damagetype = DIRECT_DAMAGE, uint32 stack = 1, bool flat = true);
         uint32 MeleeDamageBonusTaken(Unit* caster, uint32 pdamage, WeaponAttackType attType, SpellSchoolMask schoolMask, SpellEntry const* spellProto = nullptr, DamageEffectType damagetype = DIRECT_DAMAGE, uint32 stack = 1, bool flat = true);
 
-        bool IsTriggeredAtSpellProcEvent(ProcExecutionData& data, SpellAuraHolder* holder, SpellProcEventEntry const*& spellProcEvent);
+        enum class SpellProcEventTriggerCheck
+        {
+            SPELL_PROC_TRIGGER_FAILED = 0,
+            SPELL_PROC_TRIGGER_ROLL_FAILED = 1,
+            SPELL_PROC_TRIGGER_OK = 2,
+        };
+
+        SpellProcEventTriggerCheck IsTriggeredAtSpellProcEvent(ProcExecutionData& data, SpellAuraHolder* holder, SpellProcEventEntry const*& spellProcEvent);
         // only to be used in proc handlers - basepoints is expected to be a MAX_EFFECT_INDEX sized array
         SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, uint32 triggeredSpellId, Item* castItem, Aura* triggeredByAura, uint32 cooldown, ObjectGuid originalCaster);
         SpellAuraProcResult TriggerProccedSpell(Unit* target, std::array<int32, MAX_EFFECT_INDEX>& basepoints, SpellEntry const* spellInfo, Item* castItem, Aura* triggeredByAura, uint32 cooldown, ObjectGuid originalCaster);
@@ -2514,6 +2527,7 @@ class Unit : public WorldObject
         virtual bool CanCheckForHelp() const { return true; }
 
         virtual std::vector<uint32> GetCharmSpells() const { return {}; }
+        void CharmCooldownInitialize(WorldPacket& data) const;
 
         FormationSlotDataSPtr GetFormationSlot() { return m_formationSlot; }
         void SetFormationSlot(FormationSlotDataSPtr fSlot) { m_formationSlot = fSlot; }
@@ -2715,6 +2729,8 @@ class Unit : public WorldObject
 
         bool m_isMountOverriden;
         uint32 m_overridenMountId;
+
+        bool m_aoeImmune;
 
     private:                                                // Error traps for some wrong args using
         // this will catch and prevent build for any cases when all optional args skipped and instead triggered used non boolean type
