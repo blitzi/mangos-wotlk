@@ -43,13 +43,26 @@ struct SwiftHandOfJustice : public AuraScript
 	}
 };
 
+// 59915 - Discerning Eye of the Beast
 struct DiscerningEyeOfTheBeast : public AuraScript
 {
 	SpellAuraProcResult OnProc(Aura* aura, ProcExecutionData& procData) const override
 	{
-		procData.triggeredSpellId = 59913;
+		procData.triggeredSpellId = 59914;
 		procData.triggerTarget = nullptr;
 		return SPELL_AURA_PROC_OK;
+	}
+};
+
+// 75475 -  Item - Chamber of Aspects 25 Tank Trinket
+struct ProcOnlyBelow35Percent : public AuraScript
+{
+	bool OnCheckProc(Aura* aura, ProcExecutionData& data) const override
+	{
+		if (data.victim->GetHealthPercent() < 35.f)
+            return true;
+
+		return false;
 	}
 };
 
@@ -57,4 +70,5 @@ void AddSC_item_scripts_wotlk()
 {
 	RegisterSpellScript<SwiftHandOfJustice>("spell_swift_hand_of_justice");
 	RegisterSpellScript<DiscerningEyeOfTheBeast>("spell_discerning_eye_of_the_beast");
+	RegisterSpellScript<ProcOnlyBelow35Percent>("spell_proc_only_below_35_percent");
 }

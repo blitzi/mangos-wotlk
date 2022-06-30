@@ -1773,8 +1773,11 @@ void Player::SetDeathState(DeathState s)
 
         ClearResurrectRequestData();
 
+        bool petAlive = true; // PET_SAVE_REAGENTS when pet is unsummoned
         if (Pet* pet = GetPet())
-            RemovePet(pet->IsAlive() ? PET_SAVE_REAGENTS : PET_SAVE_AS_CURRENT);
+            petAlive = pet->IsAlive();
+
+        RemovePet(petAlive ? PET_SAVE_REAGENTS : PET_SAVE_AS_CURRENT);
 
         // Remove guardians (only players are supposed to have pets/guardians removed on death)
         RemoveGuardians();
@@ -17332,7 +17335,7 @@ void Player::_LoadInventory(QueryResult* result, uint32 timediff)
                 draft.AddItem(item);
             }
 
-            draft.SendMailTo(this, MailSender(this, MAIL_STATIONERY_GM), MAIL_CHECK_MASK_COPIED);
+            draft.SendMailTo(this, MailSender(this, MAIL_STATIONERY_GM), MAIL_CHECK_MASK_RETURNED);
         }
     }
 

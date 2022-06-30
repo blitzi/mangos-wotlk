@@ -741,7 +741,8 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 (74792,'spell_soul_consumption_aura'),
 (74812,'spell_leave_twilight_realm_aura'),
 (75396,'spell_clear_debuffs'),
-(75415,'spell_rallying_shout');
+(75415,'spell_rallying_shout'),
+(75475,'spell_proc_only_below_35_percent');
 
 -- Death Knight
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
@@ -1291,6 +1292,9 @@ INSERT INTO spell_scripts(Id, ScriptName) VALUES
 
 -- Battleground and Outdoor PvP
 INSERT INTO spell_scripts(Id, ScriptName) VALUES
+(23333,'spell_flag_aura_bg'),
+(23335,'spell_flag_aura_bg'),
+(34976,'spell_flag_aura_bg'),
 -- Arathi basin
 (23936,'spell_battleground_banner_trigger'),
 (23932,'spell_battleground_banner_trigger'),
