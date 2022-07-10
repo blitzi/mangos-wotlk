@@ -211,13 +211,14 @@ void CharacterDatabaseCleaner::CleanItemIds()
 				CharacterDatabase.PExecute("UPDATE character_equipmentsets SET item%u = '%u' WHERE item%u = '%u'", setId, newItemGuid, setId, itemId);
 				idChanged = true;
 			}
+			delete setResult;
 		}
 
 		/*QueryResult* aResult = CharacterDatabase.PQuery("SELECT item_guid from auction WHERE item_guid = '%u'", oldId);
 
 		if (aResult)
 		{
-			int x = 0;
+			TODO: implement when auctionhouse is used
 		}*/
 
 		if (idChanged)
