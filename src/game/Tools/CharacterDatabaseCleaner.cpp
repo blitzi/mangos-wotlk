@@ -138,3 +138,100 @@ void CharacterDatabaseCleaner::CleanCharacterTalent()
 
     CheckUnique("talent_id", "character_talent", &TalentCheck);
 }
+
+void CharacterDatabaseCleaner::CleanItemIds()
+{
+
+	QueryResult* result = CharacterDatabase.PQuery("SELECT DISTINCT guid FROM item_instance ORDER BY guid ASC");
+	BarGoLink bar(result->GetRowCount());
+	
+	int newItemGuid = 1;
+
+	do
+	{
+		bool idChanged = false;
+		bar.step();
+
+		Field* fields = result->Fetch();
+		int itemId = fields[0].GetInt32();
+	
+		QueryResult* ciItemResult = CharacterDatabase.PQuery("SELECT item from character_inventory WHERE item = '%u'", itemId);
+		if (ciItemResult)
+		{
+			CharacterDatabase.PExecute("UPDATE character_inventory SET item = '%u' WHERE item = '%u'", newItemGuid, itemId);
+			idChanged = true;
+		}
+		delete ciItemResult;
+
+		QueryResult* ciBagResult = CharacterDatabase.PQuery("SELECT bag from character_inventory WHERE bag = '%u'", itemId);
+		if (ciBagResult)
+		{
+			CharacterDatabase.PExecute("UPDATE character_inventory SET bag = '%u' WHERE bag = '%u'", newItemGuid, itemId);
+			idChanged = true;
+		}
+		delete ciBagResult;
+
+		QueryResult* caResult = CharacterDatabase.PQuery("SELECT item_guid from character_aura WHERE item_guid = '%u'", itemId);
+		if (caResult)
+		{
+			CharacterDatabase.PExecute("UPDATE character_aura SET item_guid = '%u' WHERE item_guid = '%u'", newItemGuid, itemId);
+			idChanged = true;
+		}
+		delete caResult;
+
+		QueryResult* gbResult = CharacterDatabase.PQuery("SELECT item_guid from guild_bank_item WHERE item_guid = '%u'", itemId);
+		if (gbResult)
+		{
+			CharacterDatabase.PExecute("UPDATE guild_bank_item SET item_guid = '%u' WHERE item_guid = '%u'", newItemGuid, itemId);
+			idChanged = true;
+		}
+		delete gbResult;
+
+		QueryResult* miResult = CharacterDatabase.PQuery("SELECT item_guid from mail_items WHERE item_guid = '%u'", itemId);
+		if (miResult)
+		{
+			CharacterDatabase.PExecute("UPDATE mail_items SET item_guid = '%u' WHERE item_guid = '%u'", newItemGuid, itemId);
+			idChanged = true;
+		}
+		delete miResult;
+
+		QueryResult* paResult = CharacterDatabase.PQuery("SELECT item_guid from pet_aura WHERE item_guid = '%u'", itemId);
+		if (paResult)
+		{
+			CharacterDatabase.PExecute("UPDATE pet_aura SET item_guid = '%u' WHERE item_guid = '%u'", newItemGuid, itemId);
+			idChanged = true;
+		}
+		delete paResult;
+
+		for (int setId = 0; setId <= 18; setId++)
+		{
+			QueryResult* setResult = CharacterDatabase.PQuery("SELECT item%u from character_equipmentsets WHERE item%u = '%u'", setId, setId, itemId);
+			if (setResult)
+			{
+				CharacterDatabase.PExecute("UPDATE character_equipmentsets SET item%u = '%u' WHERE item%u = '%u'", setId, newItemGuid, setId, itemId);
+				idChanged = true;
+			}
+		}
+
+		/*QueryResult* aResult = CharacterDatabase.PQuery("SELECT item_guid from auction WHERE item_guid = '%u'", oldId);
+
+		if (aResult)
+		{
+			int x = 0;
+		}*/
+
+		if (idChanged)
+		{
+			CharacterDatabase.PExecute("UPDATE item_instance SET guid = '%u' WHERE guid = '%u'", newItemGuid, itemId);
+			newItemGuid++;
+		}
+		else
+		{
+			CharacterDatabase.PExecute("DELETE FROM item_instance WHERE guid = '%u'", itemId);
+			sLog.outString("item id %u not used", itemId);
+		}
+
+	} while (result->NextRow());
+
+	delete result;
+}

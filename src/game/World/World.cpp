@@ -1016,6 +1016,9 @@ void World::SetInitialWorldSettings()
     sLog.outString("Packing groups...");
     sObjectMgr.PackGroupIds();                              // must be after CleanupInstances
 
+    sLog.outString("Cleaning up Item ids...");
+	CharacterDatabaseCleaner::CleanItemIds();				//clean and reorder Item ids before loading Highest Guids
+
     ///- Init highest guids before any guid using table loading to prevent using not initialized guids in some code.
     sObjectMgr.SetHighestGuids();                           // must be after PackInstances() and PackGroupIds()
     sLog.outString();
