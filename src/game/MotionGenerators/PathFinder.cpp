@@ -104,8 +104,12 @@ void PathFinder::SetCurrentNavMesh()
 }
 
 bool PathFinder::calculate(float destX, float destY, float destZ, bool forceDest/* = false*/, bool straightLine/* = false*/)
-{
-    float x, y, z;
+{    
+	float x, y, z;
+
+	if (!m_sourceUnit)
+		return false;
+
     m_sourceUnit->GetPosition(x, y, z, m_sourceUnit->GetTransport());
     Vector3 dest(destX, destY, destZ);
     if (GenericTransport* transport = m_sourceUnit->GetTransport())
