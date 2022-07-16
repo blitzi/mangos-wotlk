@@ -2608,6 +2608,9 @@ bool Map::GetHeightInRange(uint32 phasemask, float x, float y, float& z, float m
 
 float Map::GetHeight(uint32 phasemask, float x, float y, float z, bool swim) const
 {
+	if (!m_TerrainData || !m_TerrainData->IsReferenced())
+		return 0.0f;
+
     float staticHeight = m_TerrainData->GetHeightStatic(x, y, z, true, (swim ? DEFAULT_WATER_SEARCH : DEFAULT_HEIGHT_SEARCH));
 
     // Get Dynamic Height around static Height (if valid)
