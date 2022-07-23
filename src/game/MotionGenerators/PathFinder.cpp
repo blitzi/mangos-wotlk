@@ -70,8 +70,6 @@ PathFinder::PathFinder(uint32 mapId, uint32 instanceId) :
 
 PathFinder::~PathFinder()
 {
-    if (m_sourceUnit)
-        DEBUG_FILTER_LOG(LOG_FILTER_PATHFINDING, "++ PathFinder::~PathInfo() for %u \n", m_sourceUnit->GetGUIDLow());
 }
 
 void PathFinder::SetCurrentNavMesh()
