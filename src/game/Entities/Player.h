@@ -2162,7 +2162,10 @@ class Player : public Unit
         void SendAurasForTarget(Unit* target) const;
 
         PlayerMenu* GetPlayerMenu() const { return m_playerMenu.get(); }
-        std::vector<ItemSetEffect*> ItemSetEff;
+
+        ItemSetEffect* GetItemSetEffect(uint32 setId);
+        ItemSetEffect* AddItemSetEffect(uint32 setId);
+        void RemoveItemSetEffect(uint32 setId);
 
         /*********************************************************/
         /***               BATTLEGROUND SYSTEM                 ***/
@@ -2962,6 +2965,8 @@ class Player : public Unit
         std::map<uint32, ObjectGuid> m_followAngles;
 
         uint8 m_fishingSteps;
+
+        std::map<uint32, ItemSetEffect> m_itemSetEffects;
 
         std::set<uint32> m_serversideDailyQuests;
 };

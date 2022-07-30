@@ -738,9 +738,6 @@ Player::~Player()
         m_transport->RemovePassenger(this);
     }
 
-    for (auto& x : ItemSetEff)
-        delete x;
-
     // clean up player-instance binds, may unload some instance saves
     for (auto& m_boundInstance : m_boundInstances)
         for (BoundInstancesMap::iterator itr = m_boundInstance.begin(); itr != m_boundInstance.end(); ++itr)
@@ -832,7 +829,7 @@ bool Player::Create(uint32 guidlow, const std::string& name, uint8 race, uint8 c
 {
     // FIXME: outfitId not used in player creating
 
-    Object::_Create(guidlow, 0, HIGHGUID_PLAYER);
+    Object::_Create(guidlow, guidlow, 0, HIGHGUID_PLAYER);
 
     m_name = name;
 
@@ -2158,7 +2155,7 @@ bool Player::TeleportTo(uint32 mapid, float x, float y, float z, float orientati
         }
     }
 
-    if ((GetMapId() == mapid) && (!m_transport))            // TODO the !m_transport might have unexpected effects when teleporting from transport to other place on same map
+    if ((GetMapId() == mapid))
     {
         // lets reset far teleport flag if it wasn't reset during chained teleports
         SetSemaphoreTeleportFar(false);
@@ -6856,7 +6853,18 @@ void Player::CheckAreaExploreAndOutdoor()
                 continue;
             if ((spellInfo->Stances[0] || spellInfo->StancesNot[0]) && !IsNeedCastSpellAtFormApply(spellInfo, GetShapeshiftForm()))
                 continue;
-            CastSpell(this, spellInfo, TRIGGERED_OLD_TRIGGERED, nullptr);
+            CastSpell(this, spellInfo, TRIGGERED_OLD_TRIGGERED);
+        }
+        for (auto& setData : m_itemSetEffects)
+        {
+            for (auto spellInfo : setData.second.spells)
+            {
+                if (!spellInfo || !IsNeedCastSpellAtOutdoor(spellInfo) || HasAura(spellInfo->Id))
+                    continue;
+                if ((spellInfo->Stances || spellInfo->StancesNot) && !IsNeedCastSpellAtFormApply(spellInfo, GetShapeshiftForm()))
+                    continue;
+                CastSpell(this, spellInfo, TRIGGERED_OLD_TRIGGERED);
+            }
         }
     }
     else if (sWorld.getConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK) && !IsGameMaster())
@@ -8272,12 +8280,9 @@ void Player::UpdateEquipSpellsAtFormChange()
     }
 
     // item set bonuses not dependent from item broken state
-    for (auto eff : ItemSetEff)
+    for (auto& setData : m_itemSetEffects)
     {
-        if (!eff)
-            continue;
-
-        for (auto spellInfo : eff->spells)
+        for (auto spellInfo : setData.second.spells)
         {
             if (!spellInfo)
                 continue;
@@ -8888,50 +8893,6 @@ void Player::SendInitWorldStates(uint32 zoneid, uint32 areaid) const
         case 4197:                                          // Wintergrasp
             if (OutdoorPvP* outdoorPvP = sOutdoorPvPMgr.GetScript(zoneid))
                 outdoorPvP->FillInitialWorldStates(data, count);
-            break;
-        case 2597:                                          // AV
-            if (bg && bg->GetTypeId() == BATTLEGROUND_AV)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3277:                                          // WS
-            if (bg && bg->GetTypeId() == BATTLEGROUND_WS)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3358:                                          // AB
-            if (bg && bg->GetTypeId() == BATTLEGROUND_AB)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3820:                                          // EY
-            if (bg && bg->GetTypeId() == BATTLEGROUND_EY)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3698:                                          // Nagrand Arena
-            if (bg && bg->GetTypeId() == BATTLEGROUND_NA)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3702:                                          // Blade's Edge Arena
-            if (bg && bg->GetTypeId() == BATTLEGROUND_BE)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 3968:                                          // Ruins of Lordaeron
-            if (bg && bg->GetTypeId() == BATTLEGROUND_RL)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 4378:                                          // Dalaran Severs
-            if (bg && bg->GetTypeId() == BATTLEGROUND_DS)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 4384:                                          // Strand of the Ancients
-            if (bg && bg->GetTypeId() == BATTLEGROUND_SA)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 4406:                                          // Ring of Valor
-            if (bg && bg->GetTypeId() == BATTLEGROUND_RV)
-                bg->FillInitialWorldStates(data, count);
-            break;
-        case 4710:                                          // Isle of Conquest
-            if (bg && bg->GetTypeId() == BATTLEGROUND_IC)
-                bg->FillInitialWorldStates(data, count);
             break;
     }
 
@@ -16322,7 +16283,7 @@ bool Player::LoadFromDB(ObjectGuid guid, SqlQueryHolder* holder)
     //"health, power1, power2, power3, power4, power5, power6, power7, specCount, activeSpec, exploredZones, equipmentCache, ammoId, knownTitles, actionBars, grantableLevels, fishingSteps  FROM characters WHERE guid = '%u'", GUID_LOPART(m_guid));
     QueryResult* result = holder->GetResult(PLAYER_LOGIN_QUERY_LOADFROM);
 
-    Object::_Create(guid.GetCounter(), 0, HIGHGUID_PLAYER);
+    Object::_Create(guid.GetCounter(), guid.GetCounter(), 0, HIGHGUID_PLAYER);
 
     if (!result)
     {
@@ -21741,6 +21702,25 @@ void Player::SendAurasForTarget(Unit* target) const
     }
 
     GetSession()->SendPacket(data);
+}
+
+ItemSetEffect* Player::GetItemSetEffect(uint32 setId)
+{
+    auto itr = m_itemSetEffects.find(setId);
+    if (itr == m_itemSetEffects.end())
+        return nullptr;
+
+    return &itr->second;
+}
+
+ItemSetEffect* Player::AddItemSetEffect(uint32 setId)
+{
+    return &m_itemSetEffects.emplace(setId, ItemSetEffect()).first->second;
+}
+
+void Player::RemoveItemSetEffect(uint32 setId)
+{
+    m_itemSetEffects.erase(setId);
 }
 
 void Player::SetDailyQuestStatus(uint32 quest_id)

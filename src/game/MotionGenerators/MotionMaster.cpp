@@ -83,7 +83,7 @@ void MotionMaster::Initialize()
             auto creatureGroup = creature->GetCreatureGroup();
             if (creatureGroup && creatureGroup->GetFormationEntry() && creatureGroup->GetGroupEntry().GetFormationSlotId(m_owner->GetDbGuid()) == 0)
             {
-                m_currentPathId = creatureGroup->GetFormationEntry()->MovementID;
+                m_currentPathId = creatureGroup->GetFormationEntry()->MovementIdOrWander;
                 pathOrigin = WaypointPathOrigin::PATH_FROM_WAYPOINT_PATH;
             }
 
@@ -590,6 +590,16 @@ bool MotionMaster::MoveFall()
     init.SetFall();
     Mutate(new EffectMovementGenerator(init, EVENT_JUMP));
     return true;
+}
+
+void MotionMaster::MoveKnockback(float x, float y, float z, float horizontalSpeed, float max_height, uint32 id)
+{
+    Movement::MoveSplineInit init(*m_owner);
+    init.MoveTo(x, y, z);
+    init.SetParabolic(max_height, 0);
+    init.SetVelocity(horizontalSpeed);
+    init.SetOrientationFixed(true);
+    Mutate(new EffectMovementGenerator(init, id));
 }
 
 void MotionMaster::MoveJump(float x, float y, float z, float horizontalSpeed, float max_height, uint32 id/*= EVENT_JUMP*/)

@@ -32,6 +32,7 @@
 #include "Tools/Formulas.h"
 #include "Grids/GridNotifiersImpl.h"
 #include "Chat/Chat.h"
+#include "World/WorldStateDefines.h"
 
 namespace MaNGOS
 {
@@ -130,6 +131,20 @@ namespace MaNGOS
             int32 i_textId;
             Creature const* i_source;
             va_list* i_args;
+    };
+
+    class BattleGroundBroadcastBuilder
+    {
+        public:
+            BattleGroundBroadcastBuilder(BroadcastText const* bcd, Creature const* source)
+                : i_source(source), i_bcd(bcd) {}
+            void operator()(WorldPacket& data, int32 loc_idx)
+            {
+                ChatHandler::BuildChatPacket(data, CHAT_MSG_MONSTER_YELL, i_bcd->GetText(loc_idx, i_source->getGender()).c_str(), i_bcd->languageId, CHAT_TAG_NONE, i_source->GetObjectGuid(), i_source->GetName());
+            }
+        private:
+            Creature const* i_source;
+            BroadcastText const* i_bcd;
     };
 
     class BattleGround2ChatBuilder
@@ -254,9 +269,6 @@ BattleGround::BattleGround(): m_buffChange(false), m_arenaBuffSpawned(false), m_
 
     m_playersCount[TEAM_INDEX_ALLIANCE]    = 0;
     m_playersCount[TEAM_INDEX_HORDE]       = 0;
-
-    m_teamScores[TEAM_INDEX_ALLIANCE]      = 0;
-    m_teamScores[TEAM_INDEX_HORDE]         = 0;
 
     m_prematureCountDown = false;
     m_prematureCountDownTimer = 0;
@@ -770,42 +782,6 @@ void BattleGround::UpdateWorldStateForPlayer(uint32 field, uint32 value, Player*
 }
 
 /**
-  Method updates initial world states - main function used mainly for arenas
-
-  @param    data
-  @param    count
-*/
-void BattleGround::FillInitialWorldStates(WorldPacket& data, uint32& count)
-{
-    if (IsArena())
-    {
-        FillInitialWorldState(data, count, WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(ALLIANCE));
-        FillInitialWorldState(data, count, WORLD_STATE_ARENA_COUNT_H, GetAlivePlayersCountByTeam(HORDE));
-
-        // the main arena world state is different for the old 2.x arenas
-        uint32 state = 0;
-        switch (GetTypeId())
-        {
-            case BATTLEGROUND_NA:
-                state = WORLD_STATE_ARENA_MAIN_NA;
-                break;
-            case BATTLEGROUND_BE:
-                state = WORLD_STATE_ARENA_MAIN_BE;
-                break;
-            case BATTLEGROUND_RL:
-                state = WORLD_STATE_ARENA_MAIN_RL;
-                break;
-            default:
-                state = WORLD_STATE_ARENA_MAIN;
-                break;
-        }
-
-        if (state)
-            FillInitialWorldState(data, count, state, WORLD_STATE_ADD);
-    }
-}
-
-/**
   Method that ends battleground
 
   @param    winner team
@@ -901,6 +877,17 @@ void BattleGround::EndBattleGround(Team winner)
             SetArenaTeamRatingChangeForTeam(ALLIANCE, ARENA_TIMELIMIT_POINTS_LOSS);
             SetArenaTeamRatingChangeForTeam(HORDE, ARENA_TIMELIMIT_POINTS_LOSS);
         }
+    }
+
+    auto& objectStore = GetBgMap()->GetObjectsStore();
+    for (auto itr = objectStore.begin<Creature>(); itr != objectStore.end<Creature>(); ++itr)
+    {
+        Creature* creature = itr->second;
+        if (creature->IsClientControlled())
+            continue;
+        creature->SetImmuneToNPC(true);
+        creature->SetImmuneToPlayer(true);
+        creature->SetStunned(true);
     }
 
     for (auto& m_Player : m_players)
@@ -1054,7 +1041,8 @@ void BattleGround::EndBattleGround(Team winner)
         loser_arena_team->NotifyStatsChanged();
     }
 
-    if (winmsg_id)
+    // AV message is different - TODO: check if others are also wrong
+    if (winmsg_id && GetTypeId() != BATTLEGROUND_QUEUE_AV)
         SendMessageToAll(winmsg_id, CHAT_MSG_BG_SYSTEM_NEUTRAL);
 }
 
@@ -1460,6 +1448,34 @@ void BattleGround::Reset()
     for (BattleGroundScoreMap::const_iterator itr = m_playerScores.begin(); itr != m_playerScores.end(); ++itr)
         delete itr->second;
     m_playerScores.clear();
+
+    
+    GetBgMap()->GetVariableManager().SetVariableData(WORLD_STATE_ARENA_COUNT_A, true, 0, 0);
+    GetBgMap()->GetVariableManager().SetVariableData(WORLD_STATE_ARENA_COUNT_H, true, 0, 0);
+
+    // the main arena world state is different for the old 2.x arenas
+    uint32 state = 0;
+    switch (GetTypeId())
+    {
+        case BATTLEGROUND_NA:
+            state = WORLD_STATE_ARENA_NA_HUD_ENABLED;
+            break;
+        case BATTLEGROUND_BE:
+            state = WORLD_STATE_ARENA_BE_HUD_ENABLED;
+            break;
+        case BATTLEGROUND_RL:
+            state = WORLD_STATE_ARENA_RL_HUD_ENABLED;
+            break;
+        default:
+            state = WORLD_STATE_ARENA_HUD_ENABLED;
+            break;
+    }
+
+    if (state)
+    {
+        GetBgMap()->GetVariableManager().SetVariable(state, WORLD_STATE_ADD);
+        GetBgMap()->GetVariableManager().SetVariableData(state, true, 0, 0);
+    }
 }
 
 /**
@@ -1559,8 +1575,8 @@ void BattleGround::AddPlayer(Player* player)
         m_playerScores[player->GetObjectGuid()] = score;
 
         // update world states on player enter
-        UpdateWorldState(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(ALLIANCE));
-        UpdateWorldState(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(HORDE));
+        GetBgMap()->GetVariableManager().SetVariable(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(ALLIANCE));
+        GetBgMap()->GetVariableManager().SetVariable(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(HORDE));
     }
     else
     {
@@ -1685,8 +1701,8 @@ void BattleGround::RemovePlayer(Player* /*player*/, ObjectGuid /*guid*/)
         if (GetStatus() == STATUS_WAIT_LEAVE)
             return;
 
-        UpdateWorldState(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(ALLIANCE));
-        UpdateWorldState(WORLD_STATE_ARENA_COUNT_H, GetAlivePlayersCountByTeam(HORDE));
+        GetBgMap()->GetVariableManager().SetVariable(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(ALLIANCE));
+        GetBgMap()->GetVariableManager().SetVariable(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(HORDE));
 
         CheckArenaWinConditions();
     }
@@ -2155,6 +2171,25 @@ void BattleGround::SendYell2ToAll(int32 entry, uint32 language, Creature const* 
     BroadcastWorker(bg_do);
 }
 
+void BattleGround::SendBcdToAll(int32 bcdEntry, Creature const* source)
+{
+    MaNGOS::BattleGroundBroadcastBuilder bg_builder(sObjectMgr.GetBroadcastText(bcdEntry), source);
+    MaNGOS::LocalizedPacketDo<MaNGOS::BattleGroundBroadcastBuilder> bg_do(bg_builder);
+    BroadcastWorker(bg_do);
+}
+
+void BattleGround::SendBcdToTeam(int32 bcdEntry, Creature const* source, Team team)
+{
+    MaNGOS::BattleGroundBroadcastBuilder bg_builder(sObjectMgr.GetBroadcastText(bcdEntry), source);
+    MaNGOS::LocalizedPacketDo<MaNGOS::BattleGroundBroadcastBuilder> bg_do(bg_builder);
+    auto lambda = [&](Player* player)
+    {
+        if (player->GetTeam() == team)
+            bg_do(player);
+    };
+    BroadcastWorker(lambda);
+}
+
 /**
   Function that ends the battleground immediately
 */
@@ -2225,8 +2260,8 @@ void BattleGround::HandleKillPlayer(Player* player, Player* killer)
     if (IsArena())
     {
         // update world states on player kill
-        UpdateWorldState(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(ALLIANCE));
-        UpdateWorldState(WORLD_STATE_ARENA_COUNT_H, GetAlivePlayersCountByTeam(HORDE));
+        GetBgMap()->GetVariableManager().SetVariable(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(ALLIANCE));
+        GetBgMap()->GetVariableManager().SetVariable(WORLD_STATE_ARENA_COUNT_A, GetAlivePlayersCountByTeam(HORDE));
 
         // check win conditions
         CheckArenaWinConditions();
@@ -2327,20 +2362,6 @@ void BattleGround::SetBgRaid(Team team, Group* bgRaid)
         bgRaid->SetBattlegroundGroup(this);
 
     oldRaid = bgRaid;
-}
-
-/**
-  Function that checkes if team score is in range
-
-  @param    team
-  @param    min score
-  @param    max score
-*/
-bool BattleGround::IsTeamScoreInRange(Team team, uint32 minScore, uint32 maxScore) const
-{
-    PvpTeamIndex team_idx = GetTeamIndexByTeamId(team);
-    uint32 score = (m_teamScores[team_idx] < 0) ? 0 : uint32(m_teamScores[team_idx]);
-    return score >= minScore && score <= maxScore;
 }
 
 /**

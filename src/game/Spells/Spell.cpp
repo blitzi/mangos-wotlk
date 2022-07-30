@@ -472,7 +472,7 @@ Spell::Spell(WorldObject * caster, SpellEntry const* info, uint32 triggeredFlags
     itemTarget = nullptr;
     gameObjTarget = nullptr;
     corpseTarget = nullptr;
-    focusObject = nullptr;
+    m_eventTarget = nullptr;
     m_cast_count = 0;
     m_glyphIndex = 0;
     m_triggeredByAuraSpell  = nullptr;
@@ -764,6 +764,22 @@ void Spell::FillTargetMap()
         {
             SendCastResult(SPELL_FAILED_IMMUNE); // guessed error
             finish(false);
+        }
+    }
+
+    if (m_spellInfo->HasAttribute(SPELL_ATTR_EX_REQUIRE_ALL_TARGETS))
+    {
+        for (auto& ihit : m_UniqueTargetInfo)
+        {
+            if (ihit.targetGUID == m_targets.getUnitTargetGuid() && ihit.missCondition != SPELL_MISS_NONE)
+            {
+                for (auto& ihit : m_UniqueTargetInfo)
+                {
+                    ihit.effectHitMask = 0;
+                    ihit.effectMask = 0;
+                }
+                return;
+            }
         }
     }
 }
@@ -3400,6 +3416,7 @@ void Spell::cancel()
     {
         m_caster->RemoveDynObject(m_spellInfo->Id);
         m_caster->RemoveGameObject(m_spellInfo->Id, true);
+        m_caster->RemoveCreature(m_spellInfo->Id, true);
     }
 }
 
@@ -4079,8 +4096,7 @@ void Spell::update(uint32 difftime)
                         {
                             if (!m_caster->IsWithinCombatDistInMap(channelTarget, m_maxRange * 1.5f))
                             {
-                                SendChannelUpdate(0);
-                                finish();
+                                cancel();
                             }
                         }
                     }
@@ -4832,8 +4848,7 @@ void Spell::SendChannelStart(uint32 duration)
     {
         for (TargetList::const_iterator itr = m_UniqueTargetInfo.begin(); itr != m_UniqueTargetInfo.end(); ++itr)
         {
-            if (((itr->effectHitMask & (1 << EFFECT_INDEX_0)) && itr->reflectResult == SPELL_MISS_NONE &&
-                    m_itemCastSpell) || itr->targetGUID != m_caster->GetObjectGuid())
+            if (((itr->effectHitMask & (1 << EFFECT_INDEX_0)) && itr->reflectResult == SPELL_MISS_NONE) || itr->targetGUID != m_caster->GetObjectGuid())
             {
                 // when immune, duration is already 0, still need to fetch data for caster
                 if (itr->diminishGroup > DIMINISHING_NONE && (itr->diminishDuration != duration || diminishLevel == DIMINISHING_LEVEL_IMMUNE))
@@ -4860,6 +4875,10 @@ void Spell::SendChannelStart(uint32 duration)
                 break;
             }
         }
+    }
+    else if (m_spellInfo->Id == 27360) // override for research - is not used in targeting but supplied as unittarget
+    {
+        target = m_targets.getUnitTarget();
     }
 
     // change channel duration to account for DR if neccessary, also store in caster's targetInfo to use later for setting aura duration
@@ -5918,7 +5937,7 @@ SpellCastResult Spell::CheckCast(bool strict)
         if (!ok)
             return SPELL_FAILED_REQUIRES_SPELL_FOCUS;
 
-        focusObject = ok;                                   // game object found in range
+        m_eventTarget = ok;                                   // game object found in range
     }
 
     if (!m_IsTriggeredSpell)
@@ -7274,13 +7293,13 @@ std::pair<float, float> Spell::GetMinMaxRange(bool strict)
                     meleeRange = caster->GetCombinedCombatReach(target ? target : caster, true, 0.f);
             }
 
-            bool friendly = target ? target->CanAssistSpell(m_caster, m_spellInfo) : false;
+            bool friendly = target ? m_trueCaster->CanAssistSpell(target, m_spellInfo) : false;
             minRange = GetSpellMinRange(spellRange, friendly) + meleeRange;
             maxRange = GetSpellMaxRange(spellRange, friendly);
 
             if (target || m_targets.getCorpseTarget())
             {
-                rangeMod = m_caster->GetCombatReach() + (target ? target->GetCombatReach() : m_caster->GetCombatReach());
+                rangeMod = m_trueCaster->GetCombatReach() + (target ? target->GetCombatReach() : m_trueCaster->GetCombatReach());
 
                 if (minRange > 0.0f && !(spellRange->Flags & SPELL_RANGE_FLAG_RANGED))
                     minRange += rangeMod;
@@ -7393,8 +7412,8 @@ int32 Spell::CalculateSpellEffectDamage(Unit* unitTarget, int32 damage)
         {
             // Calculate damage bonus
             if (!m_trueCaster->IsGameObject())
-                damage = m_caster->SpellDamageBonusDone(unitTarget, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
-            damage = unitTarget->SpellDamageBonusTaken(m_trueCaster->IsGameObject() ? nullptr : m_caster, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
+                damage = m_caster->SpellDamageBonusDone(unitTarget, m_spellSchoolMask, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
+            damage = unitTarget->SpellDamageBonusTaken(m_trueCaster->IsGameObject() ? nullptr : m_caster, m_spellSchoolMask, m_spellInfo, damage, SPELL_DIRECT_DAMAGE);
         }
         break;
     }

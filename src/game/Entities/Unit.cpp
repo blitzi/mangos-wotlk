@@ -1426,11 +1426,11 @@ void Unit::JustKilledCreature(Unit* killer, Creature* victim, Player* responsibl
     if (victim->IsLinkingEventTrigger())
         victim->GetMap()->GetCreatureLinkingHolder()->DoCreatureLinkingEvent(LINKING_EVENT_DIE, victim);
 
-    if (victim->GetCreatureGroup())
+    if (CreatureGroup* cGroup = victim->GetCreatureGroup())
     {
-        auto fData = victim->GetCreatureGroup()->GetFormationData();
-        if (fData)
+        if (FormationData* fData = cGroup->GetFormationData())
             fData->OnDeath(victim);
+        cGroup->TriggerLinkingEvent(CREATURE_GROUP_EVENT_MEMBER_DIED, victim);
     }
 
     // Dungeon specific stuff
@@ -1770,8 +1770,8 @@ void Unit::CalculateSpellDamage(SpellNonMeleeDamage* spellDamageInfo, int32 dama
         case SPELL_DAMAGE_CLASS_MAGIC:
         {
             // Calculate damage bonus
-            damage = SpellDamageBonusDone(pVictim, spellInfo, damage, SPELL_DIRECT_DAMAGE);
-            damage = pVictim->SpellDamageBonusTaken(this, spellInfo, damage, SPELL_DIRECT_DAMAGE);
+            damage = SpellDamageBonusDone(pVictim, damageSchoolMask, spellInfo, damage, SPELL_DIRECT_DAMAGE);
+            damage = pVictim->SpellDamageBonusTaken(this, damageSchoolMask, spellInfo, damage, SPELL_DIRECT_DAMAGE);
         }
         break;
     }
@@ -2984,7 +2984,7 @@ void Unit::CalculateAbsorbResistBlock(Unit* caster, SpellNonMeleeDamage* spellDa
     }
 
     uint32 absorb_affected_damage = caster ? caster->CalcNotIgnoreAbsorbDamage(spellDamageInfo->damage, GetSpellSchoolMask(spellProto), spellProto) : spellDamageInfo->damage;
-    CalculateDamageAbsorbAndResist(caster, GetSpellSchoolMask(spellProto), SPELL_DIRECT_DAMAGE, absorb_affected_damage, &spellDamageInfo->absorb, &spellDamageInfo->resist, IsReflectableSpell(spellProto), IsResistableSpell(spellProto) && !spellProto->HasAttribute(SPELL_ATTR_EX5_NO_PARTIAL_RESISTS), IsBinarySpell(*spellProto));
+    CalculateDamageAbsorbAndResist(caster, spellDamageInfo->schoolMask, SPELL_DIRECT_DAMAGE, absorb_affected_damage, &spellDamageInfo->absorb, &spellDamageInfo->resist, IsReflectableSpell(spellProto), IsResistableSpell(spellProto) && !spellProto->HasAttribute(SPELL_ATTR_EX5_NO_PARTIAL_RESISTS), IsBinarySpell(*spellProto));
 
     const uint32 bonus = (spellDamageInfo->resist < 0 ? uint32(std::abs(spellDamageInfo->resist)) : 0);
     spellDamageInfo->damage += bonus;
@@ -3256,18 +3256,12 @@ void Unit::SendMeleeAttackStart(Unit* pVictim) const
 
 void Unit::SendMeleeAttackStop(Unit* victim) const
 {
-    if (!victim)
-        return;
-
     WorldPacket data(SMSG_ATTACKSTOP, (4 + 16));            // we guess size
     data << GetPackGUID();
-    data << victim->GetPackGUID();                          // can be 0x00...
-    data << uint32(0);                                      // can be 0x1
+    data << (victim ? victim->GetPackGUID() : PackedGuid());
+    data << uint32(IsDead() ? 1 : 0);
     SendMessageToSet(data, true);
     DETAIL_FILTER_LOG(LOG_FILTER_COMBAT, "%s stopped attacking %s", GetGuidStr().c_str(), victim->GetGuidStr().c_str());
-
-    /*if(victim->GetTypeId() == TYPEID_UNIT)
-    ((Creature*)victim)->AI().EnterEvadeMode(this);*/
 }
 
 SpellMissInfo Unit::MeleeSpellHitResult(Unit* pVictim, SpellEntry const* spell, uint32* heartbeatResistChance/* = nullptr*/)
@@ -4109,17 +4103,23 @@ float Unit::GetCritChance(const SpellEntry* entry, SpellSchoolMask schoolMask) c
     if (!entry)
         return 0.0f;
 
-    // Add own hit chance
-    switch (entry->DmgClass)
+    if (entry->HasAttribute(SPELL_ATTR_EX3_NORMAL_RANGED_ATTACK)) // Wand shoot forced to use ranged crit
+        chance += GetCritChance(GetWeaponAttackType(entry));
+    else
     {
-        case SPELL_DAMAGE_CLASS_MAGIC:
-            chance += GetCritChance(schoolMask);
-            break;
-        case SPELL_DAMAGE_CLASS_MELEE:
-        case SPELL_DAMAGE_CLASS_RANGED:
-            chance += GetCritChance(GetWeaponAttackType(entry));
-            break;
+        // Add own hit chance
+        switch (entry->DmgClass)
+        {
+            case SPELL_DAMAGE_CLASS_MAGIC:
+                chance += GetCritChance(schoolMask);
+                break;
+            case SPELL_DAMAGE_CLASS_MELEE:
+            case SPELL_DAMAGE_CLASS_RANGED:
+                chance += GetCritChance(GetWeaponAttackType(entry));
+                break;
+        }
     }
+
     // Add mod
     if (Player* modOwner = GetSpellModOwner())
         modOwner->ApplySpellMod(entry->Id, SPELLMOD_CRITICAL_CHANCE, chance);
@@ -4725,6 +4725,9 @@ bool Unit::RollSpellCritOutcome(Unit* caster, const Unit* victim, SpellSchoolMas
 {
     if (!caster || !caster->CanCrit(spell, schoolMask, GetWeaponAttackType(spell)))
         return false;
+
+    if (spell->DmgClass == SPELL_DAMAGE_CLASS_MELEE && victim->IsPlayer() && !victim->IsStandState()) // autocrit on not standing for melee ability
+        return true;
 
     const float chance = caster->CalculateSpellCritChance(victim, schoolMask, spell);
     return roll_chance_combat(chance);
@@ -6921,6 +6924,23 @@ void Unit::RemoveAllGameObjects()
     m_wildGameObjs.clear();
 }
 
+void Unit::AddCreature(uint32 spellId, Creature* creature)
+{
+    m_creatures.emplace(spellId, creature);
+}
+
+void Unit::RemoveCreature(uint32 spellId, bool del)
+{
+    if (del)
+    {
+        auto itr = m_creatures.find(spellId);
+        if (itr != m_creatures.end())
+            itr->second->ForcedDespawn();
+    }
+
+    m_creatures.erase(spellId);
+}
+
 void Unit::SendSpellNonMeleeDamageLog(SpellNonMeleeDamage* log)
 {
     WorldPacket data(SMSG_SPELLNONMELEEDAMAGELOG, (8 + 8 + 4 + 4 + 4 + 1 + 4 + 4 + 1 + 1 + 4 + 4 + 1));
@@ -7095,7 +7115,7 @@ void Unit::CasterHitTargetWithSpell(Unit* realCaster, Unit* target, SpellEntry c
 
         // we want to change the stand state of each character if possible/required
         // Since patch 1.5.0 sitting creature always stand up on attack (even if stunned)
-        if (success && !target->IsStandState() && target->IsPlayer())
+        if (success && !target->IsStandState() && !target->IsInCombat())
             target->SetStandState(UNIT_STAND_STATE_STAND);
 
         // Hostile spell hits count as attack made against target (if detected), stealth removed at Spell::cast if spell break it
@@ -8231,7 +8251,7 @@ int32 Unit::SpellBonusWithCoeffs(SpellEntry const* spellProto, int32 total, int3
  * Calculates caster part of spell damage bonuses,
  * also includes different bonuses dependent from target auras
  */
-uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, uint32 pdamage, DamageEffectType damagetype, uint32 stack)
+uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellSchoolMask schoolMask, SpellEntry const* spellProto, uint32 pdamage, DamageEffectType damagetype, uint32 stack)
 {
     if (!spellProto || !victim || damagetype == DIRECT_DAMAGE)
         return pdamage;
@@ -8244,7 +8264,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, ui
     if (GetTypeId() == TYPEID_UNIT && ((Creature*)this)->IsTotem() && ((Totem*)this)->GetTotemType() != TOTEM_STATUE)
     {
         if (Unit* owner = GetOwner())
-            return owner->SpellDamageBonusDone(victim, spellProto, pdamage, damagetype);
+            return owner->SpellDamageBonusDone(victim, schoolMask, spellProto, pdamage, damagetype);
     }
 
     uint32 creatureTypeMask = victim->GetCreatureTypeMask();
@@ -8266,7 +8286,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, ui
         AuraList const& mModDamagePercentDone = GetAurasByType(SPELL_AURA_MOD_DAMAGE_PERCENT_DONE);
         for (auto i : mModDamagePercentDone)
         {
-            if ((i->GetModifier()->m_miscvalue & GetSpellSchoolMask(spellProto)) &&
+            if ((i->GetModifier()->m_miscvalue & schoolMask) &&
                 i->GetSpellProto()->EquippedItemClass == -1 &&
                 // -1 == any item class (not wand then)
                 i->GetSpellProto()->EquippedItemInventoryTypeMask == 0)
@@ -8294,7 +8314,7 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, ui
         owner = this;
 
     // Done fixed damage bonus auras
-    int32 DoneAdvertisedBenefit = SpellBaseDamageBonusDone(GetSpellSchoolMask(spellProto));
+    int32 DoneAdvertisedBenefit = SpellBaseDamageBonusDone(schoolMask);
 
     for (auto i : GetScriptedLocationAuras(SCRIPT_LOCATION_SPELL_DAMAGE_DONE))
     {
@@ -8571,12 +8591,10 @@ uint32 Unit::SpellDamageBonusDone(Unit* victim, SpellEntry const* spellProto, ui
  * Calculates target part of spell damage bonuses,
  * will be called on each tick for periodic damage over time auras
  */
-uint32 Unit::SpellDamageBonusTaken(Unit* caster, SpellEntry const* spellProto, uint32 pdamage, DamageEffectType damagetype, uint32 stack)
+uint32 Unit::SpellDamageBonusTaken(Unit* caster, SpellSchoolMask schoolMask, SpellEntry const* spellProto, uint32 pdamage, DamageEffectType damagetype, uint32 stack)
 {
     if (!spellProto || damagetype == DIRECT_DAMAGE || spellProto->HasAttribute(SPELL_ATTR_EX4_IGNORE_DAMAGE_TAKEN_MODIFIERS))
         return pdamage;
-
-    uint32 schoolMask = spellProto->SchoolMask;
 
     // Taken total percent damage auras
     float TakenTotalMod = 1.0f;
@@ -12828,7 +12846,7 @@ void Unit::KnockBackWithAngle(float angle, float horizontalSpeed, float vertical
     float fz = oz + 0.5f;
     GetMap()->GetHitPosition(ox, oy, oz + 0.5f, fx, fy, fz, GetPhaseMask(), -0.5f);
     UpdateAllowedPositionZ(fx, fy, fz);
-    GetMotionMaster()->MoveJump(fx, fy, fz, horizontalSpeed, max_height);
+    GetMotionMaster()->MoveKnockback(fx, fy, fz, horizontalSpeed, max_height);
 }
 
 float Unit::GetCombatRatingReduction(CombatRating cr) const
@@ -13335,7 +13353,8 @@ Unit* Unit::TakePossessOf(SpellEntry const* spellEntry, SummonPropertiesEntry co
     if (x == 0.0f && y == 0.0f && z == 0.0f)
         pos = CreatureCreatePos(this, GetOrientation(), CONTACT_DISTANCE, ang);
 
-    if (!possessed->Create(GetMap()->GenerateLocalLowGuid(cinfo->GetHighGuid()), pos, cinfo))
+    uint32 lowGuid = GetMap()->GenerateLocalLowGuid(cinfo->GetHighGuid());
+    if (!possessed->Create(lowGuid, lowGuid, pos, cinfo))
     {
         delete possessed;
         return nullptr;

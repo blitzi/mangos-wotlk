@@ -196,7 +196,7 @@ bool Transport::Create(uint32 guidlow, uint32 mapid, float x, float y, float z, 
         return false;
     }
 
-    Object::_Create(guidlow, 0, HIGHGUID_MO_TRANSPORT);
+    Object::_Create(guidlow, guidlow, 0, HIGHGUID_MO_TRANSPORT);
 
     GameObjectInfo const* goinfo = ObjectMgr::GetGameObjectInfo(guidlow);
 
@@ -570,15 +570,17 @@ float Transport::CalculateSegmentPos(float now)
     return segmentPos / frame.NextDistFromPrev;
 }
 
-bool ElevatorTransport::Create(uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang, const QuaternionData& rotation, uint8 animprogress, GOState go_state)
+bool ElevatorTransport::Create(uint32 dbGuid, uint32 guidlow, uint32 name_id, Map* map, uint32 phaseMask, float x, float y, float z, float ang, const QuaternionData& rotation, uint8 animprogress, GOState go_state)
 {
-    if (GenericTransport::Create(guidlow, name_id, map, phaseMask, x, y, z, ang, rotation, animprogress, go_state))
+    if (GenericTransport::Create(dbGuid, guidlow, name_id, map, phaseMask, x, y, z, ang, rotation, animprogress, go_state))
     {
         m_pathProgress = GetGOInfo()->transport.startOpen ? GetGOInfo()->transport.pause : 0; // these start in the middle of their path
         m_stopped = GetGOInfo()->transport.pause > 0;
         m_animationInfo = sTransportMgr.GetTransportAnimInfo(GetGOInfo()->id);
         m_currentSeg = 0;
         m_eventTriggered = false;
+        if (m_stopped) // only verified for SotA attacker ships for now
+            SetInt16Value(GAMEOBJECT_DYNAMIC, 1, -1);
         return true;
     }
     return false;
@@ -679,6 +681,9 @@ void ElevatorTransport::Update(const uint32 diff)
                 }
             }
         }
+
+        if (GetGOInfo()->transport.pause)
+            SetUInt16Value(GAMEOBJECT_DYNAMIC, 1, m_pathProgress);
     }
 
     if (AI())

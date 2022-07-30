@@ -520,36 +520,11 @@ PersistentAreaAura::~PersistentAreaAura()
 {
 }
 
-SingleEnemyTargetAura::SingleEnemyTargetAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target,
-        Unit* caster, Item* castItem) : Aura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem)
-{
-    if (caster)
-        m_castersTargetGuid = caster->GetSelectionGuid();
-}
-
-SingleEnemyTargetAura::~SingleEnemyTargetAura()
-{
-}
-
-Unit* SingleEnemyTargetAura::GetTriggerTarget() const
-{
-    return ObjectAccessor::GetUnit(*(m_spellAuraHolder->GetTarget()), m_castersTargetGuid);
-}
-
 Aura* CreateAura(SpellEntry const* spellproto, SpellEffectIndex eff, int32 const* currentDamage, int32 const* currentBasePoints, SpellAuraHolder* holder, Unit* target, Unit* caster, Item* castItem)
 {
     Aura* aura = nullptr;
     if (IsAreaAuraEffect(spellproto->Effect[eff]))
         aura = new AreaAura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem);
-
-    if (!aura)
-    {
-        uint32 triggeredSpellId = spellproto->EffectTriggerSpell[eff];
-        if (SpellEntry const* triggeredSpellInfo = sSpellTemplate.LookupEntry<SpellEntry>(triggeredSpellId))
-            for (unsigned int i : triggeredSpellInfo->EffectImplicitTargetA)
-                if (i == TARGET_UNIT_CHANNEL_TARGET)
-                    aura = new SingleEnemyTargetAura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem);
-    }
 
     if (!aura)
         aura = new Aura(spellproto, eff, currentDamage, currentBasePoints, holder, target, caster, castItem);
@@ -1111,7 +1086,6 @@ void Aura::PickTargetsForSpellTrigger(Unit*& triggerCaster, Unit*& triggerTarget
         case TARGET_LOCATION_UNIT_RANDOM_SIDE: // fireball barrage
         case TARGET_UNIT_ENEMY:
         case TARGET_UNIT:
-        case TARGET_UNIT_CHANNEL_TARGET: // Electrified net
             triggerCaster = GetCaster();
             if (!triggerCaster)
                 triggerCaster = triggerTarget;
@@ -1121,6 +1095,10 @@ void Aura::PickTargetsForSpellTrigger(Unit*& triggerCaster, Unit*& triggerTarget
         case TARGET_UNIT_CASTER:
             triggerCaster = GetTarget();
             triggerTarget = GetTarget();
+            break;
+        case TARGET_UNIT_CHANNEL_TARGET: // Electrified net
+            triggerCaster = GetCaster();
+            triggerTarget = dynamic_cast<Unit*>(triggerCaster->GetChannelObject());
             break;
         case TARGET_LOCATION_CHANNEL_TARGET_DEST:
             triggerCaster = GetCaster();
@@ -6320,7 +6298,7 @@ void Aura::HandleAuraDamageShield(bool apply, bool real)
         if (!caster)
             return;
 
-        m_modifier.m_amount = caster->SpellDamageBonusDone(target, GetSpellProto(), m_modifier.m_amount, SPELL_DIRECT_DAMAGE, GetStackAmount());
+        m_modifier.m_amount = caster->SpellDamageBonusDone(target, SpellSchoolMask(GetSpellProto()->SchoolMask), GetSpellProto(), m_modifier.m_amount, SPELL_DIRECT_DAMAGE, GetStackAmount());
     }
 }
 
@@ -6434,7 +6412,7 @@ void Aura::HandlePeriodicDamage(bool apply, bool Real)
         {
             // SpellDamageBonusDone for magic spells
             if (spellProto->DmgClass == SPELL_DAMAGE_CLASS_NONE || spellProto->DmgClass == SPELL_DAMAGE_CLASS_MAGIC)
-                m_modifier.m_amount = caster->SpellDamageBonusDone(target, GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
+                m_modifier.m_amount = caster->SpellDamageBonusDone(target, SpellSchoolMask(GetSpellProto()->SchoolMask), GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
             // MeleeDamagebonusDone for weapon based spells
             else
             {
@@ -6491,7 +6469,7 @@ void Aura::HandlePeriodicLeech(bool apply, bool /*Real*/)
         if (!caster)
             return;
 
-        m_modifier.m_amount = caster->SpellDamageBonusDone(GetTarget(), GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
+        m_modifier.m_amount = caster->SpellDamageBonusDone(GetTarget(), SpellSchoolMask(GetSpellProto()->SchoolMask), GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
     }
 }
 
@@ -6529,7 +6507,7 @@ void Aura::HandlePeriodicHealthFunnel(bool apply, bool /*Real*/)
         if (!caster)
             return;
 
-        m_modifier.m_amount = caster->SpellDamageBonusDone(GetTarget(), GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
+        m_modifier.m_amount = caster->SpellDamageBonusDone(GetTarget(), SpellSchoolMask(GetSpellProto()->SchoolMask), GetSpellProto(), m_modifier.m_amount, DOT, GetStackAmount());
     }
 }
 
@@ -8309,7 +8287,7 @@ void Aura::PeriodicTick()
 
             // SpellDamageBonus for magic spells
             if ((spellProto->DmgClass == SPELL_DAMAGE_CLASS_NONE && isNotBleed) || spellProto->DmgClass == SPELL_DAMAGE_CLASS_MAGIC)
-                pdamage = target->SpellDamageBonusTaken(caster, spellProto, pdamage, DOT, GetStackAmount());
+                pdamage = target->SpellDamageBonusTaken(caster, SpellSchoolMask(spellProto->SchoolMask), spellProto, pdamage, DOT, GetStackAmount());
             // MeleeDamagebonus for weapon based spells
             else
             {
@@ -8410,7 +8388,7 @@ void Aura::PeriodicTick()
             uint32 absorb = 0;
             int32 resist = 0;
 
-            pdamage = target->SpellDamageBonusTaken(pCaster, spellProto, pdamage, DOT, GetStackAmount());
+            pdamage = target->SpellDamageBonusTaken(pCaster, SpellSchoolMask(spellProto->SchoolMask), spellProto, pdamage, DOT, GetStackAmount());
 
             bool isCrit = IsCritFromAbilityAura(pCaster, pdamage);
 

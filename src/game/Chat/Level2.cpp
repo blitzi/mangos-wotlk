@@ -74,8 +74,8 @@ bool ChatHandler::HandleMuteCommand(char* args)
     if (!ExtractPlayerTarget(&nameStr, &target, &target_guid, &target_name))
         return false;
 
-    uint32 notspeaktime;
-    if (!ExtractUInt32(&args, notspeaktime))
+    uint32 mutedMinutes;
+    if (!ExtractUInt32(&args, mutedMinutes))
         return false;
 
     std::string givenReason;
@@ -95,7 +95,7 @@ bool ChatHandler::HandleMuteCommand(char* args)
     if (HasLowerSecurity(target, target_guid, true))
         return false;
 
-    time_t mutetime = time(nullptr) + notspeaktime * 60;
+    time_t mutetime = time(nullptr) + mutedMinutes * 60;
 
     if (target)
         target->GetSession()->m_muteTime = mutetime;
@@ -103,19 +103,22 @@ bool ChatHandler::HandleMuteCommand(char* args)
     LoginDatabase.PExecute("UPDATE account SET mutetime = " UI64FMTD " WHERE id = '%u'", uint64(mutetime), account_id);
 
     if (target)
-        ChatHandler(target).PSendSysMessage(LANG_YOUR_CHAT_DISABLED, notspeaktime);
+        ChatHandler(target).PSendSysMessage(LANG_YOUR_CHAT_DISABLED, mutedMinutes);
 
     std::string nameLink = playerLink(target_name);
 
-    PSendSysMessage(LANG_YOU_DISABLE_CHAT, nameLink.c_str(), notspeaktime);
+    PSendSysMessage(LANG_YOU_DISABLE_CHAT, nameLink.c_str(), mutedMinutes);
 
     // Add warning to the account
     std::string authorName = m_session ? m_session->GetPlayerName() : "Console";
     std::stringstream reason;
-    reason << target->GetName() << " muted " << notspeaktime << " minutes";
-    if (givenReason != "")
+    reason << (target ? target->GetName() : target_name) << " muted " << mutedMinutes << " minutes";
+
+    if (!givenReason.empty())
         reason << " for \"" << givenReason << "\"";
+
     sWorld.WarnAccount(account_id, authorName, reason.str(), "WARNING");
+
     return true;
 }
 
@@ -664,7 +667,15 @@ bool ChatHandler::HandleGoCreatureCommand(char* args)
         {
             Creature* creature = nullptr;
             if (dbGuid)
+            {
+                // check static creature store
                 creature = map->GetCreature(ObjectGuid(HIGHGUID_UNIT, dbGuid));
+                if (!creature)
+                {
+                    // check creature with dynamic guid
+                    creature = map->GetCreature(dbGuid);
+                }
+            }
             /*else
                 creature = map->GetCreatureByEntry(data->id);*/
 
@@ -1163,7 +1174,7 @@ bool ChatHandler::HandleGameObjectAddCommand(char* args)
 
     GameObject* pGameObj = GameObject::CreateGameObject(gInfo->id);
     QuaternionData data(0.f, 0.f, sin(o / 2), cos(o / 2));
-    if (!pGameObj->Create(db_lowGUID, gInfo->id, map, plr->GetPhaseMaskForSpawn(), x, y, z, o, data))
+    if (!pGameObj->Create(db_lowGUID, db_lowGUID, gInfo->id, map, plr->GetPhaseMaskForSpawn(), x, y, z, o, data))
     {
         delete pGameObj;
         return false;
@@ -1767,7 +1778,7 @@ bool ChatHandler::HandleNpcAddCommand(char* args)
         return false;
     }
 
-    if (!pCreature->Create(lowguid, pos, cinfo))
+    if (!pCreature->Create(lowguid, lowguid, pos, cinfo))
     {
         delete pCreature;
         return false;
@@ -3531,20 +3542,20 @@ bool ChatHandler::HandleWpShowCommand(char* args)
     else
     {
         auto mgenType = wpOwner->GetMotionMaster()->GetCurrentMovementGeneratorType();
-        if (mgenType == WAYPOINT_MOTION_TYPE || mgenType == LINEAR_WP_MOTION_TYPE)
+        if (mgenType == WAYPOINT_MOTION_TYPE || mgenType == LINEAR_WP_MOTION_TYPE || mgenType == PATH_MOTION_TYPE)
         {
             uint32 pathEntry = wpOwner->GetEntry();
             if (targetCreature->GetCreatureGroup() && targetCreature->GetCreatureGroup()->GetFormationEntry())
-                pathEntry = targetCreature->GetCreatureGroup()->GetFormationEntry()->MovementID;
+                pathEntry = targetCreature->GetCreatureGroup()->GetFormationEntry()->MovementIdOrWander;
             if (WaypointMovementGenerator<Creature> const* wpMMGen = dynamic_cast<WaypointMovementGenerator<Creature> const*>(wpOwner->GetMotionMaster()->GetCurrent()))
             {
                 wpMMGen->GetPathInformation(wpPathId, wpOrigin);
-                wpPath = sWaypointMgr.GetPathFromOrigin(pathEntry, wpOwner->GetGUIDLow(), wpPathId, wpOrigin);
+                wpPath = sWaypointMgr.GetPathFromOrigin(pathEntry, wpOwner->GetDbGuid(), wpPathId, wpOrigin);
             }
         }
 
         if (wpOrigin == PATH_NO_PATH)
-            wpPath = sWaypointMgr.GetDefaultPath(wpOwner->GetEntry(), wpOwner->GetGUIDLow(), &wpOrigin);
+            wpPath = sWaypointMgr.GetDefaultPath(wpOwner->GetEntry(), wpOwner->GetDbGuid(), &wpOrigin);
     }
 
     if (!wpPath || wpPath->empty())

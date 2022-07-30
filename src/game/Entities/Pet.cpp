@@ -662,7 +662,7 @@ void Pet::Update(const uint32 diff)
         {
             // unsummon pet that lost owner
             Unit* owner = GetOwner();
-            if ((!owner ||
+            if ((!owner || !owner->IsAlive() ||
                     (!IsWithinDistInMap(owner, GetMap()->GetVisibilityDistance()) && (owner->HasCharm() && !owner->HasCharm(GetObjectGuid()))) ||
                     (isControlled() && !owner->GetPetGuid())) && (!IsGuardian() || !IsInCombat()))
             {
@@ -1031,7 +1031,10 @@ void Pet::InitStatsForLevel(uint32 petlevel)
     float mana = 0.f;
     float armor = 0.f;
 
-    switch (getPetType())
+    PetType petType = getPetType();
+    if (!GetOwnerGuid().IsPlayer())
+        petType = GUARDIAN_PET; // for purpose of pet scaling, NPC summoned SUMMON_PET scale as GUARDIAN_PET
+    switch (petType)
     {
         case HUNTER_PET:
         {
@@ -1079,7 +1082,7 @@ void Pet::InitStatsForLevel(uint32 petlevel)
             }
             else
             {
-                sLog.outErrorDb("HUNTER PET levelstats missing in DB! 'Weakifying' pet");
+                sLog.outErrorDb("HUNTER PET levelstats missing in DB! 'Weakifying' pet. Entry: 1 PetLevel: %u.", petlevel);
 
                 for (int i = STAT_STRENGTH; i < MAX_STATS; ++i)
                     SetCreateStat(Stats(i), 1.0f);
@@ -1138,7 +1141,7 @@ void Pet::InitStatsForLevel(uint32 petlevel)
             }
             else
             {
-                sLog.outErrorDb("SUMMON_PET levelstats missing in DB! 'Weakifying' pet and giving it mana to make it obvious");
+                sLog.outErrorDb("SUMMON_PET levelstats missing in DB! 'Weakifying' pet and giving it mana to make it obvious. Entry: %u Level: %u", cInfo->Entry, petlevel);
 
                 for (int i = STAT_STRENGTH; i < MAX_STATS; ++i)
                     SetCreateStat(Stats(i), 1.0f);
@@ -2227,7 +2230,7 @@ bool Pet::Create(uint32 guidlow, CreatureCreatePos& cPos, CreatureInfo const* ci
     SetMap(cPos.GetMap());
     SetPhaseMask(cPos.GetPhaseMask(), false);
 
-    Object::_Create(guidlow, pet_number, HIGHGUID_PET);
+    Object::_Create(guidlow, guidlow, pet_number, HIGHGUID_PET);
 
     m_originalEntry = cinfo->Entry;
 

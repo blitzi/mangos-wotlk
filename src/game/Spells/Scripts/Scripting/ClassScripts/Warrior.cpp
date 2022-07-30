@@ -101,7 +101,6 @@ struct WarriorDevastate : public SpellScript
 {
     void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
     {
-		// execute only the last weapon damage
         if (effIdx != EFFECT_INDEX_2)
             return;
 
@@ -120,7 +119,7 @@ struct WarriorDevastate : public SpellScript
             spell->SetDamage(sunder->GetStackAmount() * spell->CalculateSpellEffectValue(effIdx, target));
         }
 
-        if (Aura* glyphAura = caster->GetAura(63332, EFFECT_INDEX_0))
+        if (Aura* glyphAura = caster->GetAura(58388, EFFECT_INDEX_0))
             sunders = 2;
 
         // Devastate causing Sunder Armor Effect
