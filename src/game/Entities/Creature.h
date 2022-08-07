@@ -859,6 +859,7 @@ class Creature : public Unit
         void ResetSpellHitCounter();
 
         uint32 GetDbGuid() const override { return m_dbGuid; }
+        uint32 GetDbEntry() const { return m_originalEntry; }
         HighGuid GetParentHigh() const override { return HIGHGUID_UNIT; }
 
         // Spell Lists
