@@ -9058,7 +9058,7 @@ bool Unit::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex i
 {
     if (spellInfo->HasAttribute(SPELL_ATTR_NO_IMMUNITIES))
         return false;
-    
+
     if (spellInfo->HasAttribute(SPELL_ATTR_EX4_NO_PARTIAL_IMMUNITY))
         return false;
 
@@ -9835,7 +9835,7 @@ void Unit::SetInCombatState(bool PvP, Unit* enemy)
             creature->SetInCombatWithZone();
 
         if (InstanceData* mapInstance = GetInstanceData())
-            mapInstance->OnCreatureEnterCombat(creature);    
+            mapInstance->OnCreatureEnterCombat(creature);
 
         TriggerAggroLinkingEvent(enemy);
     }
@@ -12980,6 +12980,10 @@ bool Unit::IsShapeShifted() const
     // Mirroring clientside gameplay logic
     if (ShapeshiftForm form = GetShapeshiftForm())
     {
+        // druid talent based shapeshift handling (since SHAPESHIFT_FLAG_STANCE is not valid for talent based shapeshift)
+        if (form == FORM_TREE || form == FORM_MOONKIN)
+            return true;
+
         if (SpellShapeshiftFormEntry const* entry = sSpellShapeshiftFormStore.LookupEntry(form))
             return !(entry->flags1 & SHAPESHIFT_FLAG_STANCE);
     }
