@@ -1245,7 +1245,6 @@ bool ScriptAction::GetScriptProcessTargets(WorldObject* originalSource, WorldObj
             WorldObject* buddy = nullptr;
             if (m_script->IsCreatureBuddy())
             {
-                CreatureData const* cData = sObjectMgr.GetCreatureData(m_script->searchRadiusOrGuid);
                 buddy = m_map->GetCreature(m_script->searchRadiusOrGuid);
 
                 if (buddy && ((Creature*)buddy)->IsAlive() == m_script->IsDeadOrDespawnedBuddy())
@@ -1258,10 +1257,8 @@ bool ScriptAction::GetScriptProcessTargets(WorldObject* originalSource, WorldObj
                 }
             }
             else
-            {
-                GameObjectData const* oData = sObjectMgr.GetGOData(m_script->searchRadiusOrGuid);
-                buddy = m_map->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, oData->id, m_script->searchRadiusOrGuid));
-            }
+                buddy = m_map->GetGameObject(m_script->searchRadiusOrGuid);
+
             // TODO Maybe load related grid if not already done? How to handle multi-map case?
             if (!buddy && m_script->command != SCRIPT_COMMAND_TERMINATE_SCRIPT)
             {
@@ -2673,6 +2670,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
             }
 
             ((Creature*)pSource)->SetHover(m_script->fly.fly);
+            ((Creature*)pSource)->SetLevitate(m_script->fly.fly); // wotlk+ - enable setting only one if its needed in wotlk one day
             break;
         }
         case SCRIPT_COMMAND_DESPAWN_GO:                     // 40

@@ -503,7 +503,7 @@ bool Creature::InitEntry(uint32 Entry, CreatureData const* data /*=nullptr*/, Ga
     return true;
 }
 
-bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, GameEventCreatureData const* eventData /*=nullptr*/, bool preserveHPAndPower /*=true*/)
+bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, GameEventCreatureData const* eventData /*=nullptr*/, bool preserveHPAndPower /*=true*/, bool randomizeLevels/*= true*/)
 {
     if (!InitEntry(Entry, data, eventData))
         return false;
@@ -514,12 +514,12 @@ bool Creature::UpdateEntry(uint32 Entry, const CreatureData* data /*=nullptr*/, 
     if (preserveHPAndPower)
     {
         uint32 healthPercent = GetHealthPercent();
-        SelectLevel();
+        SelectLevel(randomizeLevels ? USE_DEFAULT_DATABASE_LEVEL : GetLevel());
         SetHealthPercent(healthPercent);
     }
     else
     {
-        SelectLevel();
+        SelectLevel(randomizeLevels ? USE_DEFAULT_DATABASE_LEVEL : GetLevel());
         if (data)
         {
             uint32 curhealth = data->curhealth > 1 ? data->curhealth : GetMaxHealth();
@@ -2978,7 +2978,7 @@ void Creature::AddCooldown(SpellEntry const& spellEntry, ItemPrototype const* /*
         bool success = GetSpellCooldown(spellEntry.Id, cooldown);
         if (!success)
             success = sObjectMgr.GetCreatureCooldown(GetCreatureInfo()->Entry, spellEntry.Id, cooldown);
-        if (success)
+        if (success && cooldown) // lets see if this will one day become a problem, if it does, add -1 -1 defaults to creature spell lists
             recTime = cooldown;
     }
     uint32 categoryRecTime = spellEntry.CategoryRecoveryTime;

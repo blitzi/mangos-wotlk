@@ -9077,9 +9077,6 @@ bool Unit::IsImmuneToSpellEffect(SpellEntry const* spellInfo, SpellEffectIndex i
     if (spellInfo->HasAttribute(SPELL_ATTR_NO_IMMUNITIES))
         return false;
 
-    if (spellInfo->HasAttribute(SPELL_ATTR_EX4_NO_PARTIAL_IMMUNITY))
-        return false;
-
     // If m_immuneToEffect type contain this effect type, IMMUNE effect.
     uint32 effect = spellInfo->Effect[index];
     SpellImmuneList const& effectList = m_spellImmune[IMMUNITY_EFFECT];
@@ -10012,6 +10009,12 @@ bool Unit::IsVisibleForOrDetect(Unit const* u, WorldObject const* viewPoint, boo
         // if player is dead then he can't detect anyone in any cases
         if (!u->IsAlive())
             detect = false;
+    }
+    else if (spell)
+    {
+        // all despawned creatures/players not visible for any creatures spells
+        if (u->GetDeathState() == DEAD || GetDeathState() == DEAD)
+            return false;
     }
     else
     {
@@ -13247,6 +13250,11 @@ void Unit::UpdateSplinePosition(bool relocateOnly)
         m_movementInfo.UpdateTransportData(pos);
         transport->CalculatePassengerPosition(pos.x, pos.y, pos.z, &pos.o);
     }
+    if (TransportInfo* transportInfo = GetTransportInfo())
+    {
+        m_movementInfo.UpdateTransportData(pos);
+        transportInfo->CalculatePassengerPosition(pos.x, pos.y, pos.z, &pos.o);
+    }
 
     bool faced = false;
     if (movespline->isFacing())
@@ -13289,9 +13297,7 @@ void Unit::UpdateSplinePosition(bool relocateOnly)
         return;
     }
 
-    if (IsBoarded())
-       GetTransportInfo()->SetLocalPosition(pos.x, pos.y, pos.z, pos.o);
-    else if (IsPlayer())
+    if (IsPlayer())
         static_cast<Player*>(this)->SetPosition(pos.x, pos.y, pos.z, pos.o);
     else
         GetMap()->CreatureRelocation((Creature*)this, pos.x, pos.y, pos.z, pos.o);

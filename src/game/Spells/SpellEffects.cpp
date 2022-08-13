@@ -4542,15 +4542,21 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
     else if (itemTarget)
         libraryResult = sScriptDevAIMgr.OnEffectDummy(m_caster, m_spellInfo->Id, eff_idx, itemTarget, m_originalCasterGUID);
 
-    if (libraryResult || !unitTarget)
+    if (libraryResult || (!unitTarget && !gameObjTarget))
         return;
 
     // Previous effect might have started script
     if (!ScriptMgr::CanSpellEffectStartDBScript(m_spellInfo, eff_idx))
         return;
 
+    auto& data = SpellTargetMgr::GetSpellTargetingData(m_spellInfo->Id);
+    SpellTargetImplicitType effectTargetType = data.implicitType[eff_idx];
+
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Spell ScriptStart spellid %u in EffectDummy", m_spellInfo->Id);
-    m_trueCaster->GetMap()->ScriptsStart(sSpellScripts, m_spellInfo->Id, m_trueCaster, unitTarget);
+    if (effectTargetType == TARGET_TYPE_UNIT || effectTargetType == TARGET_TYPE_UNIT_DEST)
+        m_trueCaster->GetMap()->ScriptsStart(sSpellScripts, m_spellInfo->Id, m_trueCaster, unitTarget);
+    else if (effectTargetType == TARGET_TYPE_GAMEOBJECT || (effectTargetType == TARGET_TYPE_LOCK && gameObjTarget))
+        m_trueCaster->GetMap()->ScriptsStart(sSpellScripts, m_spellInfo->Id, m_trueCaster, gameObjTarget);
 }
 
 void Spell::EffectTriggerSpellWithValue(SpellEffectIndex eff_idx)
@@ -11173,7 +11179,7 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
     }
 
     // normal DB scripted effect
-    if (!unitTarget)
+    if (!unitTarget && !gameObjTarget)
         return;
 
     // Script based implementation. Must be used only for not good for implementation in core spell effects
@@ -11188,8 +11194,14 @@ void Spell::EffectScriptEffect(SpellEffectIndex eff_idx)
     if (!ScriptMgr::CanSpellEffectStartDBScript(m_spellInfo, eff_idx))
         return;
 
+    auto& data = SpellTargetMgr::GetSpellTargetingData(m_spellInfo->Id);
+    SpellTargetImplicitType effectTargetType = data.implicitType[eff_idx];
+
     DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Spell ScriptStart spellid %u in EffectScriptEffect", m_spellInfo->Id);
-    m_trueCaster->GetMap()->ScriptsStart(sSpellScripts, m_spellInfo->Id, m_trueCaster, unitTarget);
+    if (effectTargetType == TARGET_TYPE_UNIT || effectTargetType == TARGET_TYPE_UNIT_DEST)
+        m_trueCaster->GetMap()->ScriptsStart(sSpellScripts, m_spellInfo->Id, m_trueCaster, unitTarget);
+    else if (effectTargetType == TARGET_TYPE_GAMEOBJECT || (effectTargetType == TARGET_TYPE_LOCK && gameObjTarget))
+        m_trueCaster->GetMap()->ScriptsStart(sSpellScripts, m_spellInfo->Id, m_trueCaster, gameObjTarget);
 }
 
 void Spell::EffectSanctuary(SpellEffectIndex /*eff_idx*/)
@@ -12190,7 +12202,7 @@ void Spell::EffectSummonAllTotems(SpellEffectIndex eff_idx)
         if (ActionButton const* actionButton = ((Player*)m_caster)->GetActionButton(start_button + slot))
             if (actionButton->GetType() == ACTION_BUTTON_SPELL)
                 if (uint32 spell_id = actionButton->GetAction())
-                    m_caster->CastSpell(unitTarget, spell_id, TRIGGERED_OLD_TRIGGERED);
+                    m_caster->CastSpell(unitTarget, spell_id, TRIGGERED_INSTANT_CAST | TRIGGERED_IGNORE_GCD);
 }
 
 void Spell::EffectDestroyAllTotems(SpellEffectIndex /*eff_idx*/)

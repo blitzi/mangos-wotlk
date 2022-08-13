@@ -334,6 +334,137 @@ bool AreaTrigger_at_overlord_drakuru(Player* player, AreaTriggerEntry const* at)
     return true;
 }
 
+// 55368 - Summon Stefan
+struct SummonStefan : public SpellScript
+{
+    void OnDestTarget(Spell* spell) const override
+    {
+        spell->m_targets.m_destPos.z += 20.f;
+    }
+};
+
+// 52244 - Charm Geist
+struct CharmGeist : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (aura->GetEffIndex() != EFFECT_INDEX_0 || !apply)
+            return;
+
+        static_cast<Creature*>(aura->GetTarget())->SetSpellList(2875000);
+    }
+};
+
+// 52245 - Harvest Blight Crystal
+struct HarvestBlightCrystal : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx == EFFECT_INDEX_0)
+        {
+            spell->GetCaster()->CastSpell(nullptr, 52247, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
+// 52247 - Target Crystal
+struct TargetCrystal : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        if (spell->GetCaster()->AI())
+            spell->GetCaster()->AI()->SetFollowMovement(false);
+    }
+};
+
+// 52390 - Charm Drakuru Servant
+struct CharmDrakuruServant : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!aura->GetTarget()->IsCreature())
+            return;
+
+        if (apply)
+        {
+            static_cast<Creature*>(aura->GetTarget())->UpdateEntry(28805, nullptr, nullptr, false, false);
+            DoBroadcastText(28884, aura->GetTarget(), aura->GetCaster());
+        }
+    }
+};
+
+// 52590 - Kill credit
+struct KillCreditDrakkariSkullcrusher : public SpellScript
+{
+    void OnCast(Spell* spell) const override
+    {
+        if (!spell->GetCaster()->IsPlayer())
+            return;
+
+        Player* player = static_cast<Player*>(spell->GetCaster());
+        spell->SetScriptValue(player->GetReqKillOrCastCurrentCount(12690, 29099));
+    }
+
+    void OnSuccessfulFinish(Spell* spell) const override
+    {
+        if (!spell->GetCaster()->IsPlayer())
+            return;
+
+        Player* player = static_cast<Player*>(spell->GetCaster());
+        uint32 count = player->GetReqKillOrCastCurrentCount(12690, 29099);
+        if (count == spell->GetScriptValue()) // nothing changed, prevent spam at 60
+            return;
+
+        if (count % 20 == 0) // at 20, 40, 60 - spawn chieftain
+            spell->GetCaster()->CastSpell(nullptr, 52616, TRIGGERED_OLD_TRIGGERED);
+    }
+};
+
+// 52089 - Drakuramas Teleport Script 01
+struct DrakuramasTeleportScript01 : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!aura->GetTarget()->IsPlayer())
+            return;
+
+        if (apply)
+        {
+            aura->GetTarget()->CastSpell(nullptr, 52091, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
+// 52239 - Drakuramas Teleport Script 02
+struct DrakuramasTeleportScript02 : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!aura->GetTarget()->IsPlayer())
+            return;
+
+        if (apply)
+        {
+            aura->GetTarget()->CastSpell(nullptr, 52240, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
+// 52676 - Drakuramas Teleport Script 03
+struct DrakuramasTeleportScript03 : public AuraScript
+{
+    void OnApply(Aura* aura, bool apply) const override
+    {
+        if (!aura->GetTarget()->IsPlayer())
+            return;
+
+        if (apply)
+        {
+            aura->GetTarget()->CastSpell(nullptr, 52677, TRIGGERED_OLD_TRIGGERED);
+        }
+    }
+};
+
 void AddSC_zuldrak()
 {
     Script* pNewScript = new Script;
@@ -360,4 +491,13 @@ void AddSC_zuldrak()
 
     RegisterSpellScript<GymersBuddy>("spell_gymers_buddy");
     RegisterSpellScript<GymersThrow>("spell_gymers_throw");
+    RegisterSpellScript<SummonStefan>("spell_summon_stefan");
+    RegisterSpellScript<CharmGeist>("spell_charm_geist");
+    RegisterSpellScript<HarvestBlightCrystal>("spell_harvest_blight_crystal");
+    RegisterSpellScript<TargetCrystal>("spell_target_crystal");
+    RegisterSpellScript<CharmDrakuruServant>("spell_charm_drakuru_servant");
+    RegisterSpellScript<KillCreditDrakkariSkullcrusher>("spell_kill_credit_drakkari_skullcrusher");
+    RegisterSpellScript<DrakuramasTeleportScript01>("drakuramas_teleport_script_01");
+    RegisterSpellScript<DrakuramasTeleportScript02>("drakuramas_teleport_script_02");
+    RegisterSpellScript<DrakuramasTeleportScript03>("drakuramas_teleport_script_03");
 }
