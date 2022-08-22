@@ -214,6 +214,7 @@ bool GossipSelect_npc_brann_ulduar(Player* pPlayer, Creature* pCreature, uint32 
     {
         if (instance_ulduar* pInstance = (instance_ulduar*)pCreature->GetInstanceData())
         {
+
             // if encounter is started by Brann then hard mode is failed
             pInstance->SetData(TYPE_TOWER_FREYA, FAIL);
             pInstance->SetData(TYPE_TOWER_HODIR, FAIL);
@@ -221,7 +222,8 @@ bool GossipSelect_npc_brann_ulduar(Player* pPlayer, Creature* pCreature, uint32 
             pInstance->SetData(TYPE_TOWER_THORIM, FAIL);
 
             // set gauntlet in progress; rest of the event is done by DB scripts
-            pInstance->SetData(TYPE_LEVIATHAN_GAUNTLET, IN_PROGRESS);
+            //pInstance->SetData(TYPE_LEVIATHAN_GAUNTLET, IN_PROGRESS);
+			pInstance->SetData(TYPE_LEVIATHAN, DONE);
             pCreature->GetMotionMaster()->MoveWaypoint();
         }
 
