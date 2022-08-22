@@ -53,6 +53,10 @@ class Unit;
 #define VERTEX_SIZE             3
 #define INVALID_POLYREF         0
 
+// bound box of poly search area
+static float NearPolySearchBound[VERTEX_SIZE] = { 5.0f, 5.0f, 5.0f };
+static float FarPolySearchBound[VERTEX_SIZE] = { 10.0f, 10.0f, 10.0f };
+
 enum PathType
 {
     PATHFIND_BLANK = 0x0000,   // path not built yet
@@ -77,9 +81,12 @@ public:
     bool calculate(float destX, float destY, float destZ, bool forceDest = false, bool straightLine = false); // transfers coorddinates from global to local space if on transport - use other func if coords are already in transport space
     bool calculate(Vector3 const& start, Vector3 const& dest, bool forceDest = false, bool straightLine = false);
 
-    // option setters - use optional
-    void setUseStrightPath(bool useStraightPath) { m_useStraightPath = useStraightPath; };
-    void setPathLengthLimit(float distance) { m_pointPathLimit = std::min<uint32>(uint32(distance / SMOOTH_PATH_STEP_SIZE * 1.25f), MAX_POINT_PATH_LENGTH); };
+        // compute a straight path to some random point in max range
+        void ComputePathToRandomPoint(Vector3 const& startPoint, float maxRange);
+
+        // option setters - use optional
+        void setUseStrightPath(bool useStraightPath) { m_useStraightPath = useStraightPath; };
+        void setPathLengthLimit(float distance) { m_pointPathLimit = std::min<uint32>(uint32(distance / SMOOTH_PATH_STEP_SIZE * 1.25f), MAX_POINT_PATH_LENGTH); };
 
     // result getters
     Vector3 getStartPosition()      const { return m_startPosition; }
@@ -142,8 +149,8 @@ private:
     float dist3DSqr(const Vector3& p1, const Vector3& p2) const;
     bool inRangeYZX(const float* v1, const float* v2, float r, float h) const;
 
-    dtPolyRef getPathPolyByPosition(const dtPolyRef* polyPath, uint32 polyPathSize, const float* point, float* distance = nullptr) const;
-    dtPolyRef getPolyByLocation(const float* point, float* distance) const;
+	dtPolyRef getPathPolyByPosition(const dtPolyRef* polyPath, uint32 polyPathSize, const float* point, float* distance = nullptr) const;
+    dtPolyRef getPolyByLocation(const float* point, float* distance);
     bool HaveTile(const Vector3& p) const;
 
     NavTerrainFlag getNavTerrain(float x, float y, float z) const;
