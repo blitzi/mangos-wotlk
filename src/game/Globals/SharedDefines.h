@@ -2336,8 +2336,4 @@ enum MovementEvent
 // #define PRENERF_2_1         // Pre 2.2
 // #define PRENERF_2_3         // Pre 2.4
 // #define PRENERF_2_4         // Pre 2.4.3
-
-#define MANGOSBOT_TWO
-#define CMANGOS
-
 #endif
