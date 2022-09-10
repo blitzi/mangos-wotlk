@@ -805,6 +805,7 @@ class Spell
         SpellSchoolMask GetSchoolMask() { return m_spellSchoolMask; }
         // OnHit use only
         uint32 GetTotalTargetDamage() { return m_damage; }
+        uint32 GetTotalTargetAbsorb() { return m_absorb; }
         void SetTotalTargetValueModifier(float modifier);
         // script initialization hook only setters - use only if dynamic - else use appropriate helper
         void SetMaxAffectedTargets(uint32 newValue) { m_affectedTargetCount = newValue; }
@@ -832,6 +833,10 @@ class Spell
         void SetFakeCaster(Unit* caster) { m_caster = caster; }
         WorldObject* GetTrueCaster() const { return m_trueCaster; }
         Unit* GetAffectiveCasterOrOwner() const;
+
+        //Custom Spell Cast Results
+        void SetParam1(uint32 param1) { m_param1 = param1; }
+        void SetParam2(uint32 param2) { m_param2 = param2; }
 
         // overrides
         void SetOverridenSpeed(float newSpeed);
@@ -905,6 +910,7 @@ class Spell
 
         // Damage and healing in effects need just calculate
         int32 m_damage;                                     // Damage in effects count here
+        int32 m_absorb;                                     // Absorbed amount for scripts to hook into
         int32 damagePerEffect[MAX_EFFECT_INDEX];            // Workaround for multiple weapon damage effects
         int32 m_damagePerEffect[MAX_EFFECT_INDEX];
         int32 m_healing;                                    // Healing in effects count here
