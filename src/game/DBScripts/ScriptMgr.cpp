@@ -522,7 +522,7 @@ void ScriptMgr::LoadScripts(ScriptMapMapName& scripts, const char* tablename)
             }
             case SCRIPT_COMMAND_MOVEMENT:                   // 20
             {
-                if (tmp.movement.movementType >= MAX_DB_MOTION_TYPE && tmp.movement.movementType != EFFECT_MOTION_TYPE)
+                if (tmp.movement.movementType >= MAX_DB_MOTION_TYPE && tmp.movement.movementType != EFFECT_MOTION_TYPE && tmp.movement.movementType != FALL_MOTION_TYPE)
                 {
                     sLog.outErrorDb("Table `%s` SCRIPT_COMMAND_MOVEMENT has invalid MovementType %u for script id %u",
                                     tablename, tmp.movement.movementType, tmp.id);
@@ -2175,6 +2175,12 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                     source->GetMotionMaster()->MoveJumpFacing(Position(m_script->x, m_script->y, m_script->z, 100.f), speed, m_script->movementFloat.verticalSpeed, 10001u, targetGuid, wanderORpathId);
                     break;
                 }
+                case FALL_MOTION_TYPE:
+                {
+                    source->StopMoving();
+                    source->GetMotionMaster()->MoveFall();
+                    break;
+                }
             }
             break;
         }
@@ -2652,7 +2658,7 @@ bool ScriptAction::ExecuteDbscriptCommand(WorldObject* pSource, WorldObject* pTa
                 sender = MailSender(pSource);
             uint32 deliverDelay = m_script->textId[0] > 0 ? (uint32)m_script->textId[0] : 0;
 
-            MailDraft(m_script->sendMail.mailTemplateId).SendMailTo(static_cast<Player*>(pTarget), sender, MAIL_CHECK_MASK_HAS_BODY, deliverDelay);
+            MailDraft(m_script->sendMail.mailTemplateId).SetMoney(m_script->sendMail.money).SendMailTo(static_cast<Player*>(pTarget), sender, MAIL_CHECK_MASK_HAS_BODY, deliverDelay);
             break;
         }
         case SCRIPT_COMMAND_SET_HOVER:                      // 39

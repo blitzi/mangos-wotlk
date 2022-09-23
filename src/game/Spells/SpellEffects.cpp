@@ -3157,17 +3157,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                     unitTarget->CastSpell(unitTarget, 50439, TRIGGERED_OLD_TRIGGERED);
                     return;
                 }
-                case 51276:                                 // Incinerate Corpse
-                {
-                    if (!unitTarget || unitTarget->GetTypeId() != TYPEID_UNIT)
-                        return;
-
-                    unitTarget->CastSpell(unitTarget, 51278, TRIGGERED_OLD_TRIGGERED);
-                    unitTarget->CastSpell(m_caster, 51279, TRIGGERED_OLD_TRIGGERED);
-
-                    unitTarget->SetDeathState(JUST_DIED);
-                    return;
-                }
                 case 51330:                                 // Shoot RJR
                 {
                     if (!unitTarget)
@@ -3178,18 +3167,6 @@ void Spell::EffectDummy(SpellEffectIndex eff_idx)
                         m_caster->CastSpell(unitTarget, roll_chance_i(50) ? 51332 : 51366, TRIGGERED_OLD_TRIGGERED, m_CastItem);
                     else
                         m_caster->CastSpell(unitTarget, 51331, TRIGGERED_OLD_TRIGGERED, m_CastItem);
-
-                    return;
-                }
-                case 51333:                                 // Dig For Treasure
-                {
-                    if (!unitTarget)
-                        return;
-
-                    if (roll_chance_i(75))
-                        m_caster->CastSpell(unitTarget, 51370, TRIGGERED_OLD_TRIGGERED, m_CastItem);
-                    else
-                        m_caster->CastSpell(m_caster, 51345, TRIGGERED_OLD_TRIGGERED);
 
                     return;
                 }

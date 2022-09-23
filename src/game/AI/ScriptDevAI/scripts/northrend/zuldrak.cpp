@@ -610,6 +610,55 @@ struct HaveChilledSerpentMucus : public AuraScript
     }
 };
 
+// 50664 - Summon Crusader LeCraft
+struct SummonCrusaderLeCraft : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        summon->GetMotionMaster()->MoveFollow(spell->GetCaster(), PET_FOLLOW_DIST, PET_FOLLOW_ANGLE, true);
+    }
+};
+
+// 50678 - Summon Crusader Lamoof
+struct SummonCrusaderLamoof : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        summon->GetMotionMaster()->MoveFollow(spell->GetCaster(), PET_FOLLOW_DIST, PET_FOLLOW_ANGLE, true);
+    }
+};
+
+// 50692 - Summon Crusader Josephine
+struct SummonCrusaderJosephine : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        summon->GetMotionMaster()->MoveFollow(spell->GetCaster(), PET_FOLLOW_DIST, PET_FOLLOW_ANGLE, true);
+    }
+};
+
+// 54496 Summon Plague Spray
+struct SummonPlagueSpray : public SpellScript
+{
+    void OnSummon(Spell* spell, Creature* summon) const override
+    {
+        summon->AI()->SendAIEvent(AI_EVENT_CUSTOM_EVENTAI_A, summon, spell->GetCaster());
+    }
+};
+
+// 51173 - A Tangled Skein: Encasing Webs - Effect
+struct ATangledSkeinEncasingWebsEffect : public SpellScript
+{
+    void OnEffectExecute(Spell* spell, SpellEffectIndex effIdx) const override
+    {
+        if (effIdx == EFFECT_INDEX_0)
+        {
+            spell->GetUnitTarget()->CastSpell(nullptr, 51168, TRIGGERED_OLD_TRIGGERED);
+            spell->GetUnitTarget()->GetMotionMaster()->MoveFall();
+        }
+    }
+};
+
 void AddSC_zuldrak()
 {
     Script* pNewScript = new Script;
@@ -659,4 +708,9 @@ void AddSC_zuldrak()
     RegisterSpellScript<HaveMuddyMireMaggot>("spell_have_muddy_mire_maggot");
     RegisterSpellScript<HaveAmberseed>("spell_have_amberseed");
     RegisterSpellScript<HaveChilledSerpentMucus>("spell_have_chilled_serpent_mucus");
+    RegisterSpellScript<SummonCrusaderLeCraft>("spell_summon_crusader_lecraft");
+    RegisterSpellScript<SummonCrusaderLamoof>("spell_summon_crusader_lamoof");
+    RegisterSpellScript<SummonCrusaderJosephine>("spell_summon_crusader_josephine");
+    RegisterSpellScript<SummonPlagueSpray>("spell_summon_plague_spray");
+    RegisterSpellScript<ATangledSkeinEncasingWebsEffect>("spell_a_tangled_skein_encasing_webs_effect");
 }
